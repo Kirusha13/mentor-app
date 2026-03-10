@@ -1,0 +1,30 @@
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+class StudentOut(BaseModel):
+    id: int
+    full_name: str
+    grade: int | None
+    phone_number: str | None
+    telegram_id: int
+    started_at: datetime
+    last_visited_at: datetime | None
+    avatar_url: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class StudentCreate(BaseModel):
+    full_name: str
+    telegram_id: int
+    grade: int | None = None
+    phone_number: str | None = None
+
+
+class StudentUpdate(BaseModel):
+    full_name: str | None = None
+    grade: int | None = None
+    phone_number: str | None = None
+    avatar_url: str | None = None

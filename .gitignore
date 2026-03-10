@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Env files (секреты)
+.env
+.env.*
+!.env.example
+
+# Backend media uploads
+backend/media/
+
+# Node
+node_modules/
+
+# Expo / React Native
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+
+# Native build artifacts
+mobile/android/
+mobile/ios/
+.kotlin/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Misc
+.DS_Store
+*.tsbuildinfo
+npm-debug.*
+yarn-debug.*
+yarn-error.*
