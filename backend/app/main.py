@@ -1,3 +1,4 @@
+import os
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, Request
@@ -20,6 +21,7 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api/v1")
 
+os.makedirs(settings.MEDIA_DIR, exist_ok=True)
 app.mount("/media", StaticFiles(directory=settings.MEDIA_DIR), name="media")
 
 
