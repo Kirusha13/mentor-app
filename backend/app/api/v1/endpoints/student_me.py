@@ -1,7 +1,7 @@
 """
 Эндпоинты для ученика: только свои данные.
 """
-from datetime import date
+from datetime import date, datetime, time
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -22,7 +22,7 @@ from app.models.theory_topic import TheoryTopic
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
 from app.schemas.assignment import AssignmentOut, AssignmentUpdate
-from app.schemas.lesson import LessonOut
+from app.schemas.lesson import AvailableSlot, LessonOut, RescheduleRequest
 from app.schemas.material import MaterialOut
 from app.schemas.student import StudentOut, StudentUpdate
 from app.schemas.theory_topic import TheoryTopicOut
@@ -161,6 +161,133 @@ async def my_topics(
         q = q.where(TheoryTopic.subject_id == subject_id)
     result = await db.execute(q.order_by(TheoryTopic.title))
     return list(result.scalars().all())
+
+
+@router.get("/windows", response_model=list[AvailableSlot], summary="Доступные окна для переноса")
+async def get_available_windows(
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    # Получаем всех репетиторов ученика
+    ts_result = await db.execute(
+        select(TutorStudent.tutor_id).where(TutorStudent.student_id == student.id).distinct()
+    )
+    tutor_ids = [row[0] for row in ts_result.all()]
+    if not tutor_ids:
+        return []
+
+    # Получаем имена репетиторов
+    tutors_result = await db.execute(select(Tutor).where(Tutor.id.in_(tutor_ids)))
+    tutors_map = {t.id: t.full_name for t in tutors_result.scalars().all()}
+
+    # Получаем окна (tutor_student_id IS NULL)
+    windows_result = await db.execute(
+        select(Lesson)
+        .where(Lesson.tutor_id.in_(tutor_ids), Lesson.tutor_student_id.is_(None))
+        .order_by(Lesson.lesson_date, Lesson.start_time)
+    )
+    windows = windows_result.scalars().all()
+    if not windows:
+        return []
+
+    # Получаем занятия со статусом scheduled для этих репетиторов
+    scheduled_result = await db.execute(
+        select(Lesson)
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(
+            TutorStudent.tutor_id.in_(tutor_ids),
+            Lesson.conduct_status == "scheduled",
+        )
+    )
+    scheduled = scheduled_result.scalars().all()
+
+    # Группируем занятия по дате и репетитору для быстрого поиска
+    from collections import defaultdict
+    occupied: dict[tuple, list[tuple[time, time]]] = defaultdict(list)
+    for lesson in scheduled:
+        key = (lesson.lesson_date, lesson.tutor_student_id)
+        occupied[key].append((lesson.start_time, lesson.end_time))
+
+    # Для каждого окна вычитаем занятия и возвращаем свободные промежутки
+    slots: list[AvailableSlot] = []
+    for window in windows:
+        day_lessons = [
+            (s, e) for (d, ts_id), intervals in occupied.items()
+            if d == window.lesson_date
+            for s, e in intervals
+        ]
+        day_lessons.sort()
+
+        free_start = window.start_time
+        for lesson_start, lesson_end in day_lessons:
+            if lesson_start > free_start:
+                slots.append(AvailableSlot(
+                    lesson_date=window.lesson_date,
+                    start_time=free_start,
+                    end_time=lesson_start,
+                    tutor_id=window.tutor_id,
+                    tutor_name=tutors_map.get(window.tutor_id),
+                ))
+            if lesson_end > free_start:
+                free_start = lesson_end
+
+        if free_start < window.end_time:
+            slots.append(AvailableSlot(
+                lesson_date=window.lesson_date,
+                start_time=free_start,
+                end_time=window.end_time,
+                tutor_id=window.tutor_id,
+                tutor_name=tutors_map.get(window.tutor_id),
+            ))
+
+    return slots
+
+
+@router.post("/reschedule/{lesson_id}", response_model=LessonOut, summary="Запрос на перенос занятия")
+async def request_reschedule(
+    lesson_id: int,
+    data: RescheduleRequest,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    # Проверяем что занятие принадлежит ученику
+    result = await db.execute(
+        select(Lesson)
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(Lesson.id == lesson_id, TutorStudent.student_id == student.id)
+    )
+    lesson = result.scalar_one_or_none()
+    if lesson is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Занятие не найдено")
+    if lesson.conduct_status != "scheduled":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Можно переносить только запланированные занятия")
+
+    # Проверяем что нет активного запроса на перенос
+    existing = await db.execute(
+        select(Lesson).where(
+            Lesson.original_lesson_id == lesson_id,
+            Lesson.conduct_status == "reschedule_pending",
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Запрос на перенос уже существует")
+
+    # Создаём новое занятие со статусом reschedule_pending
+    new_lesson = Lesson(
+        lesson_date=data.lesson_date,
+        start_time=data.start_time,
+        end_time=data.end_time,
+        conduct_status="reschedule_pending",
+        payment_status=lesson.payment_status,
+        cost=lesson.cost,
+        tutor_student_id=lesson.tutor_student_id,
+        topic_id=lesson.topic_id,
+        original_lesson_id=lesson_id,
+    )
+    db.add(new_lesson)
+    await db.commit()
+    await db.refresh(new_lesson)
+    return new_lesson
 
 
 @router.get("/materials", response_model=list[MaterialOut], summary="Материалы")

@@ -13,9 +13,10 @@ class LessonOut(BaseModel):
     end_time: time
     conduct_status: ConductStatus
     payment_status: PaymentStatus
-    cost: Decimal
+    cost: Decimal | None
     grade: int | None
-    tutor_student_id: int
+    tutor_student_id: int | None
+    tutor_id: int | None = None
     topic_id: int | None
     original_lesson_id: int | None
     created_at: datetime
@@ -23,6 +24,28 @@ class LessonOut(BaseModel):
     subject_name: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class AvailableSlot(BaseModel):
+    """Свободный временной промежуток в окне репетитора."""
+    lesson_date: date
+    start_time: time
+    end_time: time
+    tutor_id: int
+    tutor_name: str | None = None
+
+
+class RescheduleRequest(BaseModel):
+    """Запрос на перенос занятия."""
+    lesson_date: date
+    start_time: time
+    end_time: time
+
+    @model_validator(mode="after")
+    def check_time(self):
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time должно быть позже start_time")
+        return self
 
 
 class LessonCreate(BaseModel):

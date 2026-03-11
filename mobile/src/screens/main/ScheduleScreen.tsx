@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { getLessons, Lesson } from '../../api/lessons';
+import RescheduleScreen from './RescheduleScreen';
 
 const MONTHS_RU = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -23,18 +24,24 @@ const STATUS_LABEL: Record<Lesson['conduct_status'], string> = {
   conducted: 'Проведено',
   cancelled: 'Отменено',
   rescheduled: 'Перенесено',
+  reschedule_pending: 'Ожидает переноса',
+  reschedule_rejected: 'Перенос отклонён',
 };
 const STATUS_COLOR: Record<Lesson['conduct_status'], string> = {
   scheduled: '#2AABEE',
   conducted: '#4CAF50',
   cancelled: '#F44336',
   rescheduled: '#FF9800',
+  reschedule_pending: '#9C27B0',
+  reschedule_rejected: '#F44336',
 };
 const STATUS_BG: Record<Lesson['conduct_status'], string> = {
   scheduled: '#EFF9FF',
   conducted: '#F1FBF2',
   cancelled: '#FFF2F1',
   rescheduled: '#FFF8EE',
+  reschedule_pending: '#F9F0FF',
+  reschedule_rejected: '#FFF2F1',
 };
 const PAYMENT_LABEL: Record<Lesson['payment_status'], string> = {
   unpaid: 'Не оплачено',
@@ -74,58 +81,69 @@ function formatDate(dateStr: string): string {
 
 // ─── Модальное окно ────────────────────────────────────────────────────────────
 
-function LessonModal({ lesson, onClose }: { lesson: Lesson; onClose: () => void }) {
+function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: () => void; onRefresh: () => void }) {
   const color = STATUS_COLOR[lesson.conduct_status];
   const bg = STATUS_BG[lesson.conduct_status];
+  const [showReschedule, setShowReschedule] = useState(false);
 
-  const onReschedule = () => {
-    Alert.alert('Перенос занятия', 'Функция будет доступна в ближайшем обновлении.', [{ text: 'Понятно' }]);
-  };
+  if (showReschedule) {
+    return (
+      <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowReschedule(false)}>
+        <RescheduleScreen
+          lessonId={lesson.id}
+          onClose={() => setShowReschedule(false)}
+          onSuccess={() => { setShowReschedule(false); onClose(); onRefresh(); }}
+        />
+      </Modal>
+    );
+  }
+
+  const canReschedule = lesson.conduct_status === 'scheduled';
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={modal.container}>
-        <View style={modal.header}>
-          <Text style={modal.headerTitle}>Занятие</Text>
-          <TouchableOpacity onPress={onClose} style={modal.closeBtn}>
-            <Text style={modal.closeBtnText}>✕</Text>
-          </TouchableOpacity>
+    <View style={modal.container}>
+      <View style={modal.header}>
+        <Text style={modal.headerTitle}>Занятие</Text>
+        <TouchableOpacity onPress={onClose} style={modal.closeBtn}>
+          <Text style={modal.closeBtnText}>✕</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView contentContainerStyle={modal.body}>
+        <View style={[modal.statusBadge, { backgroundColor: bg, borderLeftColor: color }]}>
+          <Text style={[modal.statusText, { color }]}>{STATUS_LABEL[lesson.conduct_status]}</Text>
         </View>
 
-        <ScrollView contentContainerStyle={modal.body}>
-          <View style={[modal.statusBadge, { backgroundColor: bg, borderLeftColor: color }]}>
-            <Text style={[modal.statusText, { color }]}>{STATUS_LABEL[lesson.conduct_status]}</Text>
-          </View>
+        <View style={modal.section}>
+          <Row label="Дата" value={formatDate(String(lesson.lesson_date))} />
+          <Row label="Время" value={`${lesson.start_time.slice(0, 5)} – ${lesson.end_time.slice(0, 5)}`} />
+          {lesson.tutor_name ? <Row label="Репетитор" value={lesson.tutor_name} /> : null}
+          {lesson.subject_name ? <Row label="Предмет" value={lesson.subject_name} /> : null}
+        </View>
 
+        <View style={modal.section}>
+          <Row label="Стоимость" value={`${lesson.cost} ₽`} bold />
+          <Row
+            label="Оплата"
+            value={PAYMENT_LABEL[lesson.payment_status]}
+            valueColor={lesson.payment_status === 'paid' ? '#4CAF50' : '#F44336'}
+            last
+          />
+        </View>
+
+        {lesson.grade != null && (
           <View style={modal.section}>
-            <Row label="Дата" value={formatDate(String(lesson.lesson_date))} />
-            <Row label="Время" value={`${lesson.start_time.slice(0, 5)} – ${lesson.end_time.slice(0, 5)}`} />
-            {lesson.tutor_name ? <Row label="Репетитор" value={lesson.tutor_name} /> : null}
-            {lesson.subject_name ? <Row label="Предмет" value={lesson.subject_name} /> : null}
+            <Row label="Оценка" value={String(lesson.grade)} bold last />
           </View>
+        )}
 
-          <View style={modal.section}>
-            <Row label="Стоимость" value={`${lesson.cost} ₽`} bold />
-            <Row
-              label="Оплата"
-              value={PAYMENT_LABEL[lesson.payment_status]}
-              valueColor={lesson.payment_status === 'paid' ? '#4CAF50' : '#F44336'}
-              last
-            />
-          </View>
-
-          {lesson.grade != null && (
-            <View style={modal.section}>
-              <Row label="Оценка" value={String(lesson.grade)} bold last />
-            </View>
-          )}
-
-          <TouchableOpacity style={modal.rescheduleBtn} onPress={onReschedule}>
+        {canReschedule && (
+          <TouchableOpacity style={modal.rescheduleBtn} onPress={() => setShowReschedule(true)}>
             <Text style={modal.rescheduleBtnText}>Перенести занятие</Text>
           </TouchableOpacity>
-        </ScrollView>
-      </View>
-    </Modal>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -241,7 +259,11 @@ export default function ScheduleScreen() {
         </ScrollView>
       )}
 
-      {selected && <LessonModal lesson={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelected(null)}>
+          <LessonModal lesson={selected} onClose={() => setSelected(null)} onRefresh={load} />
+        </Modal>
+      )}
     </View>
   );
 }

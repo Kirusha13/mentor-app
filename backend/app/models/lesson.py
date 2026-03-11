@@ -1,7 +1,7 @@
 import enum
 from datetime import date, time
 
-from sqlalchemy import BigInteger, CheckConstraint, Date, ForeignKey, Numeric, SmallInteger, Time
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, ForeignKey, Numeric, SmallInteger, Time
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,6 +14,8 @@ class ConductStatus(str, enum.Enum):
     conducted = "conducted"
     cancelled = "cancelled"
     rescheduled = "rescheduled"
+    reschedule_pending = "reschedule_pending"
+    reschedule_rejected = "reschedule_rejected"
 
 
 class PaymentStatus(str, enum.Enum):
@@ -43,8 +45,11 @@ class Lesson(TimestampMixin, Base):
     )
     cost: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     grade: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
-    tutor_student_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("tutor_student.id", ondelete="RESTRICT"), nullable=False
+    tutor_student_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("tutor_student.id", ondelete="RESTRICT"), nullable=True
+    )
+    tutor_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("tutors.id", ondelete="CASCADE"), nullable=True
     )
     topic_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("theory_topics.id", ondelete="SET NULL"), nullable=True
@@ -53,7 +58,8 @@ class Lesson(TimestampMixin, Base):
         BigInteger, ForeignKey("lessons.id", ondelete="SET NULL"), nullable=True
     )
 
-    tutor_student: Mapped["TutorStudent"] = relationship(back_populates="lessons")
+    tutor_student: Mapped["TutorStudent | None"] = relationship(back_populates="lessons")
+    tutor: Mapped["Tutor | None"] = relationship("Tutor", foreign_keys="[Lesson.tutor_id]")
     original_lesson: Mapped["Lesson | None"] = relationship(
         "Lesson",
         foreign_keys="[Lesson.original_lesson_id]",
