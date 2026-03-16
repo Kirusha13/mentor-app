@@ -1,15 +1,42 @@
 import os
+from contextlib import asynccontextmanager
 from urllib.parse import urlencode
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from app.core.config import settings
+from app.core.database import AsyncSessionLocal
 from app.api.v1.router import api_router
 
-app = FastAPI(title=settings.APP_TITLE, debug=settings.DEBUG)
+
+async def auto_conduct_lessons():
+    """Помечает прошедшие запланированные занятия как проведённые."""
+    async with AsyncSessionLocal() as db:
+        await db.execute(text("""
+            UPDATE lessons
+            SET conduct_status = 'conducted'
+            WHERE lesson_date < CURRENT_DATE
+              AND conduct_status = 'scheduled'
+              AND tutor_student_id IS NOT NULL
+        """))
+        await db.commit()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(auto_conduct_lessons, "cron", hour=0, minute=5)
+    scheduler.start()
+    yield
+    scheduler.shutdown()
+
+
+app = FastAPI(title=settings.APP_TITLE, debug=settings.DEBUG, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { getStudentMe, StudentProfile } from '../../api/student';
 import { API_BASE_URL } from '../../api/client';
+import JoinScreen from './JoinScreen';
 
 const MONTHS_RU = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -76,6 +78,7 @@ export default function ProfileScreen() {
   const { signOut, token } = useAuth();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [joinVisible, setJoinVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -124,10 +127,22 @@ export default function ProfileScreen() {
         </View>
       )}
 
+      {/* Подключиться к репетитору */}
+      <TouchableOpacity style={styles.joinBtn} onPress={() => setJoinVisible(true)}>
+        <Text style={styles.joinText}>+ Подключиться к репетитору</Text>
+      </TouchableOpacity>
+
       {/* Выход */}
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutText}>Выйти из аккаунта</Text>
       </TouchableOpacity>
+
+      <Modal visible={joinVisible} animationType="slide" presentationStyle="pageSheet">
+        <JoinScreen onSuccess={() => setJoinVisible(false)} />
+        <TouchableOpacity style={styles.closeModal} onPress={() => setJoinVisible(false)}>
+          <Text style={styles.closeModalText}>Закрыть</Text>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
@@ -174,13 +189,27 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 12, color: '#aaa', marginBottom: 2 },
   rowValue: { fontSize: 15, color: '#1a1a1a', fontWeight: '500' },
 
+  joinBtn: {
+    borderWidth: 1.5,
+    borderColor: '#2AABEE',
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  joinText: { color: '#2AABEE', fontWeight: '600', fontSize: 15 },
   logoutBtn: {
     borderWidth: 1.5,
     borderColor: '#F44336',
     padding: 14,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 8,
   },
   logoutText: { color: '#F44336', fontWeight: '600', fontSize: 15 },
+  closeModal: {
+    padding: 16,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  closeModalText: { color: '#888', fontSize: 15 },
 });

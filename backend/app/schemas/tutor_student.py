@@ -17,6 +17,8 @@ class TutorStudentOut(BaseModel):
     tutor_id: int
     student_id: int
     subject_id: int
+    tutor_name: str | None = None
+    subject_name: str | None = None
 
     model_config = {"from_attributes": True}
 

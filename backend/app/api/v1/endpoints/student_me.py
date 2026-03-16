@@ -5,6 +5,7 @@ from datetime import date, datetime, time
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from fastapi.responses import Response
 from telegram import Bot
 from sqlalchemy import select
@@ -26,6 +27,7 @@ from app.schemas.lesson import AvailableSlot, LessonOut, RescheduleRequest
 from app.schemas.material import MaterialOut
 from app.schemas.student import StudentOut, StudentUpdate
 from app.schemas.theory_topic import TheoryTopicOut
+from app.schemas.tutor_student import TutorStudentOut
 
 router = APIRouter()
 
@@ -66,6 +68,78 @@ async def update_me(
     await db.commit()
     await db.refresh(student)
     return student
+
+
+@router.get("/tutors", response_model=list[TutorStudentOut], summary="Мои репетиторы")
+async def my_tutors(
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(TutorStudent, Tutor.full_name.label("tutor_name"), Subject.name.label("subject_name"))
+        .join(Tutor, Tutor.id == TutorStudent.tutor_id)
+        .join(Subject, Subject.id == TutorStudent.subject_id)
+        .where(TutorStudent.student_id == student.id)
+    )
+    rows = result.all()
+    out = []
+    for row in rows:
+        d = TutorStudentOut.model_validate(row.TutorStudent).model_dump()
+        d["tutor_name"] = row.tutor_name
+        d["subject_name"] = row.subject_name
+        out.append(d)
+    return out
+
+
+class JoinRequest(BaseModel):
+    token: str
+
+
+@router.post("/join", response_model=TutorStudentOut, summary="Вступить по токену приглашения")
+async def join_by_token(
+    data: JoinRequest,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    # Находим предмет по токену
+    result = await db.execute(
+        select(Subject, Tutor.full_name.label("tutor_name"))
+        .join(Tutor, Tutor.id == Subject.tutor_id)
+        .where(Subject.invitation_token == data.token)
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Токен не найден")
+
+    subject = row.Subject
+    tutor_name = row.tutor_name
+
+    # Проверяем что ученик ещё не привязан к этому предмету
+    existing = await db.execute(
+        select(TutorStudent).where(
+            TutorStudent.student_id == student.id,
+            TutorStudent.subject_id == subject.id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Вы уже привязаны к этому предмету")
+
+    ts = TutorStudent(
+        tutor_id=subject.tutor_id,
+        student_id=student.id,
+        subject_id=subject.id,
+        hourly_rate=subject.default_rate or 0,
+        rate_set_at=datetime.utcnow(),
+        started_at=date.today(),
+    )
+    db.add(ts)
+    await db.commit()
+    await db.refresh(ts)
+
+    d = TutorStudentOut.model_validate(ts).model_dump()
+    d["tutor_name"] = tutor_name
+    d["subject_name"] = subject.name
+    return d
 
 
 @router.get("/lessons", response_model=list[LessonOut], summary="Мои занятия")
