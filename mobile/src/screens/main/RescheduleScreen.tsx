@@ -35,6 +35,7 @@ export default function RescheduleScreen({ lessonId, onClose, onSuccess }: Props
   useEffect(() => {
     getAvailableWindows()
       .then(setSlots)
+      .catch((e) => Alert.alert('Ошибка', JSON.stringify(e?.response?.data) ?? e?.message ?? 'Не удалось загрузить окна'))
       .finally(() => setLoading(false));
   }, []);
 

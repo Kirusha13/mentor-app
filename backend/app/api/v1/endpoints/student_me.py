@@ -168,6 +168,14 @@ async def get_available_windows(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
+    import traceback
+    try:
+     return await _get_available_windows(student, db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
+
+
+async def _get_available_windows(student, db):
     # Получаем всех репетиторов ученика
     ts_result = await db.execute(
         select(TutorStudent.tutor_id).where(TutorStudent.student_id == student.id).distinct()
