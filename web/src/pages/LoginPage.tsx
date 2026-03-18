@@ -28,17 +28,21 @@ export default function LoginPage() {
     }
 
     window.onTelegramAuth = async (user) => {
-      try {
-        console.log('Telegram user:', user);
+  try {
+    console.log('Telegram user:', user);
+    alert('Callback from Telegram received');
 
-        const data = await loginWithTelegram(user);
-        login(data.access_token);
-        navigate('/', { replace: true });
-      } catch (error) {
-        console.error('Telegram login error:', error);
-        alert('Ошибка входа через Telegram');
-      }
-    };
+    const data = await loginWithTelegram(user);
+    console.log('Backend login response:', data);
+    alert('Backend responded');
+
+    login(data.access_token);
+    navigate('/', { replace: true });
+  } catch (error) {
+    console.error('Telegram login error:', error);
+    alert('Ошибка входа через Telegram');
+  }
+};
 
     const container = document.getElementById('telegram-login-container');
     if (!container) return;
