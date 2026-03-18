@@ -1,9 +1,9 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import LoginPage from '../pages/LoginPage';
-import DashboardPage from '../pages/DashboardPage';
-import NotFoundPage from '../pages/NotFoundPage';
-import ProtectedRoute from '../components/ProtectedRoute';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Layout from '../components/Layout';
+import ProtectedRoute from '../components/ProtectedRoute';
+import DashboardPage from '../pages/DashboardPage';
+import LoginPage from '../pages/LoginPage';
+import NotFoundPage from '../pages/NotFoundPage';
 
 export default function AppRouter() {
   return (
@@ -23,6 +23,7 @@ export default function AppRouter() {
         />
 
         <Route path="*" element={<NotFoundPage />} />
+        <Route path="" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

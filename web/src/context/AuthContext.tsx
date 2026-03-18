@@ -15,7 +15,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const saved = localStorage.getItem('access_token');
-    if (saved) setToken(saved);
+    if (saved) {
+      setToken(saved);
+    }
   }, []);
 
   const login = (token: string) => {
@@ -44,6 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside provider');
+
+  if (!ctx) {
+    throw new Error('useAuth must be used inside AuthProvider');
+  }
+
   return ctx;
 }

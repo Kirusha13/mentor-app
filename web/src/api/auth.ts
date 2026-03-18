@@ -10,7 +10,14 @@ export interface TelegramAuthData {
   hash: string;
 }
 
-export const loginWithTelegram = async (data: TelegramAuthData) => {
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+}
+
+export const loginWithTelegram = async (
+  data: TelegramAuthData
+): Promise<LoginResponse> => {
   const response = await apiClient.post('/api/v1/auth/login', data);
   return response.data;
 };
