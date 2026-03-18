@@ -18,11 +18,22 @@ async def telegram_login(db: AsyncSession, data: TelegramAuthData) -> str:
         raise ValueError("invalid_telegram_hash")
 
     tutor = await get_tutor_by_telegram_id(db, data.id)
-    if tutor is None:
-        raise LookupError("tutor_not_found")
+    now = datetime.now(timezone.utc)
 
-    tutor.last_visited_at = datetime.now(timezone.utc)
+    if tutor is None:
+        tutor = Tutor(
+            telegram_id=data.id,
+            full_name=data.first_name + (f" {data.last_name}" if data.last_name else ""),
+            avatar_url=data.photo_url,
+            registered_at=now,
+            last_visited_at=now,
+        )
+        db.add(tutor)
+    else:
+        tutor.last_visited_at = now
+
     await db.commit()
+    await db.refresh(tutor)
 
     return create_access_token(tutor.id, role="tutor")
 
