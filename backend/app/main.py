@@ -40,7 +40,11 @@ app = FastAPI(title=settings.APP_TITLE, debug=settings.DEBUG, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # уточнить при деплое
+    allow_origins=[
+        "https://mentor-app-kappa-nine.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
