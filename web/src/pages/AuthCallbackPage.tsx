@@ -31,8 +31,9 @@ export default function AuthCallbackPage() {
         login(data.access_token);
         navigate('/', { replace: true });
       })
-      .catch(() => {
-        navigate('/login?error=auth_failed', { replace: true });
+      .catch((e) => {
+        const msg = e?.response?.data?.detail ?? e?.message ?? 'unknown';
+        navigate(`/login?error=${encodeURIComponent(msg)}`, { replace: true });
       });
   }, [login, navigate]);
 

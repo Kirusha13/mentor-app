@@ -2,6 +2,8 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
 const CALLBACK_URL = window.location.origin + '/auth/callback';
 
 export default function LoginPage() {
+  const error = new URLSearchParams(window.location.search).get('error');
+
   const handleLogin = () => {
     window.location.href = `${API_BASE}/telegram-login?redirect=${encodeURIComponent(CALLBACK_URL)}`;
   };
@@ -18,6 +20,11 @@ export default function LoginPage() {
       }}>
         <h1 style={{ marginTop: 0 }}>Mentor</h1>
         <p style={{ color: '#666' }}>Вход для репетитора</p>
+        {error && (
+          <p style={{ color: '#e53935', fontSize: 13, marginTop: 8 }}>
+            Ошибка: {decodeURIComponent(error)}
+          </p>
+        )}
         <button
           onClick={handleLogin}
           style={{
