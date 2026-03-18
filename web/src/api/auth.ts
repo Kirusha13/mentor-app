@@ -18,6 +18,6 @@ export interface LoginResponse {
 export const loginWithTelegram = async (
   data: TelegramAuthData
 ): Promise<LoginResponse> => {
-  const response = await apiClient.post('/api/v1/auth/login', data);
+  const response = await apiClient.post('/auth/login', data);
   return response.data;
 };
