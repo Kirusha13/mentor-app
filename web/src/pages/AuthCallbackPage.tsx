@@ -18,6 +18,8 @@ export default function AuthCallbackPage() {
       return;
     }
 
+    console.log('API BASE:', import.meta.env.VITE_API_BASE_URL);
+    console.log('Params:', params);
     loginWithTelegram({
       id: Number(params.id),
       first_name: params.first_name ?? '',
