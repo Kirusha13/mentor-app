@@ -13,6 +13,8 @@ class AssignmentOut(BaseModel):
     completion_status: CompletionStatus
     grade: int | None
     attachments: dict | None
+    student_comment: str | None
+    student_files: list | None
     tutor_student_id: int
     topic_id: int | None
     created_at: datetime
@@ -37,3 +39,8 @@ class AssignmentUpdate(BaseModel):
     grade: int | None = None
     attachments: dict | None = None
     topic_id: int | None = None
+
+
+class StudentAssignmentUpdate(BaseModel):
+    completion_status: CompletionStatus | None = None
+    student_comment: str | None = None

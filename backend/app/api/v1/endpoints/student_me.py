@@ -3,8 +3,12 @@
 """
 from datetime import date, datetime, time
 
+import os
+import uuid
+
+import aiofiles
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from fastapi.responses import Response
 from telegram import Bot
@@ -22,7 +26,7 @@ from app.models.subject import Subject
 from app.models.theory_topic import TheoryTopic
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
-from app.schemas.assignment import AssignmentOut, AssignmentUpdate
+from app.schemas.assignment import AssignmentOut, AssignmentUpdate, StudentAssignmentUpdate
 from app.schemas.lesson import AvailableSlot, LessonOut, RescheduleRequest
 from app.schemas.material import MaterialOut
 from app.schemas.student import StudentOut, StudentUpdate
@@ -192,10 +196,10 @@ async def my_assignments(
     return list(result.scalars().all())
 
 
-@router.patch("/assignments/{assignment_id}", response_model=AssignmentOut, summary="Обновить статус задания")
+@router.patch("/assignments/{assignment_id}", response_model=AssignmentOut, summary="Обновить задание ученика")
 async def update_assignment(
     assignment_id: int,
-    data: AssignmentUpdate,
+    data: StudentAssignmentUpdate,
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
@@ -207,9 +211,79 @@ async def update_assignment(
     assignment = result.scalar_one_or_none()
     if assignment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задание не найдено")
-    # Ученик может менять только статус выполнения
     if data.completion_status is not None:
         assignment.completion_status = data.completion_status
+    if data.student_comment is not None:
+        assignment.student_comment = data.student_comment
+    await db.commit()
+    await db.refresh(assignment)
+    return assignment
+
+
+@router.post("/assignments/{assignment_id}/upload", response_model=AssignmentOut, summary="Загрузить фото к заданию")
+async def upload_assignment_photo(
+    assignment_id: int,
+    file: UploadFile = File(...),
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Assignment)
+        .join(TutorStudent, TutorStudent.id == Assignment.tutor_student_id)
+        .where(Assignment.id == assignment_id, TutorStudent.student_id == student.id)
+    )
+    assignment = result.scalar_one_or_none()
+    if assignment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задание не найдено")
+
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Только изображения")
+
+    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    save_dir = os.path.join(settings.MEDIA_DIR, "assignments", str(assignment_id))
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, filename)
+
+    async with aiofiles.open(save_path, "wb") as f:
+        content = await file.read()
+        await f.write(content)
+
+    file_url = f"/media/assignments/{assignment_id}/{filename}"
+    current_files = assignment.student_files or []
+    assignment.student_files = current_files + [file_url]
+
+    await db.commit()
+    await db.refresh(assignment)
+    return assignment
+
+
+@router.delete("/assignments/{assignment_id}/upload", response_model=AssignmentOut, summary="Удалить фото из задания")
+async def delete_assignment_photo(
+    assignment_id: int,
+    file_url: str,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Assignment)
+        .join(TutorStudent, TutorStudent.id == Assignment.tutor_student_id)
+        .where(Assignment.id == assignment_id, TutorStudent.student_id == student.id)
+    )
+    assignment = result.scalar_one_or_none()
+    if assignment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задание не найдено")
+
+    current_files = assignment.student_files or []
+    assignment.student_files = [f for f in current_files if f != file_url]
+
+    media_prefix = "/media/"
+    if file_url.startswith(media_prefix):
+        sub_path = file_url[len(media_prefix):]
+        full_path = os.path.join(settings.MEDIA_DIR, sub_path)
+        if os.path.exists(full_path):
+            os.remove(full_path)
+
     await db.commit()
     await db.refresh(assignment)
     return assignment
