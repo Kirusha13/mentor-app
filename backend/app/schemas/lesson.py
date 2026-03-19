@@ -74,6 +74,20 @@ class LessonUpdate(BaseModel):
     topic_id: int | None = None
 
 
+class StudentLessonCreate(BaseModel):
+    """Самостоятельная запись ученика на занятие."""
+    tutor_student_id: int
+    lesson_date: date
+    start_time: time
+    end_time: time
+
+    @model_validator(mode="after")
+    def check_time(self):
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time должно быть позже start_time")
+        return self
+
+
 class LessonReschedule(BaseModel):
     """Перенос занятия — создаёт новое, помечает исходное как rescheduled."""
     new_date: date
