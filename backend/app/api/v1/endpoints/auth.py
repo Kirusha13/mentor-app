@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import create_access_token
+from app.core.telegram_auth import verify_telegram_data
 from app.models.tutor import Tutor
 from app.schemas.auth import TelegramAuthData, Token
 
@@ -17,6 +18,9 @@ async def telegram_login(
     data: TelegramAuthData,
     db: AsyncSession = Depends(get_db),
 ):
+    if not verify_telegram_data(data.model_dump()):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверная подпись Telegram")
+
     result = await db.execute(
         select(Tutor).where(Tutor.telegram_id == data.id)
     )
