@@ -27,7 +27,7 @@ from app.models.theory_topic import TheoryTopic
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
 from app.schemas.assignment import AssignmentOut, AssignmentUpdate, StudentAssignmentUpdate
-from app.schemas.lesson import AvailableSlot, LessonOut, RescheduleRequest
+from app.schemas.lesson import AvailableSlot, LessonOut, RescheduleRequest, StudentLessonCreate
 from app.schemas.material import MaterialOut
 from app.schemas.student import StudentOut, StudentUpdate
 from app.schemas.theory_topic import TheoryTopicOut
@@ -177,6 +177,65 @@ async def my_lessons(
         d["subject_name"] = row.subject_name
         lessons.append(d)
     return lessons
+
+
+@router.post("/lessons", response_model=LessonOut, status_code=status.HTTP_201_CREATED, summary="Записаться на занятие")
+async def book_lesson(
+    data: StudentLessonCreate,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    # Проверяем что tutor_student_id принадлежит этому ученику
+    ts_result = await db.execute(
+        select(TutorStudent).where(
+            TutorStudent.id == data.tutor_student_id,
+            TutorStudent.student_id == student.id,
+        )
+    )
+    ts = ts_result.scalar_one_or_none()
+    if ts is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связка не найдена")
+
+    # Проверяем отсутствие конфликта — нет другого scheduled занятия в это время у этого репетитора
+    conflict_result = await db.execute(
+        select(Lesson)
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(
+            TutorStudent.tutor_id == ts.tutor_id,
+            Lesson.lesson_date == data.lesson_date,
+            Lesson.conduct_status == "scheduled",
+            Lesson.start_time < data.end_time,
+            Lesson.end_time > data.start_time,
+        )
+    )
+    if conflict_result.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Этот слот уже занят")
+
+    # Рассчитываем стоимость: hourly_rate * длительность в часах
+    duration_hours = (
+        (data.end_time.hour * 60 + data.end_time.minute) -
+        (data.start_time.hour * 60 + data.start_time.minute)
+    ) / 60
+    cost = float(ts.hourly_rate) * duration_hours
+
+    lesson = Lesson(
+        tutor_student_id=data.tutor_student_id,
+        lesson_date=data.lesson_date,
+        start_time=data.start_time,
+        end_time=data.end_time,
+        conduct_status="scheduled",
+        payment_status="unpaid",
+        cost=cost,
+    )
+    db.add(lesson)
+    await db.commit()
+    await db.refresh(lesson)
+
+    # Добавляем имена для ответа
+    d = LessonOut.model_validate(lesson).model_dump()
+    d["tutor_name"] = (await db.execute(select(Tutor.full_name).where(Tutor.id == ts.tutor_id))).scalar_one_or_none()
+    d["subject_name"] = (await db.execute(select(Subject.name).where(Subject.id == ts.subject_id))).scalar_one_or_none()
+    return d
 
 
 @router.get("/assignments", response_model=list[AssignmentOut], summary="Мои задания")
