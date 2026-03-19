@@ -17,8 +17,6 @@ async def telegram_login(
     data: TelegramAuthData,
     db: AsyncSession = Depends(get_db),
 ):
-    validate_telegram_auth(data)
-    
     result = await db.execute(
         select(Tutor).where(Tutor.telegram_id == data.id)
     )
