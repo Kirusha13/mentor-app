@@ -9,7 +9,9 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Assignment, getAssignments, updateAssignmentStatus } from '../../api/assignments';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Assignment, getAssignments } from '../../api/assignments';
+import { AssignmentsStackParamList } from '../../navigation/AppNavigator';
 
 const STATUS_LABEL: Record<Assignment['completion_status'], string> = {
   assigned: 'Назначено',
@@ -25,18 +27,21 @@ const STATUS_COLOR: Record<Assignment['completion_status'], string> = {
   overdue: '#F44336',
 };
 
+type Props = NativeStackScreenProps<AssignmentsStackParamList, 'AssignmentsList'>;
+
 function AssignmentCard({
   item,
-  onStatusChange,
+  onPress,
 }: {
   item: Assignment;
-  onStatusChange: (id: number, status: Assignment['completion_status']) => void;
+  onPress: () => void;
 }) {
   const deadline = new Date(item.deadline);
   const isOverdue = deadline < new Date() && item.completion_status !== 'completed';
+  const hasResponse = !!item.student_comment || (item.student_files && item.student_files.length > 0);
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={onPress}>
       <View style={styles.header}>
         <Text style={styles.title} numberOfLines={1}>
           {item.title ?? 'Без названия'}
@@ -48,29 +53,25 @@ function AssignmentCard({
       <Text style={styles.description} numberOfLines={2}>
         {item.description}
       </Text>
-      <Text style={[styles.deadline, isOverdue && { color: '#F44336' }]}>
-        Дедлайн: {deadline.toLocaleDateString('ru-RU')}
-      </Text>
-      {item.completion_status !== 'completed' && (
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() =>
-            onStatusChange(
-              item.id,
-              item.completion_status === 'assigned' ? 'in_progress' : 'completed',
-            )
-          }
-        >
-          <Text style={styles.actionBtnText}>
-            {item.completion_status === 'assigned' ? 'Взять в работу' : 'Отметить выполненным'}
-          </Text>
-        </TouchableOpacity>
+      <View style={styles.footer}>
+        <Text style={[styles.deadline, isOverdue && { color: '#F44336' }]}>
+          Дедлайн: {deadline.toLocaleDateString('ru-RU')}
+        </Text>
+        {hasResponse && <Text style={styles.responseHint}>✏️ Есть ответ</Text>}
+      </View>
+      {item.grade != null && (
+        <View style={styles.gradeRow}>
+          <Text style={styles.gradeLabel}>Оценка:</Text>
+          <View style={styles.gradeBadge}>
+            <Text style={styles.gradeText}>{item.grade}</Text>
+          </View>
+        </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 
-export default function AssignmentsScreen() {
+export default function AssignmentsScreen({ navigation }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -87,11 +88,6 @@ export default function AssignmentsScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const handleStatusChange = async (id: number, status: Assignment['completion_status']) => {
-    const updated = await updateAssignmentStatus(id, status);
-    setAssignments((prev) => prev.map((a) => (a.id === id ? updated : a)));
-  };
-
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
 
   return (
@@ -99,7 +95,10 @@ export default function AssignmentsScreen() {
       data={assignments}
       keyExtractor={(item) => String(item.id)}
       renderItem={({ item }) => (
-        <AssignmentCard item={item} onStatusChange={handleStatusChange} />
+        <AssignmentCard
+          item={item}
+          onPress={() => navigation.push('AssignmentDetail', { assignment: item })}
+        />
       )}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
       contentContainerStyle={styles.list}
@@ -126,13 +125,19 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   description: { fontSize: 14, color: '#555', lineHeight: 20 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   deadline: { fontSize: 13, color: '#888' },
-  actionBtn: {
-    backgroundColor: '#2AABEE',
-    padding: 10,
+  responseHint: { fontSize: 12, color: '#4CAF50' },
+  gradeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  gradeLabel: { fontSize: 13, color: '#888' },
+  gradeBadge: {
+    backgroundColor: '#FFF8E1',
     borderRadius: 8,
-    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#FFD54F',
   },
-  actionBtnText: { color: '#fff', fontWeight: '600' },
+  gradeText: { fontSize: 14, fontWeight: '700', color: '#F57F17' },
   empty: { textAlign: 'center', color: '#999', marginTop: 60 },
 });

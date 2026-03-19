@@ -8,6 +8,8 @@ export interface Assignment {
   completion_status: 'assigned' | 'in_progress' | 'completed' | 'overdue';
   grade: number | null;
   attachments: Record<string, unknown> | null;
+  student_comment: string | null;
+  student_files: string[] | null;
   tutor_student_id: number;
   topic_id: number | null;
 }
@@ -19,10 +21,37 @@ export async function getAssignments(params?: {
   return res.data;
 }
 
-export async function updateAssignmentStatus(
+export async function updateAssignment(
   id: number,
-  completion_status: Assignment['completion_status'],
+  data: { completion_status?: Assignment['completion_status']; student_comment?: string },
 ): Promise<Assignment> {
-  const res = await client.patch(`/student/assignments/${id}`, { completion_status });
+  const res = await client.patch(`/student/assignments/${id}`, data);
+  return res.data;
+}
+
+export async function uploadAssignmentPhoto(
+  id: number,
+  uri: string,
+  filename: string,
+): Promise<Assignment> {
+  const formData = new FormData();
+  formData.append('file', {
+    uri,
+    name: filename,
+    type: 'image/jpeg',
+  } as unknown as Blob);
+  const res = await client.post(`/student/assignments/${id}/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return res.data;
+}
+
+export async function deleteAssignmentPhoto(
+  id: number,
+  fileUrl: string,
+): Promise<Assignment> {
+  const res = await client.delete(`/student/assignments/${id}/upload`, {
+    params: { file_url: fileUrl },
+  });
   return res.data;
 }
