@@ -10,8 +10,10 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getLessons, Lesson } from '../../api/lessons';
 import RescheduleScreen from './RescheduleScreen';
+import BookingScreen from './BookingScreen';
 
 const MONTHS_RU = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -163,11 +165,13 @@ function Row({ label, value, bold, valueColor, last }: {
 // ─── Основной экран ────────────────────────────────────────────────────────────
 
 export default function ScheduleScreen() {
+  const insets = useSafeAreaInsets();
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const [selectedDay, setSelectedDay] = useState(getTodayDayIndex);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Lesson | null>(null);
+  const [showBooking, setShowBooking] = useState(false);
   const weekEnd = addDays(weekStart, 6);
 
   const load = useCallback(async () => {
@@ -190,7 +194,7 @@ export default function ScheduleScreen() {
   const dayLessons = lessons.filter((l) => String(l.lesson_date).slice(0, 10) === selectedDate);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Навигация по неделям */}
       <View style={styles.weekNav}>
         <TouchableOpacity onPress={() => setWeekStart((s) => addDays(s, -7))} style={styles.navBtn}>
@@ -264,6 +268,18 @@ export default function ScheduleScreen() {
           <LessonModal lesson={selected} onClose={() => setSelected(null)} onRefresh={load} />
         </Modal>
       )}
+
+      <Modal visible={showBooking} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowBooking(false)}>
+        <BookingScreen
+          onClose={() => setShowBooking(false)}
+          onSuccess={() => { setShowBooking(false); load(); }}
+        />
+      </Modal>
+
+      {/* FAB */}
+      <TouchableOpacity style={styles.fab} onPress={() => setShowBooking(true)} activeOpacity={0.85}>
+        <Text style={styles.fabText}>+</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -274,15 +290,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  navBtn: { padding: 8 },
-  navArrow: { fontSize: 30, color: '#2AABEE', lineHeight: 34 },
+  navBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#EFF9FF',
+  },
+  navArrow: { fontSize: 22, color: '#2AABEE', lineHeight: 26, fontWeight: '600' },
   weekLabel: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#2AABEE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#2AABEE',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  fabText: { color: '#fff', fontSize: 28, lineHeight: 32, fontWeight: '300' },
   dayTabs: {
     flexDirection: 'row',
     paddingHorizontal: 4,
@@ -296,8 +334,8 @@ const styles = StyleSheet.create({
   dayLabel: { fontSize: 11, color: '#aaa', fontWeight: '500' },
   dayLabelSelected: { color: '#2AABEE' },
   dayNumWrap: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  dayNumWrapToday: { backgroundColor: '#2AABEE' },
-  dayNumWrapSelected: { backgroundColor: '#E3F2FD' },
+  dayNumWrapToday: { backgroundColor: '#2AABEE', borderRadius: 15 },
+  dayNumWrapSelected: { backgroundColor: '#E3F2FD', borderRadius: 15 },
   dayNum: { fontSize: 14, color: '#333', fontWeight: '500' },
   dayNumWhite: { color: '#fff' },
   dayNumBlue: { color: '#2AABEE' },

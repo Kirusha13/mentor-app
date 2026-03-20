@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Assignment, getAssignments } from '../../api/assignments';
 import { AssignmentsStackParamList } from '../../navigation/AppNavigator';
@@ -88,10 +89,12 @@ export default function AssignmentsScreen({ navigation }: Props) {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const insets = useSafeAreaInsets();
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
 
   return (
     <FlatList
+      style={{ paddingTop: insets.top }}
       data={assignments}
       keyExtractor={(item) => String(item.id)}
       renderItem={({ item }) => (
@@ -108,7 +111,7 @@ export default function AssignmentsScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  list: { padding: 16 },
+  list: { padding: 16, paddingTop: 20 },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,

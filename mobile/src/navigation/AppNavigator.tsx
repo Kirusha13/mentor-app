@@ -41,7 +41,7 @@ function MaterialsNavigator() {
       <MaterialsStack.Screen
         name="TopicsList"
         component={MaterialsScreen}
-        options={{ title: 'Материалы' }}
+        options={{ headerShown: false }}
       />
       <MaterialsStack.Screen
         name="TopicDetail"
@@ -64,7 +64,7 @@ function AssignmentsNavigator() {
       <AssignmentsStack.Screen
         name="AssignmentsList"
         component={AssignmentsScreen}
-        options={{ title: 'Задания' }}
+        options={{ headerShown: false }}
       />
       <AssignmentsStack.Screen
         name="AssignmentDetail"
@@ -91,7 +91,7 @@ function MainTabs() {
         name="Schedule"
         component={ScheduleScreen}
         options={{
-          title: 'Расписание',
+          headerShown: false,
           tabBarLabel: 'Расписание',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📅</Text>,
         }}

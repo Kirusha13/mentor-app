@@ -1,4 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useState } from 'react';
 import {
@@ -34,10 +35,12 @@ export default function MaterialsScreen({ navigation }: Props) {
   // Только корневые темы (без родителя) на главном экране
   const rootTopics = topics.filter((t) => t.parent_topic_id === null);
 
+  const insets = useSafeAreaInsets();
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
 
   return (
     <FlatList
+      style={{ paddingTop: insets.top }}
       data={rootTopics}
       keyExtractor={(item) => String(item.id)}
       contentContainerStyle={styles.list}
