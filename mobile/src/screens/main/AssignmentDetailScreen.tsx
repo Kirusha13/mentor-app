@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -52,18 +52,16 @@ export default function AssignmentDetailScreen({ route }: Props) {
   const isEditable = !isCompleted;
   const files = assignment.student_files ?? [];
 
-  // ─── Взять в работу ──────────────────────────────────────────────────────
-
-  const handleStartWork = async () => {
-    try {
-      const updated = await updateAssignment(assignment.id, { completion_status: 'in_progress' });
-      setAssignment(updated);
-    } catch {
-      Alert.alert('Ошибка', 'Не удалось обновить статус');
+  // Автопереход assigned → in_progress при открытии экрана
+  useEffect(() => {
+    if (assignment.completion_status === 'assigned') {
+      updateAssignment(assignment.id, { completion_status: 'in_progress' })
+        .then(updated => setAssignment(updated))
+        .catch(() => {});
     }
-  };
+  }, []);
 
-  // ─── Отправить ответ (сохранить комментарий + пометить выполненным) ───────
+  // ─── Отправить ответ ──────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
     if (!comment.trim() && files.length === 0) {
@@ -179,100 +177,84 @@ export default function AssignmentDetailScreen({ route }: Props) {
           <Text style={styles.description}>{assignment.description}</Text>
         </View>
 
-        {/* Ответ ученика */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>
-            {isCompleted ? 'Мой ответ' : 'Напиши ответ'}
-          </Text>
-
-          {isEditable ? (
-            <TextInput
-              style={styles.commentInput}
-              value={comment}
-              onChangeText={setComment}
-              placeholder="Текстовый ответ или комментарий к фото..."
-              placeholderTextColor="#bbb"
-              multiline
-              textAlignVertical="top"
-            />
-          ) : (
-            comment ? (
-              <Text style={styles.commentReadonly}>{comment}</Text>
+        {/* Текстовый ответ: при редактировании всегда, при просмотре — только если есть */}
+        {(isEditable || !!comment) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>{isCompleted ? 'Мой ответ' : 'Напиши ответ'}</Text>
+            {isEditable ? (
+              <TextInput
+                style={styles.commentInput}
+                value={comment}
+                onChangeText={setComment}
+                placeholder="Текстовый ответ или комментарий к фото..."
+                placeholderTextColor="#bbb"
+                multiline
+                textAlignVertical="top"
+              />
             ) : (
-              <Text style={styles.commentEmpty}>Текстового ответа нет</Text>
-            )
-          )}
-        </View>
+              <Text style={styles.commentReadonly}>{comment}</Text>
+            )}
+          </View>
+        )}
 
-        {/* Фотографии */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Фотографии</Text>
-
-          {files.length > 0 && (
-            <View style={styles.photosGrid}>
-              {files.map((url) => (
-                <View key={url} style={styles.photoWrapper}>
-                  <Image
-                    source={{ uri: `${API_BASE}${url}` }}
-                    style={styles.photo}
-                    resizeMode="cover"
-                  />
-                  {isEditable && (
-                    deletingUrl === url ? (
-                      <View style={styles.photoOverlay}>
-                        <ActivityIndicator color="#fff" />
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.photoDeleteBtn}
-                        onPress={() => handleDeletePhoto(url)}
-                      >
-                        <Text style={styles.photoDeleteText}>✕</Text>
-                      </TouchableOpacity>
-                    )
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
-
-          {isEditable && (
-            <TouchableOpacity
-              style={[styles.addPhotoBtn, uploadingPhoto && { opacity: 0.6 }]}
-              onPress={handlePickPhoto}
-              disabled={uploadingPhoto}
-            >
-              {uploadingPhoto
-                ? <ActivityIndicator color="#2AABEE" />
-                : <Text style={styles.addPhotoBtnText}>+ Добавить фото</Text>
-              }
-            </TouchableOpacity>
-          )}
-
-          {isCompleted && files.length === 0 && (
-            <Text style={styles.commentEmpty}>Фотографий нет</Text>
-          )}
-        </View>
-
-        {/* Кнопки действий */}
-        {!isCompleted && (
-          <View style={styles.actionsSection}>
-            {assignment.completion_status === 'assigned' && (
-              <TouchableOpacity style={styles.secondaryBtn} onPress={handleStartWork}>
-                <Text style={styles.secondaryBtnText}>Взять в работу</Text>
+        {/* Фотографии: при редактировании всегда, при просмотре — только если есть */}
+        {(isEditable || files.length > 0) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Фотографии</Text>
+            {files.length > 0 && (
+              <View style={styles.photosGrid}>
+                {files.map((url) => (
+                  <View key={url} style={styles.photoWrapper}>
+                    <Image
+                      source={{ uri: `${API_BASE}${url}` }}
+                      style={styles.photo}
+                      resizeMode="cover"
+                    />
+                    {isEditable && (
+                      deletingUrl === url ? (
+                        <View style={styles.photoOverlay}>
+                          <ActivityIndicator color="#fff" />
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.photoDeleteBtn}
+                          onPress={() => handleDeletePhoto(url)}
+                        >
+                          <Text style={styles.photoDeleteText}>✕</Text>
+                        </TouchableOpacity>
+                      )
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+            {isEditable && (
+              <TouchableOpacity
+                style={[styles.addPhotoBtn, uploadingPhoto && { opacity: 0.6 }]}
+                onPress={handlePickPhoto}
+                disabled={uploadingPhoto}
+              >
+                {uploadingPhoto
+                  ? <ActivityIndicator color="#2AABEE" />
+                  : <Text style={styles.addPhotoBtnText}>+ Добавить фото</Text>
+                }
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              style={[styles.submitBtn, submitting && { opacity: 0.6 }]}
-              onPress={handleSubmit}
-              disabled={submitting}
-            >
-              {submitting
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.submitBtnText}>Отправить ответ</Text>
-              }
-            </TouchableOpacity>
           </View>
+        )}
+
+        {/* Кнопка отправки */}
+        {isEditable && (
+          <TouchableOpacity
+            style={[styles.submitBtn, submitting && { opacity: 0.6 }]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.submitBtnText}>Отправить ответ</Text>
+            }
+          </TouchableOpacity>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -361,15 +343,6 @@ const styles = StyleSheet.create({
   },
   addPhotoBtnText: { color: '#2AABEE', fontWeight: '600', fontSize: 15 },
 
-  actionsSection: { gap: 10 },
-  secondaryBtn: {
-    borderWidth: 1.5,
-    borderColor: '#2AABEE',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  secondaryBtnText: { color: '#2AABEE', fontSize: 15, fontWeight: '600' },
   submitBtn: {
     backgroundColor: '#4CAF50',
     borderRadius: 12,
