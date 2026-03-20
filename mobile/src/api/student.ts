@@ -11,7 +11,26 @@ export interface StudentProfile {
   avatar_url: string | null;
 }
 
+export interface TutorStudent {
+  id: number;
+  tutor_id: number;
+  student_id: number;
+  subject_id: number;
+  status: 'active' | 'paused' | 'completed';
+  hourly_rate: number;
+  started_at: string;
+  subscription_lessons: number | null;
+  used_lessons: number | null;
+  tutor_name: string | null;
+  subject_name: string | null;
+}
+
 export async function getStudentMe(): Promise<StudentProfile> {
   const res = await client.get('/student/me');
+  return res.data;
+}
+
+export async function getTutors(): Promise<TutorStudent[]> {
+  const res = await client.get('/student/tutors');
   return res.data;
 }

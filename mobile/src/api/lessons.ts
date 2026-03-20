@@ -37,6 +37,16 @@ export async function getAvailableWindows(): Promise<AvailableSlot[]> {
   return res.data;
 }
 
+export async function bookLesson(data: {
+  tutor_student_id: number;
+  lesson_date: string;
+  start_time: string;
+  end_time: string;
+}): Promise<Lesson> {
+  const res = await client.post('/student/lessons', data);
+  return res.data;
+}
+
 export async function requestReschedule(
   lessonId: number,
   data: { lesson_date: string; start_time: string; end_time: string }
