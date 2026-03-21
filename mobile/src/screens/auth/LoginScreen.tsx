@@ -103,6 +103,10 @@ export default function LoginScreen() {
   }, [handleTelegramData]);
 
   const openTelegramAuth = async () => {
+    if (showTokenInput && !inviteToken.trim()) {
+      Alert.alert('Нужен код приглашения', 'Введите код от репетитора, чтобы создать аккаунт');
+      return;
+    }
     tgHandledRef.current = false;
     setLoading(true);
     try {
@@ -231,7 +235,7 @@ export default function LoginScreen() {
             <ActivityIndicator color="#fff" />
           ) : (
             <View style={styles.tgBtnInner}>
-              <Ionicons name="logo-telegram" size={20} color="#fff" />
+              <Ionicons name="paper-plane" size={20} color="#fff" />
               <Text style={styles.tgBtnText}>
                 {showTokenInput ? 'Зарегистрироваться через Telegram' : 'Войти через Telegram'}
               </Text>
