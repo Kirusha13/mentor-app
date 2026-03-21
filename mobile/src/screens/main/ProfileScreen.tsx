@@ -70,6 +70,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [joinVisible, setJoinVisible] = useState(false);
 
+  const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [saving, setSaving] = useState(false);
@@ -85,6 +86,17 @@ export default function ProfileScreen() {
     }, []),
   );
 
+  const handleEdit = () => {
+    // Reset edit fields to current profile values before entering edit mode
+    setEditName(profile?.full_name ?? '');
+    setEditPhone(profile?.phone_number ?? '');
+    setEditing(true);
+  };
+
+  const handleCancel = () => {
+    setEditing(false);
+  };
+
   const handleSave = async () => {
     if (!editName.trim()) { Alert.alert('Ошибка', 'Имя не может быть пустым'); return; }
     setSaving(true);
@@ -94,6 +106,7 @@ export default function ProfileScreen() {
         phone_number: editPhone.trim() || null,
       });
       setProfile(updated);
+      setEditing(false);
       Alert.alert('Сохранено');
     } catch {
       Alert.alert('Ошибка', 'Не удалось сохранить');
@@ -145,35 +158,64 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      {/* Редактирование */}
+      {/* Профиль */}
       <View style={styles.card}>
-        <Text style={styles.fieldLabel}>Имя</Text>
-        <TextInput
-          style={styles.input}
-          value={editName}
-          onChangeText={setEditName}
-          placeholder="Полное имя"
-          placeholderTextColor="#bbb"
-        />
-        <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Телефон</Text>
-        <TextInput
-          style={styles.input}
-          value={editPhone}
-          onChangeText={setEditPhone}
-          placeholder="+7 999 000 00 00"
-          placeholderTextColor="#bbb"
-          keyboardType="phone-pad"
-        />
-        {profile?.grade != null && (
-          <Text style={styles.gradeInfo}>Класс: {profile.grade}</Text>
+        {editing ? (
+          <>
+            <Text style={styles.fieldLabel}>Имя</Text>
+            <TextInput
+              style={styles.input}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Полное имя"
+              placeholderTextColor="#bbb"
+              autoFocus
+            />
+            <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Телефон</Text>
+            <TextInput
+              style={styles.input}
+              value={editPhone}
+              onChangeText={setEditPhone}
+              placeholder="+7 999 000 00 00"
+              placeholderTextColor="#bbb"
+              keyboardType="phone-pad"
+            />
+            {profile?.grade != null && (
+              <Text style={styles.gradeInfo}>Класс: {profile.grade}</Text>
+            )}
+            <View style={styles.editActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} disabled={saving}>
+                <Text style={styles.cancelBtnText}>Отмена</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+                onPress={handleSave}
+                disabled={saving}
+              >
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Сохранить</Text>}
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.profileRow}>
+              <View style={styles.profileInfo}>
+                <Text style={styles.profileName}>{profile?.full_name}</Text>
+                {profile?.phone_number ? (
+                  <Text style={styles.profilePhone}>{profile.phone_number}</Text>
+                ) : (
+                  <Text style={styles.profilePhoneEmpty}>Телефон не указан</Text>
+                )}
+                {profile?.grade != null && (
+                  <Text style={styles.gradeInfo}>Класс: {profile.grade}</Text>
+                )}
+              </View>
+              <TouchableOpacity style={styles.editBtn} onPress={handleEdit}>
+                <Text style={styles.editBtnText}>Изменить</Text>
+              </TouchableOpacity>
+            </View>
+          </>
         )}
-        <TouchableOpacity
-          style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Сохранить</Text>}
-        </TouchableOpacity>
       </View>
 
       {/* Подключиться к репетитору */}
@@ -239,6 +281,23 @@ const styles = StyleSheet.create({
     elevation: 1,
     gap: 4,
   },
+
+  // View mode
+  profileRow: { flexDirection: 'row', alignItems: 'center' },
+  profileInfo: { flex: 1, gap: 4 },
+  profileName: { fontSize: 16, fontWeight: '600', color: '#1a1a1a' },
+  profilePhone: { fontSize: 14, color: '#555' },
+  profilePhoneEmpty: { fontSize: 14, color: '#bbb', fontStyle: 'italic' },
+  editBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#2AABEE',
+  },
+  editBtnText: { color: '#2AABEE', fontWeight: '600', fontSize: 14 },
+
+  // Edit mode
   fieldLabel: { fontSize: 12, color: '#aaa', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   input: {
     borderWidth: 1,
@@ -248,13 +307,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#1a1a1a',
   },
-  gradeInfo: { fontSize: 13, color: '#888', marginTop: 8 },
+  gradeInfo: { fontSize: 13, color: '#888', marginTop: 4 },
+  editActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  cancelBtn: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelBtnText: { color: '#888', fontWeight: '600', fontSize: 15 },
   saveBtn: {
+    flex: 1,
     backgroundColor: '#2AABEE',
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
-    marginTop: 12,
   },
   saveBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
 

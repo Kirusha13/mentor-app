@@ -99,6 +99,7 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
       <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowReschedule(false)}>
         <RescheduleScreen
           lessonId={lesson.id}
+          tutorStudentId={lesson.tutor_student_id}
           onClose={() => setShowReschedule(false)}
           onSuccess={() => { setShowReschedule(false); onClose(); onRefresh(); }}
         />
