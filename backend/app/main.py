@@ -15,7 +15,7 @@ from app.api.v1.router import api_router
 
 
 async def auto_conduct_lessons():
-    """Помечает прошедшие запланированные занятия как проведённые."""
+    """Обновляет статусы прошедших занятий."""
     async with AsyncSessionLocal() as db:
         await db.execute(text("""
             UPDATE lessons
@@ -23,6 +23,18 @@ async def auto_conduct_lessons():
             WHERE lesson_date < CURRENT_DATE
               AND conduct_status = 'scheduled'
               AND tutor_student_id IS NOT NULL
+        """))
+        await db.execute(text("""
+            UPDATE lessons
+            SET conduct_status = 'reschedule_rejected'
+            WHERE lesson_date < CURRENT_DATE
+              AND conduct_status = 'reschedule_pending'
+        """))
+        await db.execute(text("""
+            UPDATE lessons
+            SET conduct_status = 'booking_rejected'
+            WHERE lesson_date < CURRENT_DATE
+              AND conduct_status = 'booking_pending'
         """))
         await db.commit()
 
