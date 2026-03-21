@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,172 +9,407 @@ import {
   View,
 } from 'react-native';
 import { AvailableSlot, getAvailableWindows, requestReschedule } from '../../api/lessons';
+import { getTutors } from '../../api/student';
 
-const MONTHS_RU = [
-  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+// ─── Вспомогательные функции ─────────────────────────────────────────────────
+
+const MONTHS_RU = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const MONTHS_FULL_RU = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const DAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+
+const DURATIONS = [
+  { label: '45 мин', minutes: 45 },
+  { label: '1 ч', minutes: 60 },
+  { label: '1.5 ч', minutes: 90 },
+  { label: '2 ч', minutes: 120 },
+  { label: '2.5 ч', minutes: 150 },
+  { label: '3 ч', minutes: 180 },
 ];
 
-function formatDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-');
-  return `${parseInt(d)} ${MONTHS_RU[parseInt(m) - 1]} ${y}`;
+function toMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
 }
+function fromMinutes(mins: number): string {
+  return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+}
+function fmt(t: string): string { return t.slice(0, 5); }
+function formatDateFull(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${d.getDate()} ${MONTHS_FULL_RU[d.getMonth()]}`;
+}
+function getStartOptions(slotStart: string, slotEnd: string): string[] {
+  const options: string[] = [];
+  const end = toMinutes(slotEnd) - 45;
+  let cur = toMinutes(slotStart);
+  while (cur <= end) { options.push(fromMinutes(cur)); cur += 30; }
+  return options;
+}
+
+// ─── Секция формы ─────────────────────────────────────────────────────────────
+
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={s.section}>
+      <Text style={s.sectionLabel}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
+// ─── Компонент ────────────────────────────────────────────────────────────────
 
 interface Props {
   lessonId: number;
+  tutorStudentId: number | null;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function RescheduleScreen({ lessonId, onClose, onSuccess }: Props) {
-  const [slots, setSlots] = useState<AvailableSlot[]>([]);
+export default function RescheduleScreen({ lessonId, tutorStudentId, onClose, onSuccess }: Props) {
+  const scrollRef = useRef<ScrollView>(null);
+  const [windows, setWindows] = useState<AvailableSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [selected, setSelected] = useState<AvailableSlot | null>(null);
+
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedStart, setSelectedStart] = useState<string | null>(null);
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
-    getAvailableWindows()
-      .then(setSlots)
-      .catch((e) => Alert.alert('Ошибка', JSON.stringify(e?.response?.data) ?? e?.message ?? 'Не удалось загрузить окна'))
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const [slots, tutorStudents] = await Promise.all([getAvailableWindows(), getTutors()]);
+        const futureSlots = slots.filter(s => s.lesson_date >= todayStr);
+
+        if (tutorStudentId !== null) {
+          const ts = tutorStudents.find(t => t.id === tutorStudentId);
+          const tutorId = ts?.tutor_id;
+          setWindows(tutorId ? futureSlots.filter(s => s.tutor_id === tutorId) : futureSlots);
+        } else {
+          setWindows(futureSlots);
+        }
+      } catch {
+        Alert.alert('Ошибка', 'Не удалось загрузить доступные окна');
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
+  type StartOption = { time: string; slotEnd: string };
+
+  function getSlotsForDate(date: string): AvailableSlot[] {
+    return windows.filter(w => w.lesson_date === date);
+  }
+
+  function getStartOptionsForSlots(slots: AvailableSlot[]): StartOption[] {
+    return slots.flatMap(slot =>
+      getStartOptions(slot.start_time, slot.end_time).map(t => ({ time: t, slotEnd: slot.end_time }))
+    );
+  }
+
+  const availableDates = [...new Set(windows.map(w => w.lesson_date))].sort().filter(date => {
+    return getStartOptionsForSlots(getSlotsForDate(date)).length > 0;
+  });
+
+  const dateSlots = selectedDate ? getSlotsForDate(selectedDate) : [];
+  const startOptions: StartOption[] = getStartOptionsForSlots(dateSlots);
+
+  const activeSlotEnd = selectedStart
+    ? startOptions.find(o => o.time === selectedStart)?.slotEnd ?? null
+    : null;
+
+  const validDurations = selectedStart && activeSlotEnd
+    ? DURATIONS.filter(d => toMinutes(selectedStart) + d.minutes <= toMinutes(activeSlotEnd))
+    : [];
+
+  const endTime = selectedStart && selectedDuration
+    ? fromMinutes(toMinutes(selectedStart) + selectedDuration)
+    : null;
+
+  function selectDate(date: string) {
+    setSelectedDate(date);
+    setSelectedStart(null);
+    setSelectedDuration(null);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
+  }
+  function selectStart(time: string) {
+    setSelectedStart(time);
+    setSelectedDuration(null);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
+  }
+
   const handleSubmit = async () => {
-    if (!selected) return;
-    setSubmitting(true);
-    try {
-      await requestReschedule(lessonId, {
-        lesson_date: selected.lesson_date,
-        start_time: selected.start_time,
-        end_time: selected.end_time,
-      });
-      Alert.alert('Запрос отправлен', 'Репетитор рассмотрит ваш запрос на перенос.', [
-        { text: 'OK', onPress: onSuccess },
-      ]);
-    } catch (e: any) {
-      const msg = e?.response?.data?.detail ?? 'Не удалось отправить запрос';
-      Alert.alert('Ошибка', msg);
-    } finally {
-      setSubmitting(false);
-    }
+    if (!selectedDate || !selectedStart || !endTime) return;
+    Alert.alert(
+      'Запрос на перенос?',
+      `${formatDateFull(selectedDate)}, ${fmt(selectedStart)} – ${fmt(endTime)}\n\nРепетитор рассмотрит ваш запрос.`,
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Отправить',
+          onPress: async () => {
+            setSubmitting(true);
+            try {
+              await requestReschedule(lessonId, {
+                lesson_date: selectedDate,
+                start_time: selectedStart + ':00',
+                end_time: endTime + ':00',
+              });
+              Alert.alert('Запрос отправлен', 'Репетитор рассмотрит ваш запрос на перенос.', [
+                { text: 'OK', onPress: onSuccess },
+              ]);
+            } catch (e: any) {
+              const msg = e?.response?.data?.detail ?? 'Не удалось отправить запрос';
+              Alert.alert('Ошибка', msg);
+            } finally {
+              setSubmitting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Выберите время</Text>
-        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-          <Text style={styles.closeBtnText}>✕</Text>
+    <View style={s.container}>
+      {/* Шапка */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={onClose} style={s.closeBtn}>
+          <Text style={s.closeText}>✕</Text>
         </TouchableOpacity>
+        <Text style={s.headerTitle}>Перенос занятия</Text>
+        <View style={s.closeBtn} />
       </View>
 
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color="#2AABEE" />
-      ) : slots.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>Нет доступных окон для переноса</Text>
-          <Text style={styles.emptySubtext}>Репетитор ещё не добавил свободное время</Text>
+      ) : availableDates.length === 0 ? (
+        <View style={s.empty}>
+          <Text style={s.emptyTitle}>Нет доступных окон для переноса</Text>
+          <Text style={s.emptyHint}>Репетитор ещё не добавил свободное время</Text>
         </View>
       ) : (
-        <>
-          <ScrollView contentContainerStyle={styles.list}>
-            {slots.map((slot, i) => {
-              const isSelected =
-                selected?.lesson_date === slot.lesson_date &&
-                selected?.start_time === slot.start_time;
-              return (
-                <TouchableOpacity
-                  key={i}
-                  style={[styles.slot, isSelected && styles.slotSelected]}
-                  onPress={() => setSelected(slot)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.slotLeft}>
-                    <Text style={[styles.slotDate, isSelected && styles.slotTextSelected]}>
-                      {formatDate(slot.lesson_date)}
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={s.body}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* ── 1. Дата ── */}
+          <Section label="Дата">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {availableDates.map(date => {
+                const d = new Date(date + 'T00:00:00');
+                const isSelected = date === selectedDate;
+                return (
+                  <TouchableOpacity
+                    key={date}
+                    style={[s.dateChip, isSelected && s.dateChipSelected]}
+                    onPress={() => selectDate(date)}
+                  >
+                    <Text style={[s.dateChipDay, isSelected && s.dateChipTextSelected]}>
+                      {DAYS_SHORT[d.getDay()]}
                     </Text>
-                    <Text style={[styles.slotTime, isSelected && styles.slotTextSelected]}>
-                      {slot.start_time.slice(0, 5)} – {slot.end_time.slice(0, 5)}
+                    <Text style={[s.dateChipNum, isSelected && s.dateChipTextSelected]}>
+                      {d.getDate()}
                     </Text>
-                    {slot.tutor_name ? (
-                      <Text style={[styles.slotTutor, isSelected && styles.slotTextSelected]}>
-                        {slot.tutor_name}
-                      </Text>
-                    ) : null}
-                  </View>
-                  {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                    <Text style={[s.dateChipMonth, isSelected && s.dateChipTextSelected]}>
+                      {MONTHS_RU[d.getMonth()]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Section>
 
-          <View style={styles.footer}>
-            <TouchableOpacity
-              style={[styles.submitBtn, (!selected || submitting) && styles.submitBtnDisabled]}
-              onPress={handleSubmit}
-              disabled={!selected || submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.submitBtnText}>Отправить запрос</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </>
+          {/* Бейджи окон */}
+          {selectedDate && dateSlots.length > 0 && (
+            <View style={s.windowsBadgeRow}>
+              {dateSlots.map((slot, i) => (
+                <View key={i} style={s.windowBadge}>
+                  <Text style={s.windowBadgeText}>
+                    🕐 {fmt(slot.start_time)} – {fmt(slot.end_time)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* ── 2. Время начала ── */}
+          {selectedDate && startOptions.length > 0 && (
+            <Section label="Время начала">
+              <View style={s.chipGrid}>
+                {startOptions.map(({ time }) => {
+                  const isSelected = time === selectedStart;
+                  return (
+                    <TouchableOpacity
+                      key={time}
+                      style={[s.timeChip, isSelected && s.timeChipSelected]}
+                      onPress={() => selectStart(time)}
+                    >
+                      <Text style={[s.timeChipText, isSelected && s.timeChipTextSelected]}>
+                        {fmt(time)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </Section>
+          )}
+
+          {/* ── 3. Длительность ── */}
+          {selectedStart && validDurations.length > 0 && (
+            <Section label="Длительность">
+              <View style={s.chipRow}>
+                {validDurations.map(d => {
+                  const isSelected = d.minutes === selectedDuration;
+                  return (
+                    <TouchableOpacity
+                      key={d.minutes}
+                      style={[s.durationChip, isSelected && s.durationChipSelected]}
+                      onPress={() => setSelectedDuration(d.minutes)}
+                    >
+                      <Text style={[s.durationChipText, isSelected && s.durationChipTextSelected]}>
+                        {d.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </Section>
+          )}
+
+          {/* ── Итог ── */}
+          {selectedStart && selectedDuration && endTime && (
+            <View style={s.summary}>
+              <SummaryRow label="Дата" value={formatDateFull(selectedDate!)} />
+              <SummaryRow label="Время" value={`${fmt(selectedStart)} – ${fmt(endTime)}`} last />
+            </View>
+          )}
+
+          <View style={{ height: 24 }} />
+        </ScrollView>
+      )}
+
+      {/* Фиксированная кнопка */}
+      {selectedDate && selectedStart && selectedDuration && (
+        <View style={s.footer}>
+          <TouchableOpacity
+            style={[s.submitBtn, submitting && s.submitBtnDisabled]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={s.submitBtnText}>Отправить запрос на перенос</Text>
+            }
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function SummaryRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+  return (
+    <View style={[sr.row, last && { borderBottomWidth: 0 }]}>
+      <Text style={sr.label}>{label}</Text>
+      <Text style={sr.value}>{value}</Text>
+    </View>
+  );
+}
+
+// ─── Стили ────────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  title: { fontSize: 17, fontWeight: '600' },
-  closeBtn: { padding: 4 },
-  closeBtnText: { fontSize: 18, color: '#999' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  closeText: { fontSize: 18, color: '#999' },
+
+  body: { padding: 16, gap: 4 },
+
+  section: { gap: 10, marginBottom: 20 },
+  sectionLabel: { fontSize: 12, fontWeight: '700', color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.6 },
+
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 8 },
-  emptyText: { fontSize: 16, fontWeight: '600', color: '#333', textAlign: 'center' },
-  emptySubtext: { fontSize: 13, color: '#999', textAlign: 'center' },
-  list: { padding: 16, gap: 10 },
-  slot: {
-    flexDirection: 'row',
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: '#333', textAlign: 'center' },
+  emptyHint: { fontSize: 13, color: '#999', textAlign: 'center' },
+
+  // Даты
+  dateChip: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#f9f9f9',
-    borderWidth: 1.5,
-    borderColor: '#f0f0f0',
+    marginRight: 8,
+    backgroundColor: '#f5f5f5',
+    minWidth: 54,
   },
-  slotSelected: {
-    backgroundColor: '#EFF9FF',
-    borderColor: '#2AABEE',
+  dateChipSelected: { backgroundColor: '#2AABEE' },
+  dateChipDay: { fontSize: 11, color: '#999', fontWeight: '500' },
+  dateChipNum: { fontSize: 20, fontWeight: '700', color: '#1a1a1a', lineHeight: 26 },
+  dateChipMonth: { fontSize: 11, color: '#999' },
+  dateChipTextSelected: { color: '#fff' },
+
+  // Окна
+  windowsBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12, marginTop: -8 },
+  windowBadge: { backgroundColor: '#F1FBF2', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  windowBadgeText: { fontSize: 13, color: '#4CAF50', fontWeight: '500' },
+
+  // Время начала
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  timeChip: {
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 10, backgroundColor: '#f5f5f5',
+    borderWidth: 1, borderColor: '#eee',
   },
-  slotLeft: { gap: 2 },
-  slotDate: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
-  slotTime: { fontSize: 15, fontWeight: '700', color: '#333' },
-  slotTutor: { fontSize: 12, color: '#888', marginTop: 2 },
-  slotTextSelected: { color: '#1a7bbf' },
-  checkmark: { fontSize: 18, color: '#2AABEE', fontWeight: '700' },
-  footer: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+  timeChipSelected: { backgroundColor: '#2AABEE', borderColor: '#2AABEE' },
+  timeChipText: { fontSize: 14, fontWeight: '500', color: '#333' },
+  timeChipTextSelected: { color: '#fff' },
+
+  // Длительность
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  durationChip: {
+    paddingHorizontal: 18, paddingVertical: 10,
+    borderRadius: 10, backgroundColor: '#f5f5f5',
+    borderWidth: 1, borderColor: '#eee',
   },
-  submitBtn: {
-    backgroundColor: '#2AABEE',
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
+  durationChipSelected: { backgroundColor: '#1a1a1a', borderColor: '#1a1a1a' },
+  durationChipText: { fontSize: 14, fontWeight: '500', color: '#333' },
+  durationChipTextSelected: { color: '#fff' },
+
+  // Итог
+  summary: {
+    backgroundColor: '#fafafa', borderRadius: 14,
+    paddingHorizontal: 16, paddingVertical: 4,
+    marginTop: 4,
   },
-  submitBtnDisabled: { backgroundColor: '#b0d8f5' },
-  submitBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+
+  // Кнопка
+  footer: { padding: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  submitBtn: { backgroundColor: '#2AABEE', borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  submitBtnDisabled: { opacity: 0.6 },
+  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+});
+
+const sr = StyleSheet.create({
+  row: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+  },
+  label: { fontSize: 14, color: '#888' },
+  value: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
 });

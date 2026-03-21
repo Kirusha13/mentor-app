@@ -70,6 +70,7 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
   const [windows, setWindows] = useState<AvailableSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
+  const [tutorDropdownOpen, setTutorDropdownOpen] = useState(false);
 
   // Состояние формы
   const [selectedTutorId, setSelectedTutorId] = useState<number | null>(null);
@@ -91,6 +92,7 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
       }
     })();
   }, []);
+
 
   // Уникальные репетиторы
   const uniqueTutors = tutors.filter(
@@ -162,6 +164,22 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
     setSelectedDuration(null);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
   }
+
+  // Авто-выбор если репетитор или предмет один
+  useEffect(() => {
+    if (!loading && uniqueTutors.length === 1 && selectedTutorId === null) {
+      selectTutor(uniqueTutors[0].tutor_id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  useEffect(() => {
+    if (selectedTutorId !== null && subjectsForTutor.length === 1 && selectedTS === null) {
+      selectSubject(subjectsForTutor[0]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTutorId]);
+
   function selectDate(date: string) {
     setSelectedDate(date);
     setSelectedStart(null);
@@ -177,12 +195,12 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
   const handleBook = () => {
     if (!selectedTS || !selectedDate || !selectedStart || !endTime) return;
     Alert.alert(
-      'Подтверждение',
-      `${formatDateFull(selectedDate)}, ${fmt(selectedStart)} – ${fmt(endTime)}\n${selectedTS.subject_name} · ${cost} ₽`,
+      'Отправить запрос?',
+      `${formatDateFull(selectedDate)}, ${fmt(selectedStart)} – ${fmt(endTime)}\n${selectedTS.subject_name} · ${cost} ₽\n\nЗапрос будет отправлен репетитору. После одобрения занятие появится в расписании.`,
       [
         { text: 'Отмена', style: 'cancel' },
         {
-          text: 'Записаться',
+          text: 'Отправить',
           onPress: async () => {
             setBooking(true);
             try {
@@ -192,9 +210,9 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
                 start_time: selectedStart + ':00',
                 end_time: endTime + ':00',
               });
-              Alert.alert('Готово!', 'Занятие успешно записано', [{ text: 'OK', onPress: onSuccess }]);
+              Alert.alert('Запрос отправлен', 'Репетитор рассмотрит ваш запрос и подтвердит занятие.', [{ text: 'OK', onPress: onSuccess }]);
             } catch (e: any) {
-              Alert.alert('Ошибка', e?.response?.data?.detail ?? 'Не удалось записаться');
+              Alert.alert('Ошибка', e?.response?.data?.detail ?? 'Не удалось отправить запрос');
             } finally {
               setBooking(false);
             }
@@ -227,28 +245,58 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
         >
           {/* ── 1. Репетитор ── */}
           <Section label="Репетитор">
-            {uniqueTutors.length === 0
-              ? <Text style={s.emptyText}>Нет активных репетиторов</Text>
-              : uniqueTutors.map(ts => {
-                const isSelected = ts.tutor_id === selectedTutorId;
-                return (
-                  <TouchableOpacity
-                    key={ts.tutor_id}
-                    style={[s.tutorCard, isSelected && s.tutorCardSelected]}
-                    activeOpacity={0.8}
-                    onPress={() => selectTutor(ts.tutor_id)}
-                  >
-                    <View style={[s.avatar, isSelected && s.avatarSelected]}>
-                      <Text style={s.avatarText}>{ts.tutor_name?.[0] ?? '?'}</Text>
-                    </View>
-                    <Text style={[s.tutorName, isSelected && s.tutorNameSelected]}>
-                      {ts.tutor_name ?? 'Репетитор'}
-                    </Text>
-                    {isSelected && <Text style={s.checkmark}>✓</Text>}
-                  </TouchableOpacity>
-                );
-              })
-            }
+            {uniqueTutors.length === 0 ? (
+              <Text style={s.emptyText}>Нет активных репетиторов</Text>
+            ) : uniqueTutors.length === 1 ? (
+              <View style={s.dropdownSelected}>
+                <View style={s.avatar}>
+                  <Text style={s.avatarText}>{uniqueTutors[0].tutor_name?.[0] ?? '?'}</Text>
+                </View>
+                <Text style={s.dropdownSelectedText}>{uniqueTutors[0].tutor_name ?? 'Репетитор'}</Text>
+                <Text style={s.checkmark}>✓</Text>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={s.dropdownTrigger}
+                  activeOpacity={0.8}
+                  onPress={() => setTutorDropdownOpen(o => !o)}
+                >
+                  <Text style={selectedTutorId ? s.dropdownValueText : s.dropdownPlaceholder}>
+                    {selectedTutorId
+                      ? (uniqueTutors.find(t => t.tutor_id === selectedTutorId)?.tutor_name ?? 'Репетитор')
+                      : 'Выберите репетитора'}
+                  </Text>
+                  <Text style={s.dropdownChevron}>{tutorDropdownOpen ? '˄' : '˅'}</Text>
+                </TouchableOpacity>
+                {tutorDropdownOpen && (
+                  <View style={s.dropdownList}>
+                    {uniqueTutors.map((ts, idx) => {
+                      const isSelected = ts.tutor_id === selectedTutorId;
+                      return (
+                        <TouchableOpacity
+                          key={ts.tutor_id}
+                          style={[
+                            s.dropdownItem,
+                            isSelected && s.dropdownItemSelected,
+                            idx === uniqueTutors.length - 1 && { borderBottomWidth: 0 },
+                          ]}
+                          onPress={() => { selectTutor(ts.tutor_id); setTutorDropdownOpen(false); }}
+                        >
+                          <View style={[s.avatar, isSelected && s.avatarSelected]}>
+                            <Text style={s.avatarText}>{ts.tutor_name?.[0] ?? '?'}</Text>
+                          </View>
+                          <Text style={[s.dropdownItemText, isSelected && s.dropdownItemTextSelected]}>
+                            {ts.tutor_name ?? 'Репетитор'}
+                          </Text>
+                          {isSelected && <Text style={s.checkmark}>✓</Text>}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </>
+            )}
           </Section>
 
           {/* ── 2. Предмет ── */}
@@ -395,7 +443,7 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
           >
             {booking
               ? <ActivityIndicator color="#fff" />
-              : <Text style={s.bookBtnText}>Записаться · {cost} ₽</Text>
+              : <Text style={s.bookBtnText}>Отправить запрос · {cost} ₽</Text>
             }
           </TouchableOpacity>
         </View>
@@ -439,26 +487,57 @@ const s = StyleSheet.create({
 
   emptyText: { fontSize: 14, color: '#aaa' },
 
-  // Репетиторы
-  tutorCard: {
+  // Репетитор — dropdown
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fafafa',
+  },
+  dropdownPlaceholder: { fontSize: 15, color: '#bbb', flex: 1 },
+  dropdownValueText: { fontSize: 15, fontWeight: '600', color: '#1a1a1a', flex: 1 },
+  dropdownChevron: { fontSize: 16, color: '#aaa', marginLeft: 8 },
+  dropdownList: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fff',
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  dropdownItemSelected: { backgroundColor: '#EFF9FF' },
+  dropdownItemText: { flex: 1, fontSize: 15, fontWeight: '600', color: '#333' },
+  dropdownItemTextSelected: { color: '#2AABEE' },
+  dropdownSelected: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#f0f0f0',
-    backgroundColor: '#fafafa',
+    borderColor: '#2AABEE',
+    backgroundColor: '#EFF9FF',
   },
-  tutorCardSelected: { borderColor: '#2AABEE', backgroundColor: '#EFF9FF' },
+  dropdownSelectedText: { flex: 1, fontSize: 15, fontWeight: '600', color: '#2AABEE' },
   avatar: {
     width: 42, height: 42, borderRadius: 21,
-    backgroundColor: '#ddd', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#2AABEE', alignItems: 'center', justifyContent: 'center',
   },
   avatarSelected: { backgroundColor: '#2AABEE' },
   avatarText: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  tutorName: { flex: 1, fontSize: 15, fontWeight: '600', color: '#333' },
-  tutorNameSelected: { color: '#2AABEE' },
   checkmark: { fontSize: 16, color: '#2AABEE', fontWeight: '700' },
 
   // Предметы

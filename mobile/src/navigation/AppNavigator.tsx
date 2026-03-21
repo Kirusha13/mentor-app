@@ -1,8 +1,9 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { TheoryTopic } from '../api/materials';
 import { Assignment } from '../api/assignments';
 import { useAuth } from '../context/AuthContext';
@@ -84,7 +85,12 @@ function MainTabs() {
         headerStyle: { backgroundColor: '#fff' },
         headerShadowVisible: false,
         tabBarActiveTintColor: '#2AABEE',
-        tabBarInactiveTintColor: '#999',
+        tabBarInactiveTintColor: '#aaa',
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '500', marginBottom: 2 },
+        tabBarStyle: {
+          borderTopColor: '#f0f0f0',
+          paddingTop: 6,
+        },
       }}
     >
       <Tab.Screen
@@ -93,7 +99,9 @@ function MainTabs() {
         options={{
           headerShown: false,
           tabBarLabel: 'Расписание',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📅</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={24} color={color} />
+          ),
         }}
       />
       <Tab.Screen
@@ -102,7 +110,9 @@ function MainTabs() {
         options={{
           headerShown: false,
           tabBarLabel: 'Задания',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📝</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'document-text' : 'document-text-outline'} size={24} color={color} />
+          ),
         }}
       />
       <Tab.Screen
@@ -111,7 +121,9 @@ function MainTabs() {
         options={{
           headerShown: false,
           tabBarLabel: 'Материалы',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📚</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'book' : 'book-outline'} size={24} color={color} />
+          ),
         }}
       />
       <Tab.Screen
@@ -120,7 +132,9 @@ function MainTabs() {
         options={{
           headerShown: false,
           tabBarLabel: 'Профиль',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>👤</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
+          ),
         }}
       />
     </Tab.Navigator>

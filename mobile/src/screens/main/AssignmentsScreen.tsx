@@ -82,10 +82,9 @@ export default function AssignmentsScreen({ navigation }: Props) {
         if (item.type === "header") {
           const isCollapsed = collapsed[item.sectionKey];
           return (
-            <TouchableOpacity style={styles.sectionHeader} onPress={() => toggle(item.sectionKey)} activeOpacity={0.7}>
-              <View style={[styles.sectionDot, { backgroundColor: item.color }]} />
-              <Text style={styles.sectionTitle}>{item.label}</Text>
-              <View style={styles.sectionCount}><Text style={styles.sectionCountText}>{item.count}</Text></View>
+            <TouchableOpacity style={[styles.sectionHeader, { borderLeftColor: item.color }]} onPress={() => toggle(item.sectionKey)} activeOpacity={0.7}>
+              <Text style={[styles.sectionTitle, { color: item.color }]}>{item.label}</Text>
+              <View style={[styles.sectionCount, { backgroundColor: item.color + '22' }]}><Text style={[styles.sectionCountText, { color: item.color }]}>{item.count}</Text></View>
               <Text style={styles.sectionChevron}>{isCollapsed ? "›" : "˅"}</Text>
             </TouchableOpacity>
           );
@@ -102,11 +101,17 @@ export default function AssignmentsScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   list: { padding: 16, paddingTop: 8 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 4, marginTop: 8, marginBottom: 4, gap: 8 },
-  sectionDot: { width: 10, height: 10, borderRadius: 5 },
-  sectionTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: "#1a1a1a" },
-  sectionCount: { backgroundColor: "#eee", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  sectionCountText: { fontSize: 12, fontWeight: "600", color: "#666" },
+  sectionHeader: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingVertical: 12, paddingHorizontal: 14,
+    marginTop: 12, marginBottom: 6,
+    backgroundColor: "#fff", borderRadius: 12,
+    borderLeftWidth: 4,
+    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+  },
+  sectionTitle: { flex: 1, fontSize: 14, fontWeight: "700" },
+  sectionCount: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  sectionCountText: { fontSize: 12, fontWeight: "700" },
   sectionChevron: { fontSize: 18, color: "#bbb" },
   card: { backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5, elevation: 2, gap: 6 },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
