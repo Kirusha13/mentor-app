@@ -5,7 +5,7 @@ export interface Lesson {
   lesson_date: string;
   start_time: string;
   end_time: string;
-  conduct_status: 'scheduled' | 'conducted' | 'cancelled' | 'rescheduled' | 'reschedule_pending' | 'reschedule_rejected';
+  conduct_status: 'scheduled' | 'conducted' | 'cancelled' | 'rescheduled' | 'reschedule_pending' | 'reschedule_rejected' | 'booking_pending' | 'booking_rejected';
   payment_status: 'unpaid' | 'paid';
   cost: number | null;
   grade: number | null;

@@ -243,8 +243,10 @@ export default function AssignmentDetailScreen({ route }: Props) {
           </View>
         )}
 
-        {/* Кнопка отправки */}
-        {isEditable && (
+      </ScrollView>
+
+      {isEditable && (
+        <View style={styles.submitContainer}>
           <TouchableOpacity
             style={[styles.submitBtn, submitting && { opacity: 0.6 }]}
             onPress={handleSubmit}
@@ -255,8 +257,8 @@ export default function AssignmentDetailScreen({ route }: Props) {
               : <Text style={styles.submitBtnText}>Отправить ответ</Text>
             }
           </TouchableOpacity>
-        )}
-      </ScrollView>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -343,6 +345,12 @@ const styles = StyleSheet.create({
   },
   addPhotoBtnText: { color: '#2AABEE', fontWeight: '600', fontSize: 15 },
 
+  submitContainer: {
+    padding: 16,
+    backgroundColor: '#f5f5f5',
+    borderTopWidth: 1,
+    borderTopColor: '#e8e8e8',
+  },
   submitBtn: {
     backgroundColor: '#4CAF50',
     borderRadius: 12,

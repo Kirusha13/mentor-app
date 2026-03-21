@@ -28,6 +28,8 @@ const STATUS_LABEL: Record<Lesson['conduct_status'], string> = {
   rescheduled: 'Перенесено',
   reschedule_pending: 'Ожидает переноса',
   reschedule_rejected: 'Перенос отклонён',
+  booking_pending: 'Ожидает подтверждения',
+  booking_rejected: 'Запрос отклонён',
 };
 const STATUS_COLOR: Record<Lesson['conduct_status'], string> = {
   scheduled: '#2AABEE',
@@ -36,6 +38,8 @@ const STATUS_COLOR: Record<Lesson['conduct_status'], string> = {
   rescheduled: '#FF9800',
   reschedule_pending: '#9C27B0',
   reschedule_rejected: '#F44336',
+  booking_pending: '#9C27B0',
+  booking_rejected: '#F44336',
 };
 const STATUS_BG: Record<Lesson['conduct_status'], string> = {
   scheduled: '#EFF9FF',
@@ -44,6 +48,8 @@ const STATUS_BG: Record<Lesson['conduct_status'], string> = {
   rescheduled: '#FFF8EE',
   reschedule_pending: '#F9F0FF',
   reschedule_rejected: '#FFF2F1',
+  booking_pending: '#F9F0FF',
+  booking_rejected: '#FFF2F1',
 };
 const PAYMENT_LABEL: Record<Lesson['payment_status'], string> = {
   unpaid: 'Не оплачено',

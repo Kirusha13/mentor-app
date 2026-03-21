@@ -177,12 +177,12 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
   const handleBook = () => {
     if (!selectedTS || !selectedDate || !selectedStart || !endTime) return;
     Alert.alert(
-      'Подтверждение',
-      `${formatDateFull(selectedDate)}, ${fmt(selectedStart)} – ${fmt(endTime)}\n${selectedTS.subject_name} · ${cost} ₽`,
+      'Отправить запрос?',
+      `${formatDateFull(selectedDate)}, ${fmt(selectedStart)} – ${fmt(endTime)}\n${selectedTS.subject_name} · ${cost} ₽\n\nЗапрос будет отправлен репетитору. После одобрения занятие появится в расписании.`,
       [
         { text: 'Отмена', style: 'cancel' },
         {
-          text: 'Записаться',
+          text: 'Отправить',
           onPress: async () => {
             setBooking(true);
             try {
@@ -192,9 +192,9 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
                 start_time: selectedStart + ':00',
                 end_time: endTime + ':00',
               });
-              Alert.alert('Готово!', 'Занятие успешно записано', [{ text: 'OK', onPress: onSuccess }]);
+              Alert.alert('Запрос отправлен', 'Репетитор рассмотрит ваш запрос и подтвердит занятие.', [{ text: 'OK', onPress: onSuccess }]);
             } catch (e: any) {
-              Alert.alert('Ошибка', e?.response?.data?.detail ?? 'Не удалось записаться');
+              Alert.alert('Ошибка', e?.response?.data?.detail ?? 'Не удалось отправить запрос');
             } finally {
               setBooking(false);
             }
@@ -395,7 +395,7 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
           >
             {booking
               ? <ActivityIndicator color="#fff" />
-              : <Text style={s.bookBtnText}>Записаться · {cost} ₽</Text>
+              : <Text style={s.bookBtnText}>Отправить запрос · {cost} ₽</Text>
             }
           </TouchableOpacity>
         </View>
