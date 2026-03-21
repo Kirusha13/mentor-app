@@ -18,15 +18,19 @@ type Props = {
   navigation: NativeStackNavigationProp<MaterialsStackParamList, 'TopicsList'>;
 };
 
+type ListItem =
+  | { type: 'tutor'; tutorId: number; tutorName: string }
+  | { type: 'subject'; subjectId: number; subjectName: string }
+  | { type: 'topic'; topic: TheoryTopic; allTopics: TheoryTopic[]; depth: number };
+
 export default function MaterialsScreen({ navigation }: Props) {
   const [topics, setTopics] = useState<TheoryTopic[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedTutorId, setSelectedTutorId] = useState<number | null>(null);
-  const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
-  const [tutorDropdownOpen, setTutorDropdownOpen] = useState(false);
-  const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
+  const [expandedTutors, setExpandedTutors] = useState<Set<number>>(new Set());
+  const [expandedSubjects, setExpandedSubjects] = useState<Set<number>>(new Set());
+  const [expandedTopics, setExpandedTopics] = useState<Set<number>>(new Set());
 
   const load = useCallback(async () => {
     try {
@@ -34,13 +38,13 @@ export default function MaterialsScreen({ navigation }: Props) {
       setTopics(topicsData);
       setTutorStudents(tsData);
 
-      // Авто-выбор если данные однозначные
-      const uniqueTutors = [...new Map(tsData.map(t => [t.tutor_id, t])).values()];
-      if (uniqueTutors.length === 1) {
-        setSelectedTutorId(uniqueTutors[0].tutor_id);
-        const subjects = tsData.filter(t => t.tutor_id === uniqueTutors[0].tutor_id);
+      // Авто-раскрытие если репетитор и предмет один
+      const uniqueTutorIds = [...new Set(tsData.map(t => t.tutor_id))];
+      if (uniqueTutorIds.length === 1) {
+        setExpandedTutors(new Set([uniqueTutorIds[0]]));
+        const subjects = tsData.filter(t => t.tutor_id === uniqueTutorIds[0]);
         if (subjects.length === 1) {
-          setSelectedSubjectId(subjects[0].subject_id);
+          setExpandedSubjects(new Set([subjects[0].subject_id]));
         }
       }
     } finally {
@@ -52,258 +56,227 @@ export default function MaterialsScreen({ navigation }: Props) {
 
   const insets = useSafeAreaInsets();
 
-  // Уникальные репетиторы
+  const toggleTutor = (id: number) => setExpandedTutors(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const toggleSubject = (id: number) => setExpandedSubjects(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const toggleTopic = (id: number) => setExpandedTopics(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  // Build flat list
   const uniqueTutors = [...new Map(tutorStudents.map(t => [t.tutor_id, t])).values()];
+  const listData: ListItem[] = [];
 
-  // Предметы для выбранного репетитора
-  const subjectsForTutor = selectedTutorId !== null
-    ? tutorStudents.filter(ts => ts.tutor_id === selectedTutorId)
-    : [];
+  for (const tutor of uniqueTutors) {
+    listData.push({ type: 'tutor', tutorId: tutor.tutor_id, tutorName: tutor.tutor_name ?? 'Репетитор' });
+    if (!expandedTutors.has(tutor.tutor_id)) continue;
 
-  // Топики для выбранного предмета
-  const rootTopics = selectedSubjectId !== null
-    ? topics.filter(t => t.subject_id === selectedSubjectId && t.parent_topic_id === null)
-    : [];
+    const subjects = tutorStudents.filter(ts => ts.tutor_id === tutor.tutor_id);
+    for (const sub of subjects) {
+      listData.push({ type: 'subject', subjectId: sub.subject_id, subjectName: sub.subject_name ?? 'Предмет' });
+      if (!expandedSubjects.has(sub.subject_id)) continue;
 
-  const selectedTutorName = uniqueTutors.find(t => t.tutor_id === selectedTutorId)?.tutor_name ?? null;
-  const selectedSubjectName = subjectsForTutor.find(t => t.subject_id === selectedSubjectId)?.subject_name ?? null;
+      const rootTopics = topics.filter(t => t.subject_id === sub.subject_id && t.parent_topic_id === null);
+      for (const topic of rootTopics) {
+        const children = topics.filter(t => t.parent_topic_id === topic.id);
+        listData.push({ type: 'topic', topic, allTopics: topics, depth: 0 });
+        if (expandedTopics.has(topic.id)) {
+          for (const child of children) {
+            listData.push({ type: 'topic', topic: child, allTopics: topics, depth: 1 });
+          }
+        }
+      }
+    }
+  }
 
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f5f5f5', paddingTop: insets.top }}>
-      {/* Фильтры */}
-      <View style={styles.filters}>
-        {/* Репетитор */}
-        {uniqueTutors.length === 1 ? (
-          <View style={styles.filterSingle}>
-            <Text style={styles.filterSingleLabel}>Репетитор</Text>
-            <Text style={styles.filterSingleValue}>{uniqueTutors[0].tutor_name ?? 'Репетитор'}</Text>
-          </View>
-        ) : (
-          <View style={styles.dropdownWrapper}>
+    <FlatList
+      style={{ paddingTop: insets.top, backgroundColor: '#f5f5f5' }}
+      data={listData}
+      keyExtractor={(item, idx) =>
+        item.type === 'tutor' ? `tutor-${item.tutorId}` :
+        item.type === 'subject' ? `subject-${item.subjectId}` :
+        `topic-${item.topic.id}-d${item.depth}`
+      }
+      contentContainerStyle={styles.list}
+      ListEmptyComponent={<Text style={styles.emptyText}>Нет репетиторов</Text>}
+      renderItem={({ item }) => {
+        if (item.type === 'tutor') {
+          const isOpen = expandedTutors.has(item.tutorId);
+          return (
             <TouchableOpacity
-              style={styles.dropdownTrigger}
-              onPress={() => { setTutorDropdownOpen(o => !o); setSubjectDropdownOpen(false); }}
+              style={[styles.tutorHeader, isOpen && styles.tutorHeaderOpen]}
+              onPress={() => toggleTutor(item.tutorId)}
+              activeOpacity={0.75}
             >
-              <Text style={selectedTutorId !== null ? styles.dropdownValue : styles.dropdownPlaceholder}>
-                {selectedTutorName ?? 'Выберите репетитора'}
-              </Text>
-              <Text style={styles.chevron}>{tutorDropdownOpen ? '˄' : '˅'}</Text>
-            </TouchableOpacity>
-            {tutorDropdownOpen && (
-              <View style={styles.dropdownList}>
-                {uniqueTutors.map((ts, idx) => (
-                  <TouchableOpacity
-                    key={ts.tutor_id}
-                    style={[
-                      styles.dropdownItem,
-                      ts.tutor_id === selectedTutorId && styles.dropdownItemSelected,
-                      idx === uniqueTutors.length - 1 && { borderBottomWidth: 0 },
-                    ]}
-                    onPress={() => {
-                      setSelectedTutorId(ts.tutor_id);
-                      setSelectedSubjectId(null);
-                      setTutorDropdownOpen(false);
-                    }}
-                  >
-                    <Text style={[
-                      styles.dropdownItemText,
-                      ts.tutor_id === selectedTutorId && styles.dropdownItemTextSelected,
-                    ]}>
-                      {ts.tutor_name ?? 'Репетитор'}
-                    </Text>
-                    {ts.tutor_id === selectedTutorId && <Text style={styles.checkmark}>✓</Text>}
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.tutorAvatar}>
+                <Text style={styles.tutorAvatarText}>{item.tutorName[0]?.toUpperCase() ?? '?'}</Text>
               </View>
-            )}
-          </View>
-        )}
+              <Text style={styles.tutorName}>{item.tutorName}</Text>
+              <Text style={styles.chevron}>{isOpen ? '˅' : '›'}</Text>
+            </TouchableOpacity>
+          );
+        }
 
-        {/* Предмет */}
-        {selectedTutorId !== null && (
-          subjectsForTutor.length === 1 ? (
-            <View style={styles.filterSingle}>
-              <Text style={styles.filterSingleLabel}>Предмет</Text>
-              <Text style={styles.filterSingleValue}>{subjectsForTutor[0].subject_name ?? 'Предмет'}</Text>
+        if (item.type === 'subject') {
+          const isOpen = expandedSubjects.has(item.subjectId);
+          return (
+            <TouchableOpacity
+              style={[styles.subjectHeader, isOpen && styles.subjectHeaderOpen]}
+              onPress={() => toggleSubject(item.subjectId)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.subjectName}>{item.subjectName}</Text>
+              <Text style={styles.chevronSmall}>{isOpen ? '˅' : '›'}</Text>
+            </TouchableOpacity>
+          );
+        }
+
+        // topic at depth 0 or 1
+        const { topic, allTopics, depth } = item;
+        const children = allTopics.filter(t => t.parent_topic_id === topic.id);
+        const hasChildren = children.length > 0;
+        const isOpen = expandedTopics.has(topic.id);
+
+        return (
+          <TouchableOpacity
+            style={[styles.topicRow, depth === 1 && styles.topicRowIndented]}
+            activeOpacity={0.8}
+            onPress={() => {
+              if (hasChildren) {
+                toggleTopic(topic.id);
+              } else {
+                navigation.navigate('TopicDetail', { topic, allTopics });
+              }
+            }}
+          >
+            {depth === 1 && <View style={styles.subtopicLine} />}
+            <View style={styles.topicContent}>
+              <Text style={styles.topicTitle}>{topic.title}</Text>
+              {topic.description ? (
+                <Text style={styles.topicDesc} numberOfLines={1}>{topic.description}</Text>
+              ) : null}
             </View>
-          ) : (
-            <View style={styles.dropdownWrapper}>
-              <TouchableOpacity
-                style={styles.dropdownTrigger}
-                onPress={() => { setSubjectDropdownOpen(o => !o); setTutorDropdownOpen(false); }}
-              >
-                <Text style={selectedSubjectId !== null ? styles.dropdownValue : styles.dropdownPlaceholder}>
-                  {selectedSubjectName ?? 'Выберите предмет'}
-                </Text>
-                <Text style={styles.chevron}>{subjectDropdownOpen ? '˄' : '˅'}</Text>
-              </TouchableOpacity>
-              {subjectDropdownOpen && (
-                <View style={styles.dropdownList}>
-                  {subjectsForTutor.map((ts, idx) => (
-                    <TouchableOpacity
-                      key={ts.subject_id}
-                      style={[
-                        styles.dropdownItem,
-                        ts.subject_id === selectedSubjectId && styles.dropdownItemSelected,
-                        idx === subjectsForTutor.length - 1 && { borderBottomWidth: 0 },
-                      ]}
-                      onPress={() => {
-                        setSelectedSubjectId(ts.subject_id);
-                        setSubjectDropdownOpen(false);
-                      }}
-                    >
-                      <Text style={[
-                        styles.dropdownItemText,
-                        ts.subject_id === selectedSubjectId && styles.dropdownItemTextSelected,
-                      ]}>
-                        {ts.subject_name ?? 'Предмет'}
-                      </Text>
-                      {ts.subject_id === selectedSubjectId && <Text style={styles.checkmark}>✓</Text>}
-                    </TouchableOpacity>
-                  ))}
+            <View style={styles.topicRight}>
+              {hasChildren && (
+                <View style={styles.childBadge}>
+                  <Text style={styles.childBadgeText}>{children.length}</Text>
                 </View>
               )}
+              <Text style={styles.topicChevron}>
+                {hasChildren ? (isOpen ? '˅' : '›') : '›'}
+              </Text>
             </View>
-          )
-        )}
-      </View>
-
-      {/* Список топиков */}
-      {selectedSubjectId === null ? (
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyText}>
-            {selectedTutorId === null ? 'Выберите репетитора' : 'Выберите предмет'}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={rootTopics}
-          keyExtractor={item => `topic-${item.id}`}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={<Text style={styles.emptyText}>Тем пока нет</Text>}
-          renderItem={({ item }) => {
-            const childCount = topics.filter(t => t.parent_topic_id === item.id).length;
-            return (
-              <TouchableOpacity
-                style={styles.card}
-                onPress={() => navigation.navigate('TopicDetail', { topic: item, allTopics: topics })}
-              >
-                <View style={styles.cardContent}>
-                  <Text style={styles.title}>{item.title}</Text>
-                  {item.description ? (
-                    <Text style={styles.desc} numberOfLines={2}>{item.description}</Text>
-                  ) : null}
-                </View>
-                <View style={styles.meta}>
-                  {childCount > 0 && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{childCount} подтем</Text>
-                    </View>
-                  )}
-                  <Text style={styles.arrow}>›</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-        />
-      )}
-    </View>
+          </TouchableOpacity>
+        );
+      }}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  filters: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    zIndex: 10,
-  },
-
-  filterSingle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  filterSingleLabel: { fontSize: 13, color: '#aaa', fontWeight: '500' },
-  filterSingleValue: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
-
-  dropdownWrapper: { zIndex: 20 },
-  dropdownTrigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#e0e0e0',
-    backgroundColor: '#fafafa',
-  },
-  dropdownPlaceholder: { fontSize: 15, color: '#bbb', flex: 1 },
-  dropdownValue: { fontSize: 15, fontWeight: '600', color: '#1a1a1a', flex: 1 },
-  chevron: { fontSize: 16, color: '#aaa', marginLeft: 8 },
-  dropdownList: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    marginTop: 4,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#e0e0e0',
-    backgroundColor: '#fff',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-    zIndex: 100,
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  dropdownItemSelected: { backgroundColor: '#EFF9FF' },
-  dropdownItemText: { flex: 1, fontSize: 15, color: '#333', fontWeight: '500' },
-  dropdownItemTextSelected: { color: '#2AABEE', fontWeight: '600' },
-  checkmark: { fontSize: 15, color: '#2AABEE', fontWeight: '700' },
-
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  list: { padding: 16, paddingTop: 8, gap: 0 },
   emptyText: { textAlign: 'center', color: '#999', marginTop: 60 },
 
-  list: { padding: 16 },
-  card: {
+  // Репетитор
+  tutorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginTop: 12,
+    marginBottom: 2,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2AABEE',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tutorHeaderOpen: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginBottom: 0,
+  },
+  tutorAvatar: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#2AABEE',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  tutorAvatarText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  tutorName: { flex: 1, fontSize: 15, fontWeight: '700', color: '#1a1a1a' },
+  chevron: { fontSize: 20, color: '#2AABEE', fontWeight: '600' },
+
+  // Предмет
+  subjectHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    paddingLeft: 20,
+    backgroundColor: '#EFF9FF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2AABEE',
+    marginBottom: 2,
+  },
+  subjectHeaderOpen: {
+    borderBottomColor: '#daeef9',
+    borderBottomWidth: 1,
+  },
+  subjectName: { fontSize: 13, fontWeight: '600', color: '#1a7bbf', textTransform: 'uppercase', letterSpacing: 0.4 },
+  chevronSmall: { fontSize: 17, color: '#2AABEE' },
+
+  // Тема
+  topicRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f4f4f4',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2AABEE',
+    gap: 10,
   },
-  cardContent: { flex: 1, marginRight: 8 },
-  title: { fontSize: 15, fontWeight: '600', color: '#1a1a1a', marginBottom: 4 },
-  desc: { fontSize: 13, color: '#888', lineHeight: 18 },
-  meta: { alignItems: 'flex-end', gap: 6 },
-  badge: {
+  topicRowIndented: {
+    paddingLeft: 24,
+    borderLeftColor: '#c8e8f8',
+    backgroundColor: '#fafafa',
+  },
+  subtopicLine: {
+    position: 'absolute',
+    left: 16,
+    top: 0,
+    bottom: 0,
+    width: 2,
+    backgroundColor: '#d0eaf8',
+  },
+  topicContent: { flex: 1 },
+  topicTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  topicDesc: { fontSize: 12, color: '#aaa', marginTop: 2 },
+  topicRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  childBadge: {
     backgroundColor: '#E3F2FD',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
     borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
   },
-  badgeText: { fontSize: 11, color: '#1976D2', fontWeight: '600' },
-  arrow: { fontSize: 22, color: '#ccc', lineHeight: 24 },
+  childBadgeText: { fontSize: 11, fontWeight: '700', color: '#1976D2' },
+  topicChevron: { fontSize: 20, color: '#ccc' },
 });
