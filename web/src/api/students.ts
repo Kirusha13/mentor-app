@@ -11,7 +11,21 @@ export interface Student {
   last_visited_at?: string | null;
 }
 
+export interface CreateStudentPayload {
+  full_name: string;
+  telegram_id: number;
+  grade?: number;
+  phone_number?: string;
+}
+
 export const getStudents = async (): Promise<Student[]> => {
   const response = await apiClient.get('/students');
+  return response.data;
+};
+
+export const createStudent = async (
+  payload: CreateStudentPayload
+): Promise<Student> => {
+  const response = await apiClient.post('/students', payload);
   return response.data;
 };
