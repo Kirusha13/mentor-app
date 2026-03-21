@@ -74,6 +74,26 @@ async def update_me(
     return student
 
 
+@router.post("/me/avatar", response_model=StudentOut, summary="Загрузить аватар ученика")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    avatars_dir = os.path.join(settings.MEDIA_DIR, "avatars")
+    os.makedirs(avatars_dir, exist_ok=True)
+    ext = os.path.splitext(file.filename or "")[1] or ".jpg"
+    filename = f"{student.id}{ext}"
+    filepath = os.path.join(avatars_dir, filename)
+    async with aiofiles.open(filepath, "wb") as f:
+        content = await file.read()
+        await f.write(content)
+    student.avatar_url = f"/media/avatars/{filename}"
+    await db.commit()
+    await db.refresh(student)
+    return student
+
+
 @router.get("/tutors", response_model=list[TutorStudentOut], summary="Мои репетиторы")
 async def my_tutors(
     student: Student = Depends(get_current_student),
@@ -223,7 +243,7 @@ async def book_lesson(
         lesson_date=data.lesson_date,
         start_time=data.start_time,
         end_time=data.end_time,
-        conduct_status="scheduled",
+        conduct_status="booking_pending",
         payment_status="unpaid",
         cost=cost,
     )

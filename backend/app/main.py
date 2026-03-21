@@ -29,6 +29,7 @@ async def auto_conduct_lessons():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await auto_conduct_lessons()
     scheduler = AsyncIOScheduler()
     scheduler.add_job(auto_conduct_lessons, "cron", hour=0, minute=5)
     scheduler.start()
