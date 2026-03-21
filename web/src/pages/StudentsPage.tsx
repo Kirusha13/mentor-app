@@ -21,8 +21,8 @@ interface StudentCardData {
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
-  padding: '20px',
-  borderRadius: '22px',
+  padding: '16px',
+  borderRadius: '18px',
   border: '1px solid rgba(24,33,47,0.08)',
   boxShadow: 'var(--shadow-card)',
 } as const;
@@ -267,8 +267,8 @@ export default function StudentsPage() {
       <section
         style={{
           ...panelStyle,
-          padding: '28px',
-          marginBottom: '22px',
+          padding: '20px',
+          marginBottom: '16px',
           background:
             'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
         }}
@@ -286,20 +286,20 @@ export default function StudentsPage() {
             <div
               style={{
                 display: 'inline-flex',
-                padding: '8px 12px',
+                padding: '6px 10px',
                 borderRadius: 999,
                 background: 'rgba(217,111,50,0.12)',
                 color: '#b9551f',
                 fontWeight: 700,
                 fontSize: 13,
-                marginBottom: 14,
+                marginBottom: 10,
               }}
             >
               Этап 1
             </div>
             <h1
               style={{
-                fontSize: 'clamp(2rem, 4vw, 3.2rem)',
+                fontSize: 'clamp(1.7rem, 3vw, 2.45rem)',
                 lineHeight: 0.98,
                 letterSpacing: '-0.04em',
                 marginBottom: 12,
@@ -309,7 +309,7 @@ export default function StudentsPage() {
               <br />
               к предметам
             </h1>
-            <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 16, marginBottom: 0 }}>
+            <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 14, marginBottom: 0 }}>
               Теперь можно создавать ученика прямо здесь и сразу привязывать его к предмету,
               чтобы не блокировать тестирование следующих этапов.
             </p>
@@ -317,9 +317,9 @@ export default function StudentsPage() {
 
           <div
             style={{
-              minWidth: 220,
-              borderRadius: 22,
-              padding: 18,
+              minWidth: 200,
+              borderRadius: 18,
+              padding: 14,
               background: '#172033',
               color: '#fff',
             }}
@@ -327,7 +327,7 @@ export default function StudentsPage() {
             <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>
               Всего карточек
             </div>
-            <div style={{ fontSize: 38, fontWeight: 800, lineHeight: 1, marginBottom: 10 }}>
+            <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, marginBottom: 8 }}>
               {filteredCards.length}
             </div>
             <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>
@@ -340,14 +340,14 @@ export default function StudentsPage() {
       <div
         style={{
           display: 'grid',
-          gap: '18px',
+          gap: '14px',
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          marginBottom: '24px',
+          marginBottom: '18px',
         }}
       >
         <section style={panelStyle}>
-          <h3 style={{ fontSize: 22, marginBottom: 10 }}>Поиск</h3>
-          <p style={{ color: '#687486', marginBottom: 14 }}>
+          <h3 style={{ fontSize: 19, marginBottom: 8 }}>Поиск</h3>
+          <p style={{ color: '#687486', marginBottom: 10, fontSize: 14 }}>
             Быстрый фильтр по имени ученика и названию предмета.
           </p>
           <input
@@ -358,8 +358,8 @@ export default function StudentsPage() {
         </section>
 
         <section style={panelStyle}>
-          <h3 style={{ fontSize: 22, marginBottom: 10 }}>Создать ученика</h3>
-          <p style={{ color: '#687486', marginBottom: 14 }}>
+          <h3 style={{ fontSize: 19, marginBottom: 8 }}>Создать ученика</h3>
+          <p style={{ color: '#687486', marginBottom: 10, fontSize: 14 }}>
             Новый ученик сразу создаётся и привязывается к выбранному предмету.
           </p>
 
@@ -375,7 +375,7 @@ export default function StudentsPage() {
               Сначала создай предмет на странице "Предметы".
             </div>
           ) : (
-            <div style={{ display: 'grid', gap: '10px' }}>
+            <div style={{ display: 'grid', gap: '8px' }}>
               <input
                 value={newStudentName}
                 onChange={(e) => setNewStudentName(e.target.value)}
@@ -444,8 +444,8 @@ export default function StudentsPage() {
         </section>
 
         <section style={panelStyle}>
-          <h3 style={{ fontSize: 22, marginBottom: 10 }}>Привязать ученика</h3>
-          <p style={{ color: '#687486', marginBottom: 14 }}>
+          <h3 style={{ fontSize: 19, marginBottom: 8 }}>Привязать ученика</h3>
+          <p style={{ color: '#687486', marginBottom: 10, fontSize: 14 }}>
             Для уже существующих учеников можно создать отдельную связку с предметом.
           </p>
 
@@ -483,7 +483,7 @@ export default function StudentsPage() {
               Сначала создай предмет на отдельной странице "Предметы".
             </div>
           ) : (
-            <div style={{ display: 'grid', gap: '10px' }}>
+            <div style={{ display: 'grid', gap: '8px' }}>
               <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)}>
                 {availableStudents.map((student) => (
                   <option key={student.id} value={student.id}>
@@ -536,14 +536,14 @@ export default function StudentsPage() {
         ) : filteredCards.length === 0 ? (
           <p style={{ color: '#687486', marginBottom: 0 }}>Ученики не найдены</p>
         ) : (
-          <div style={{ display: 'grid', gap: '16px' }}>
+            <div style={{ display: 'grid', gap: '12px' }}>
             {filteredCards.map(({ student, tutorStudent, subject }) => (
               <article
                 key={student.id}
                 style={{
                   border: '1px solid rgba(24,33,47,0.08)',
-                  borderRadius: '22px',
-                  padding: '20px',
+                  borderRadius: '18px',
+                  padding: '16px',
                   background:
                     'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.9) 100%)',
                 }}
@@ -552,20 +552,20 @@ export default function StudentsPage() {
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    gap: '18px',
+                    gap: '12px',
                     alignItems: 'flex-start',
                     flexWrap: 'wrap',
                   }}
                 >
                   <div>
-                    <h3 style={{ marginBottom: '10px', fontSize: 24 }}>{student.full_name}</h3>
+                    <h3 style={{ marginBottom: '8px', fontSize: 21 }}>{student.full_name}</h3>
 
                     <div
                       style={{
                         display: 'flex',
                         flexWrap: 'wrap',
-                        gap: 10,
-                        marginBottom: 14,
+                        gap: 8,
+                        marginBottom: 10,
                       }}
                     >
                       {[
@@ -577,11 +577,11 @@ export default function StudentsPage() {
                         <span
                           key={item}
                           style={{
-                            padding: '8px 12px',
+                            padding: '6px 10px',
                             borderRadius: 999,
                             background: 'rgba(23,32,51,0.06)',
                             color: '#324055',
-                            fontSize: 14,
+                            fontSize: 13,
                           }}
                         >
                           {item}
@@ -589,11 +589,11 @@ export default function StudentsPage() {
                       ))}
                     </div>
 
-                    <p style={{ marginBottom: 6, color: '#435066' }}>
+                    <p style={{ marginBottom: 4, color: '#435066', fontSize: 14 }}>
                       <strong>Тариф:</strong>{' '}
                       {tutorStudent?.hourly_rate ? `${tutorStudent.hourly_rate} ₽/ч` : '—'}
                     </p>
-                    <p style={{ marginBottom: 0, color: '#435066' }}>
+                    <p style={{ marginBottom: 0, color: '#435066', fontSize: 14 }}>
                       <strong>Статус:</strong> {tutorStudent?.status || '—'}
                     </p>
                   </div>
@@ -604,9 +604,9 @@ export default function StudentsPage() {
                     style={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 260px))',
-                      gap: '12px',
-                      marginTop: '18px',
-                      paddingTop: '18px',
+                      gap: '10px',
+                      marginTop: '14px',
+                      paddingTop: '14px',
                       borderTop: '1px solid rgba(24,33,47,0.08)',
                     }}
                   >
