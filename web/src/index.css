@@ -17,10 +17,10 @@
   --border-soft: rgba(24, 33, 47, 0.1);
   --accent: #d96f32;
   --accent-strong: #b9551f;
-  --shadow-card: 0 14px 30px rgba(22, 30, 44, 0.08);
-  --radius-lg: 24px;
-  --radius-md: 18px;
-  --radius-sm: 12px;
+  --shadow-card: 0 10px 24px rgba(22, 30, 44, 0.07);
+  --radius-lg: 20px;
+  --radius-md: 16px;
+  --radius-sm: 10px;
 }
 
 * {
@@ -57,8 +57,9 @@ textarea {
 button {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  padding: 0.85rem 1.1rem;
+  padding: 0.7rem 0.95rem;
   font-weight: 700;
+  line-height: 1.15;
   background: var(--accent);
   color: #fff;
   cursor: pointer;
@@ -89,7 +90,8 @@ textarea {
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.94);
   color: var(--text-primary);
-  padding: 0.9rem 1rem;
+  padding: 0.72rem 0.9rem;
+  line-height: 1.2;
   outline: none;
   transition:
     border-color 140ms ease,
@@ -120,4 +122,10 @@ p {
 
 #root {
   min-height: 100vh;
+}
+
+@media (max-width: 1200px) {
+  :root {
+    --shadow-card: 0 8px 20px rgba(22, 30, 44, 0.06);
+  }
 }

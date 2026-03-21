@@ -30,7 +30,7 @@ export default function Layout({ children }: LayoutProps) {
       style={{
         minHeight: '100vh',
         display: 'grid',
-        gridTemplateColumns: '280px minmax(0, 1fr)',
+        gridTemplateColumns: '248px minmax(0, 1fr)',
       }}
     >
       <aside
@@ -38,7 +38,7 @@ export default function Layout({ children }: LayoutProps) {
           background:
             'linear-gradient(180deg, rgba(23,32,51,0.98) 0%, rgba(26,38,59,0.97) 100%)',
           color: '#f8fafc',
-          padding: '28px 18px 22px',
+          padding: '20px 14px 16px',
           borderRight: '1px solid rgba(255,255,255,0.06)',
           boxShadow: '18px 0 40px rgba(18, 26, 38, 0.12)',
           position: 'sticky',
@@ -46,12 +46,12 @@ export default function Layout({ children }: LayoutProps) {
           height: '100vh',
           display: 'flex',
           flexDirection: 'column',
-          gap: 18,
+          gap: 14,
         }}
       >
         <div
           style={{
-            padding: '8px 10px 20px',
+            padding: '6px 8px 16px',
             borderBottom: '1px solid rgba(255,255,255,0.08)',
           }}
         >
@@ -72,7 +72,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </div>
 
-        <nav style={{ display: 'grid', gap: 8 }}>
+        <nav style={{ display: 'grid', gap: 6 }}>
           {NAV_ITEMS.map(({ to, label, exact }) => (
             <NavLink
               key={to}
@@ -81,16 +81,16 @@ export default function Layout({ children }: LayoutProps) {
               style={({ isActive }) => ({
                 display: 'flex',
                 alignItems: 'center',
-                minHeight: 46,
-                padding: '0 14px',
-                borderRadius: 14,
+                minHeight: 40,
+                padding: '0 12px',
+                borderRadius: 12,
                 color: isActive ? '#fff' : 'rgba(255,255,255,0.72)',
                 background: isActive ? 'rgba(217,111,50,0.92)' : 'rgba(255,255,255,0.04)',
                 border: isActive
                   ? '1px solid rgba(255,255,255,0.12)'
                   : '1px solid transparent',
                 boxShadow: isActive ? '0 10px 24px rgba(217,111,50,0.24)' : 'none',
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: 700,
               })}
             >
@@ -104,8 +104,8 @@ export default function Layout({ children }: LayoutProps) {
             marginTop: 'auto',
             background: 'rgba(255,255,255,0.05)',
             border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 18,
-            padding: 16,
+            borderRadius: 16,
+            padding: 14,
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 6 }}>Рабочая сессия</div>
@@ -130,18 +130,18 @@ export default function Layout({ children }: LayoutProps) {
       <main
         style={{
           minWidth: 0,
-          padding: '28px 32px 40px',
+          padding: '16px 18px 20px',
         }}
       >
         <div
           style={{
-            minHeight: 'calc(100vh - 68px)',
-            borderRadius: 30,
+            minHeight: 'calc(100vh - 36px)',
+            borderRadius: 24,
             background: 'rgba(255,255,255,0.52)',
             border: '1px solid rgba(255,255,255,0.5)',
             boxShadow: '0 24px 60px rgba(27, 39, 52, 0.08)',
             backdropFilter: 'blur(16px)',
-            padding: 24,
+            padding: 18,
           }}
         >
           {children}
