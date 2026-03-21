@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -14,9 +15,10 @@ import client from '../../api/client';
 
 interface Props {
   onSuccess: () => void;
+  onClose: () => void;
 }
 
-export default function JoinScreen({ onSuccess }: Props) {
+export default function JoinScreen({ onSuccess, onClose }: Props) {
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -32,7 +34,7 @@ export default function JoinScreen({ onSuccess }: Props) {
         [{ text: 'OK', onPress: onSuccess }],
       );
     } catch (e: any) {
-      const msg = e?.response?.data?.detail ?? 'Неверный токен';
+      const msg = e?.response?.data?.detail ?? 'Неверный код';
       Alert.alert('Ошибка', msg);
     } finally {
       setLoading(false);
@@ -44,14 +46,23 @@ export default function JoinScreen({ onSuccess }: Props) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {/* Крестик */}
+      <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+        <Ionicons name="close" size={24} color="#999" />
+      </TouchableOpacity>
+
       <View style={styles.inner}>
-        <Text style={styles.title}>Подключиться к репетитору</Text>
+        <View style={styles.iconWrap}>
+          <Ionicons name="key" size={36} color="#2AABEE" />
+        </View>
+        <Text style={styles.title}>Код приглашения</Text>
         <Text style={styles.subtitle}>
-          Введите токен приглашения, который выдал вам репетитор
+          Введите код, который выдал вам репетитор, чтобы подключиться к занятиям
         </Text>
         <TextInput
           style={styles.input}
-          placeholder="Токен приглашения"
+          placeholder="Введите код"
+          placeholderTextColor="#bbb"
           value={token}
           onChangeText={setToken}
           autoCapitalize="none"
@@ -67,7 +78,7 @@ export default function JoinScreen({ onSuccess }: Props) {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.btnText}>Подключиться</Text>
+            <Text style={styles.btnText}>Подтвердить</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -77,14 +88,41 @@ export default function JoinScreen({ onSuccess }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
+
+  closeBtn: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   inner: {
     flex: 1,
     padding: 24,
-    justifyContent: 'center',
-    gap: 16,
+    paddingTop: 72,
+    gap: 14,
   },
+
+  iconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: '#EFF9FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 4,
+  },
+
   title: { fontSize: 22, fontWeight: '700', color: '#1a1a1a', textAlign: 'center' },
   subtitle: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 20 },
+
   input: {
     borderWidth: 1.5,
     borderColor: '#e0e0e0',
@@ -92,13 +130,19 @@ const styles = StyleSheet.create({
     padding: 14,
     fontSize: 16,
     color: '#1a1a1a',
+    backgroundColor: '#fafafa',
   },
+
   btn: {
     backgroundColor: '#2AABEE',
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
+    shadowColor: '#2AABEE',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  btnDisabled: { backgroundColor: '#b0d8f5' },
+  btnDisabled: { backgroundColor: '#b0d8f5', shadowOpacity: 0 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

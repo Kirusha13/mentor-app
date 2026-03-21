@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
@@ -218,21 +219,28 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      {/* Подключиться к репетитору */}
-      <TouchableOpacity style={styles.joinBtn} onPress={() => setJoinVisible(true)}>
-        <Text style={styles.joinText}>+ Подключиться к репетитору</Text>
-      </TouchableOpacity>
+      {/* Действия */}
+      <View style={styles.settingsCard}>
+        <TouchableOpacity style={styles.settingsItem} onPress={() => setJoinVisible(true)}>
+          <View style={[styles.settingsIconWrap, { backgroundColor: '#EFF9FF' }]}>
+            <Ionicons name="key-outline" size={18} color="#2AABEE" />
+          </View>
+          <Text style={styles.settingsItemText}>Ввести код приглашения</Text>
+          <Ionicons name="chevron-forward" size={18} color="#ccc" />
+        </TouchableOpacity>
 
-      {/* Выход */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Выйти из аккаунта</Text>
-      </TouchableOpacity>
+        <View style={styles.settingsDivider} />
+
+        <TouchableOpacity style={styles.settingsItem} onPress={handleLogout}>
+          <View style={[styles.settingsIconWrap, { backgroundColor: '#FFF2F1' }]}>
+            <Ionicons name="log-out-outline" size={18} color="#F44336" />
+          </View>
+          <Text style={[styles.settingsItemText, { color: '#F44336' }]}>Выйти из аккаунта</Text>
+        </TouchableOpacity>
+      </View>
 
       <Modal visible={joinVisible} animationType="slide" presentationStyle="pageSheet">
-        <JoinScreen onSuccess={() => setJoinVisible(false)} />
-        <TouchableOpacity style={styles.closeModal} onPress={() => setJoinVisible(false)}>
-          <Text style={styles.closeModalText}>Закрыть</Text>
-        </TouchableOpacity>
+        <JoinScreen onSuccess={() => setJoinVisible(false)} onClose={() => setJoinVisible(false)} />
       </Modal>
     </ScrollView>
   );
@@ -327,27 +335,29 @@ const styles = StyleSheet.create({
   },
   saveBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
 
-  joinBtn: {
-    borderWidth: 1.5,
-    borderColor: '#2AABEE',
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
+  settingsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+    overflow: 'hidden',
   },
-  joinText: { color: '#2AABEE', fontWeight: '600', fontSize: 15 },
-  logoutBtn: {
-    borderWidth: 1.5,
-    borderColor: '#F44336',
-    padding: 14,
-    borderRadius: 12,
+  settingsItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
-  logoutText: { color: '#F44336', fontWeight: '600', fontSize: 15 },
-  closeModal: {
-    padding: 16,
+  settingsIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    justifyContent: 'center',
   },
-  closeModalText: { color: '#888', fontSize: 15 },
+  settingsItemText: { flex: 1, fontSize: 15, fontWeight: '500', color: '#1a1a1a' },
+  settingsDivider: { height: 1, backgroundColor: '#f0f0f0', marginLeft: 62 },
 });

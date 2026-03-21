@@ -1,5 +1,6 @@
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -26,18 +27,16 @@ export default function LoginScreen() {
 
   const [step, setStep] = useState<Step>('start');
   const [inviteToken, setInviteToken] = useState('');
+  const [showTokenInput, setShowTokenInput] = useState(false);
   const [tgData, setTgData] = useState<TelegramAuthData | null>(null);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Предотвращаем двойную обработку (iOS через result.url, Android через Linking)
   const tgHandledRef = useRef(false);
-  // Актуальный inviteToken внутри callback-ов без пересоздания listener-а
   const inviteTokenRef = useRef(inviteToken);
   useEffect(() => { inviteTokenRef.current = inviteToken; }, [inviteToken]);
 
-  // Обрабатывает данные Telegram после успешной авторизации
   const handleTelegramData = useCallback(async (data: TelegramAuthData) => {
     const token = inviteTokenRef.current;
     setLoading(true);
@@ -57,7 +56,6 @@ export default function LoginScreen() {
     }
   }, [signIn]);
 
-  // Парсит URL deep link → TelegramAuthData (если там есть Telegram-данные)
   const parseTelegramUrl = (url: string): TelegramAuthData | null => {
     try {
       const parsed = Linking.parse(url);
@@ -81,15 +79,12 @@ export default function LoginScreen() {
     const handleUrl = ({ url }: { url: string }) => {
       const parsed = Linking.parse(url);
 
-      // Ссылка приглашения: mentor://register?token=xxx
       if (parsed.path === 'register' && parsed.queryParams?.token) {
         setInviteToken(String(parsed.queryParams.token));
+        setShowTokenInput(true);
         return;
       }
 
-      // Telegram callback:
-      //   Expo Go dev → exp://host/--/auth?id=...&hash=...  (path = '--/auth')
-      //   Production  → mentor://auth?id=...&hash=...       (path = 'auth')
       if (parsed.path === 'auth' || parsed.path === '--/auth') {
         const data = parseTelegramUrl(url);
         if (data && !tgHandledRef.current) {
@@ -117,20 +112,17 @@ export default function LoginScreen() {
         redirectUrl,
       );
 
-      // iOS: возвращает type='success' с URL → парсим здесь
-      // Android: type='cancel'/'dismiss' → данные уже обработал Linking listener
       if (result.type === 'success' && !tgHandledRef.current) {
         tgHandledRef.current = true;
         const data = parseTelegramUrl(result.url);
         if (data) {
           await handleTelegramData(data);
-          return; // handleTelegramData сам снимет loading
+          return;
         }
       }
     } catch (e: any) {
       Alert.alert('Ошибка', e?.response?.data?.detail ?? 'Не удалось открыть браузер');
     } finally {
-      // Снимаем loading только если Telegram-данные НЕ получены
       if (!tgHandledRef.current) {
         setLoading(false);
       }
@@ -154,7 +146,7 @@ export default function LoginScreen() {
     }
   };
 
-  // ── Шаг 2: форма ──
+  // ── Шаг 2: форма регистрации ──
   if (step === 'form') {
     return (
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -162,29 +154,34 @@ export default function LoginScreen() {
           <Text style={styles.title}>Почти готово!</Text>
           <Text style={styles.subtitle}>Проверьте и уточните данные</Text>
 
-          <Text style={styles.label}>ФИО</Text>
+          <Text style={styles.fieldLabel}>ФИО</Text>
           <TextInput
             style={styles.input}
             value={fullName}
             onChangeText={setFullName}
             placeholder="Иванов Иван Иванович"
+            placeholderTextColor="#bbb"
           />
 
-          <Text style={styles.label}>Номер телефона</Text>
+          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Номер телефона</Text>
           <TextInput
             style={styles.input}
             value={phone}
             onChangeText={setPhone}
             placeholder="+79001234567"
+            placeholderTextColor="#bbb"
             keyboardType="phone-pad"
           />
 
-          <TouchableOpacity style={styles.btn} onPress={handleRegisterSubmit} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Завершить регистрацию</Text>}
+          <TouchableOpacity style={styles.tgBtn} onPress={handleRegisterSubmit} disabled={loading}>
+            {loading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.tgBtnText}>Завершить регистрацию</Text>
+            }
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => setStep('start')}>
-            <Text style={styles.link}>← Назад</Text>
+            <Text style={styles.backLink}>← Назад</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -193,65 +190,142 @@ export default function LoginScreen() {
 
   // ── Шаг 1: начальный экран ──
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Mentor</Text>
-      <Text style={styles.subtitle}>Приложение для учеников</Text>
-
-      {inviteToken ? (
-        <View style={styles.tokenBanner}>
-          <Text style={styles.tokenText}>🔗 Ссылка приглашения активирована</Text>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={styles.container}>
+        {/* Hero */}
+        <View style={styles.hero}>
+          <View style={styles.logoWrap}>
+            <Ionicons name="school" size={44} color="#fff" />
+          </View>
+          <Text style={styles.title}>Mentor</Text>
+          <Text style={styles.subtitle}>Приложение для учеников</Text>
         </View>
-      ) : null}
 
-      <TextInput
-        style={styles.input}
-        placeholder="Или введите токен приглашения вручную"
-        value={inviteToken}
-        onChangeText={setInviteToken}
-        autoCapitalize="none"
-      />
+        {/* Бейдж активированного приглашения */}
+        {inviteToken && showTokenInput ? (
+          <View style={styles.tokenBanner}>
+            <Ionicons name="link" size={15} color="#2E7D32" />
+            <Text style={styles.tokenText}>Ссылка приглашения активирована</Text>
+          </View>
+        ) : null}
 
-      <TouchableOpacity style={styles.btn} onPress={openTelegramAuth} disabled={loading}>
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.btnText}>
-            {inviteToken ? 'Зарегистрироваться через Telegram' : 'Войти через Telegram'}
-          </Text>
+        {/* Поле токена (только в режиме регистрации) */}
+        {showTokenInput && !inviteToken && (
+          <View style={styles.tokenSection}>
+            <Text style={styles.fieldLabel}>Код приглашения от репетитора</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Введите код"
+              placeholderTextColor="#bbb"
+              value={inviteToken}
+              onChangeText={setInviteToken}
+              autoCapitalize="none"
+              autoFocus
+            />
+          </View>
         )}
-      </TouchableOpacity>
-    </View>
+
+        {/* Кнопка Telegram */}
+        <TouchableOpacity style={styles.tgBtn} onPress={openTelegramAuth} disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <View style={styles.tgBtnInner}>
+              <Ionicons name="logo-telegram" size={20} color="#fff" />
+              <Text style={styles.tgBtnText}>
+                {showTokenInput ? 'Зарегистрироваться через Telegram' : 'Войти через Telegram'}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Ссылка регистрации / возврат */}
+        {!showTokenInput ? (
+          <TouchableOpacity onPress={() => setShowTokenInput(true)}>
+            <Text style={styles.registerHint}>
+              Нет аккаунта?{' '}
+              <Text style={styles.registerLink}>Зарегистрироваться</Text>
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={() => { setShowTokenInput(false); setInviteToken(''); }}>
+            <Text style={styles.backLink}>← Уже есть аккаунт</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#fff' },
-  title: { fontSize: 32, fontWeight: '700', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 32 },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 28,
+    backgroundColor: '#fff',
+    gap: 12,
+  },
+
+  // Hero
+  hero: { alignItems: 'center', marginBottom: 12, gap: 8 },
+  logoWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: '#2AABEE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+    shadowColor: '#2AABEE',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  title: { fontSize: 28, fontWeight: '700', color: '#1a1a1a', textAlign: 'center' },
+  subtitle: { fontSize: 15, color: '#aaa', textAlign: 'center' },
+
+  // Invite banner
   tokenBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#E8F5E9',
     borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
-  tokenText: { color: '#2E7D32', fontWeight: '600' },
-  label: { fontSize: 14, color: '#555', marginBottom: 6, marginTop: 8 },
+  tokenText: { color: '#2E7D32', fontWeight: '600', fontSize: 13 },
+
+  // Token input section
+  tokenSection: { gap: 6 },
+  fieldLabel: { fontSize: 13, color: '#888', fontWeight: '500' },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
     padding: 14,
-    marginBottom: 12,
-    fontSize: 16,
+    fontSize: 15,
+    color: '#1a1a1a',
+    backgroundColor: '#fafafa',
   },
-  btn: {
+
+  // Telegram button
+  tgBtn: {
     backgroundColor: '#2AABEE',
-    padding: 16,
-    borderRadius: 10,
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: 'center',
-    marginBottom: 16,
+    shadowColor: '#2AABEE',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+    marginTop: 4,
   },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  link: { color: '#2AABEE', textAlign: 'center', fontSize: 14 },
+  tgBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  tgBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  // Links
+  registerHint: { textAlign: 'center', fontSize: 14, color: '#999' },
+  registerLink: { color: '#2AABEE', fontWeight: '600' },
+  backLink: { textAlign: 'center', fontSize: 14, color: '#2AABEE', fontWeight: '500' },
 });
