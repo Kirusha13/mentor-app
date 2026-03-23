@@ -1,3 +1,608 @@
+import { useEffect, useMemo, useState } from 'react';
+import { getLessons, type Lesson } from '../api/lessons';
+import { getStudents, type Student } from '../api/students';
+import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+
+const panelStyle = {
+  background: 'rgba(255,255,255,0.88)',
+  padding: '20px',
+  borderRadius: '22px',
+  border: '1px solid rgba(24,33,47,0.08)',
+  boxShadow: 'var(--shadow-card)',
+} as const;
+
+type PresetRange = 'month' | 'quarter' | 'year';
+
+function formatDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function startOfDay(date: Date) {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function endOfDay(date: Date) {
+  const copy = new Date(date);
+  copy.setHours(23, 59, 59, 999);
+  return copy;
+}
+
+function addDays(date: Date, days: number) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+function getPresetDates(preset: PresetRange) {
+  const today = new Date();
+  const end = endOfDay(today);
+
+  if (preset === 'quarter') {
+    return {
+      from: formatDate(addDays(startOfDay(today), -89)),
+      to: formatDate(end),
+    };
+  }
+
+  if (preset === 'year') {
+    return {
+      from: formatDate(addDays(startOfDay(today), -364)),
+      to: formatDate(end),
+    };
+  }
+
+  return {
+    from: formatDate(new Date(today.getFullYear(), today.getMonth(), 1)),
+    to: formatDate(end),
+  };
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function percentageDelta(current: number, previous: number) {
+  if (previous === 0) {
+    return current === 0 ? 0 : 100;
+  }
+
+  return ((current - previous) / previous) * 100;
+}
+
+function clampPercent(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+}
+
+function toLessonDate(date: string) {
+  return new Date(`${date}T00:00:00`);
+}
+
+function filterLessonsByRange(lessons: Lesson[], from: string, to: string) {
+  const fromDate = startOfDay(new Date(`${from}T00:00:00`)).getTime();
+  const toDate = endOfDay(new Date(`${to}T00:00:00`)).getTime();
+
+  return lessons.filter((lesson) => {
+    const lessonTime = toLessonDate(lesson.lesson_date).getTime();
+    return lessonTime >= fromDate && lessonTime <= toDate;
+  });
+}
+
+function lessonCost(lesson: Lesson) {
+  return lesson.cost ?? 0;
+}
+
+function getPreviousRange(from: string, to: string) {
+  const currentFrom = startOfDay(new Date(`${from}T00:00:00`));
+  const currentTo = endOfDay(new Date(`${to}T00:00:00`));
+  const diff = currentTo.getTime() - currentFrom.getTime();
+  const prevTo = addDays(currentFrom, -1);
+  const prevFrom = new Date(prevTo.getTime() - diff);
+
+  return {
+    from: formatDate(prevFrom),
+    to: formatDate(prevTo),
+  };
+}
+
 export default function FinancePage() {
-  return <h2>Финансы</h2>;
+  const isTablet = useMediaQuery('(max-width: 1100px)');
+  const isMobile = useMediaQuery('(max-width: 720px)');
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [preset, setPreset] = useState<PresetRange>('month');
+  const [dateFrom, setDateFrom] = useState(() => getPresetDates('month').from);
+  const [dateTo, setDateTo] = useState(() => getPresetDates('month').to);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [lessonData, tutorStudentData, studentData] = await Promise.all([
+          getLessons(),
+          getTutorStudents(),
+          getStudents(),
+        ]);
+        setLessons(lessonData);
+        setTutorStudents(tutorStudentData);
+        setStudents(studentData);
+      } catch (error) {
+        console.error('Ошибка загрузки финансовых данных:', error);
+        alert('Не удалось загрузить данные для раздела финансов');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const rangeError = useMemo(() => {
+    if (!dateFrom || !dateTo) {
+      return 'Укажи обе даты периода.';
+    }
+
+    if (new Date(`${dateFrom}T00:00:00`).getTime() > new Date(`${dateTo}T00:00:00`).getTime()) {
+      return 'Дата начала не может быть позже даты окончания.';
+    }
+
+    return null;
+  }, [dateFrom, dateTo]);
+
+  const filteredLessons = useMemo(() => {
+    if (rangeError) return [];
+    return filterLessonsByRange(lessons, dateFrom, dateTo);
+  }, [dateFrom, dateTo, lessons, rangeError]);
+
+  const previousRange = useMemo(() => {
+    if (rangeError) {
+      return null;
+    }
+    return getPreviousRange(dateFrom, dateTo);
+  }, [dateFrom, dateTo, rangeError]);
+
+  const previousLessons = useMemo(() => {
+    if (!previousRange) return [];
+    return filterLessonsByRange(lessons, previousRange.from, previousRange.to);
+  }, [lessons, previousRange]);
+
+  const currentConducted = filteredLessons.filter((lesson) => lesson.conduct_status === 'conducted');
+  const previousConducted = previousLessons.filter((lesson) => lesson.conduct_status === 'conducted');
+  const unpaidLessons = filteredLessons.filter(
+    (lesson) => lesson.payment_status === 'unpaid' && lesson.conduct_status !== 'cancelled'
+  );
+
+  const income = currentConducted.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+  const previousIncome = previousConducted.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+  const debt = unpaidLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+
+  const lessonsDelta = percentageDelta(currentConducted.length, previousConducted.length);
+  const incomeDelta = percentageDelta(income, previousIncome);
+
+  const studentMap = useMemo(
+    () => new Map(students.map((student) => [student.id, student])),
+    [students]
+  );
+
+  const subscriptions = useMemo(() => {
+    return tutorStudents
+      .map((relation) => {
+        const student = studentMap.get(relation.student_id);
+        const total = relation.subscription_lessons ?? 0;
+        const used = relation.used_lessons ?? 0;
+
+        return {
+          id: relation.id,
+          studentName: student?.full_name ?? `Ученик #${relation.student_id}`,
+          subjectName: relation.subject_name ?? `Предмет #${relation.subject_id}`,
+          status: relation.status,
+          total,
+          used,
+          remaining: Math.max(total - used, 0),
+          progress: total > 0 ? clampPercent((used / total) * 100) : 0,
+        };
+      })
+      .sort((a, b) => a.studentName.localeCompare(b.studentName));
+  }, [studentMap, tutorStudents]);
+
+  const debtRows = unpaidLessons
+    .map((lesson) => {
+      const relation = tutorStudents.find((item) => item.id === lesson.tutor_student_id);
+      const student = relation ? studentMap.get(relation.student_id) : null;
+
+      return {
+        id: lesson.id,
+        studentName: student?.full_name ?? 'Без ученика',
+        subjectName: relation?.subject_name ?? lesson.subject_name ?? 'Без предмета',
+        lessonDate: lesson.lesson_date,
+        cost: lessonCost(lesson),
+      };
+    })
+    .sort((a, b) => a.lessonDate.localeCompare(b.lessonDate));
+
+  const applyPreset = (nextPreset: PresetRange) => {
+    const nextRange = getPresetDates(nextPreset);
+    setPreset(nextPreset);
+    setDateFrom(nextRange.from);
+    setDateTo(nextRange.to);
+  };
+
+  const metricCards = [
+    {
+      title: 'Доход за период',
+      value: formatCurrency(income),
+      note:
+        previousIncome === 0 && income === 0
+          ? 'В обоих периодах пока нет проведённых занятий'
+          : `${incomeDelta >= 0 ? '+' : ''}${incomeDelta.toFixed(0)}% к прошлому периоду`,
+      accent: '#d96f32',
+    },
+    {
+      title: 'Долги',
+      value: formatCurrency(debt),
+      note:
+        unpaidLessons.length > 0
+          ? `${unpaidLessons.length} неоплаченных занятий`
+          : 'За выбранный период долгов нет',
+      accent: '#a63f3b',
+    },
+    {
+      title: 'Проведённые занятия',
+      value: String(currentConducted.length),
+      note:
+        previousConducted.length === 0 && currentConducted.length === 0
+          ? 'Сравнивать пока не с чем'
+          : `${lessonsDelta >= 0 ? '+' : ''}${lessonsDelta.toFixed(0)}% к прошлому периоду`,
+      accent: '#2a6fdb',
+    },
+  ];
+
+  return (
+    <div>
+      <section
+        style={{
+          ...panelStyle,
+          padding: isMobile ? 18 : 24,
+          marginBottom: 16,
+          background:
+            'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 16,
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                display: 'inline-flex',
+                padding: '8px 12px',
+                borderRadius: 999,
+                background: 'rgba(217,111,50,0.12)',
+                color: '#b9551f',
+                fontWeight: 700,
+                fontSize: 13,
+                marginBottom: 14,
+              }}
+            >
+              Этап 5
+            </div>
+            <h1
+              style={{
+                fontSize: 'clamp(2rem, 4vw, 3.2rem)',
+                lineHeight: 0.98,
+                letterSpacing: '-0.04em',
+                marginBottom: 12,
+              }}
+            >
+              Финансы и
+              <br />
+              платежи
+            </h1>
+            <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 16, marginBottom: 0 }}>
+              Здесь считаются доход, долги, динамика по занятиям и прогресс подписок учеников
+              без отдельного бэкенд-эндпоинта.
+            </p>
+          </div>
+
+          <div
+            style={{
+              minWidth: isMobile ? '100%' : 240,
+              borderRadius: 18,
+              padding: 14,
+              background: '#172033',
+              color: '#fff',
+            }}
+          >
+            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>
+              Текущий период
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.1, marginBottom: 8 }}>
+              {dateFrom} - {dateTo}
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>
+              Всего уроков в диапазоне: {filteredLessons.length}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section style={{ ...panelStyle, marginBottom: 16 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isTablet ? '1fr' : '1.2fr 1fr',
+            gap: 16,
+            alignItems: 'end',
+          }}
+        >
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ fontSize: 19, fontWeight: 800, color: '#1f2a3b' }}>
+              Период расчёта
+            </div>
+            <div style={{ color: '#687486', fontSize: 14 }}>
+              Можно быстро выбрать типовой диапазон или задать даты вручную.
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {[
+                ['month', 'Месяц'],
+                ['quarter', '90 дней'],
+                ['year', 'Год'],
+              ].map(([value, label]) => {
+                const active = preset === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => applyPreset(value as PresetRange)}
+                    style={{
+                      background: active ? '#d96f32' : 'rgba(23,32,51,0.92)',
+                      boxShadow: 'none',
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: 10,
+            }}
+          >
+            <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+              С даты
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(event) => {
+                  setPreset('month');
+                  setDateFrom(event.target.value);
+                }}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+              По дату
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(event) => {
+                  setPreset('month');
+                  setDateTo(event.target.value);
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {rangeError && (
+          <div
+            style={{
+              marginTop: 14,
+              padding: '12px 14px',
+              borderRadius: 14,
+              background: 'rgba(166,63,59,0.08)',
+              color: '#9f3f3c',
+              border: '1px solid rgba(166,63,59,0.12)',
+            }}
+          >
+            {rangeError}
+          </div>
+        )}
+      </section>
+
+      <section
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isTablet ? '1fr' : 'repeat(3, minmax(0, 1fr))',
+          gap: 16,
+          marginBottom: 16,
+        }}
+      >
+        {metricCards.map((card) => (
+          <article key={card.title} style={panelStyle}>
+            <div style={{ color: '#6a7586', fontSize: 14, marginBottom: 10 }}>{card.title}</div>
+            <div style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, color: '#1f2a3b', marginBottom: 10 }}>
+              {loading || rangeError ? '—' : card.value}
+            </div>
+            <div
+              style={{
+                display: 'inline-flex',
+                padding: '7px 10px',
+                borderRadius: 999,
+                background: `${card.accent}14`,
+                color: card.accent,
+                fontWeight: 700,
+                fontSize: 13,
+              }}
+            >
+              {loading || rangeError ? 'Ждём данные' : card.note}
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isTablet ? '1fr' : '1.1fr 0.9fr',
+          gap: 16,
+        }}
+      >
+        <article style={panelStyle}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              marginBottom: 14,
+            }}
+          >
+            <div>
+              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Неоплаченные занятия</h3>
+              <div style={{ color: '#687486', fontSize: 14 }}>
+                Здесь видны долги за выбранный период без отменённых уроков.
+              </div>
+            </div>
+            <div style={{ fontWeight: 800, color: '#1f2a3b' }}>{formatCurrency(debt)}</div>
+          </div>
+
+          {loading ? (
+            <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка финансовых записей...</p>
+          ) : rangeError ? (
+            <p style={{ color: '#9f3f3c', marginBottom: 0 }}>Исправь диапазон дат, чтобы увидеть долги.</p>
+          ) : debtRows.length === 0 ? (
+            <p style={{ color: '#687486', marginBottom: 0 }}>За выбранный период неоплаченных занятий нет.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {debtRows.map((row) => (
+                <div
+                  key={row.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr auto',
+                    gap: 10,
+                    alignItems: 'center',
+                    padding: 14,
+                    borderRadius: 16,
+                    border: '1px solid rgba(24,33,47,0.08)',
+                    background: 'rgba(23,32,51,0.03)',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#243041', marginBottom: 4 }}>
+                      {row.studentName}
+                    </div>
+                    <div style={{ color: '#687486', fontSize: 14 }}>{row.subjectName}</div>
+                  </div>
+                  <div style={{ color: '#435066', fontSize: 14 }}>{row.lessonDate}</div>
+                  <div style={{ fontWeight: 800, color: '#9f3f3c' }}>{formatCurrency(row.cost)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article style={panelStyle}>
+          <div style={{ marginBottom: 14 }}>
+            <h3 style={{ fontSize: 20, marginBottom: 6 }}>Подписки учеников</h3>
+            <div style={{ color: '#687486', fontSize: 14 }}>
+              Если у связки есть пакет занятий, здесь видно прогресс и остаток.
+            </div>
+          </div>
+
+          {loading ? (
+            <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка подписок...</p>
+          ) : subscriptions.length === 0 ? (
+            <p style={{ color: '#687486', marginBottom: 0 }}>
+              Пока нет связок учеников с предметами, поэтому подписки не отображаются.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {subscriptions.map((subscription) => (
+                <div
+                  key={subscription.id}
+                  style={{
+                    padding: 14,
+                    borderRadius: 16,
+                    border: '1px solid rgba(24,33,47,0.08)',
+                    background: 'rgba(23,32,51,0.03)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      flexWrap: 'wrap',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#243041' }}>{subscription.studentName}</div>
+                      <div style={{ color: '#687486', fontSize: 14 }}>{subscription.subjectName}</div>
+                    </div>
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        padding: '6px 10px',
+                        borderRadius: 999,
+                        background: 'rgba(42,111,219,0.12)',
+                        color: '#2a6fdb',
+                        fontWeight: 700,
+                        fontSize: 13,
+                        alignSelf: 'flex-start',
+                      }}
+                    >
+                      {subscription.status}
+                    </div>
+                  </div>
+
+                  <div style={{ height: 10, borderRadius: 999, background: 'rgba(23,32,51,0.08)', overflow: 'hidden', marginBottom: 8 }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${subscription.progress}%`,
+                        background: 'linear-gradient(90deg, #2a6fdb 0%, #5d93ea 100%)',
+                        borderRadius: 999,
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', color: '#435066', fontSize: 14 }}>
+                    <span>Использовано: {subscription.used}</span>
+                    <span>Всего: {subscription.total}</span>
+                    <span>Осталось: {subscription.remaining}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+      </section>
+    </div>
+  );
 }

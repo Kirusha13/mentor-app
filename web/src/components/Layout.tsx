@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 interface LayoutProps {
   children: ReactNode;
@@ -19,6 +20,8 @@ const NAV_ITEMS = [
 export default function Layout({ children }: LayoutProps) {
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const isTablet = useMediaQuery('(max-width: 1100px)');
+  const isMobile = useMediaQuery('(max-width: 820px)');
 
   const handleLogout = () => {
     logout();
@@ -30,7 +33,7 @@ export default function Layout({ children }: LayoutProps) {
       style={{
         minHeight: '100vh',
         display: 'grid',
-        gridTemplateColumns: '248px minmax(0, 1fr)',
+        gridTemplateColumns: isMobile ? '1fr' : isTablet ? '220px minmax(0, 1fr)' : '248px minmax(0, 1fr)',
       }}
     >
       <aside
@@ -38,12 +41,13 @@ export default function Layout({ children }: LayoutProps) {
           background:
             'linear-gradient(180deg, rgba(23,32,51,0.98) 0%, rgba(26,38,59,0.97) 100%)',
           color: '#f8fafc',
-          padding: '20px 14px 16px',
-          borderRight: '1px solid rgba(255,255,255,0.06)',
-          boxShadow: '18px 0 40px rgba(18, 26, 38, 0.12)',
-          position: 'sticky',
+          padding: isMobile ? '14px 14px 12px' : '20px 14px 16px',
+          borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.06)',
+          borderBottom: isMobile ? '1px solid rgba(255,255,255,0.06)' : 'none',
+          boxShadow: isMobile ? '0 14px 32px rgba(18, 26, 38, 0.12)' : '18px 0 40px rgba(18, 26, 38, 0.12)',
+          position: isMobile ? 'relative' : 'sticky',
           top: 0,
-          height: '100vh',
+          height: isMobile ? 'auto' : '100vh',
           display: 'flex',
           flexDirection: 'column',
           gap: 14,
@@ -66,13 +70,21 @@ export default function Layout({ children }: LayoutProps) {
           >
             Mentor App
           </div>
-          <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.05 }}>Кабинет</div>
-          <div style={{ marginTop: 8, color: 'rgba(255,255,255,0.68)', fontSize: 14 }}>
-            Панель репетитора для работы с учениками, занятиями и материалами.
-          </div>
+          <div style={{ fontSize: isMobile ? 24 : 28, fontWeight: 800, lineHeight: 1.05 }}>Кабинет</div>
+          {!isMobile && (
+            <div style={{ marginTop: 8, color: 'rgba(255,255,255,0.68)', fontSize: 14 }}>
+              Панель репетитора для работы с учениками, занятиями и материалами.
+            </div>
+          )}
         </div>
 
-        <nav style={{ display: 'grid', gap: 6 }}>
+        <nav
+          style={{
+            display: 'grid',
+            gap: 6,
+            gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(132px, 1fr))' : '1fr',
+          }}
+        >
           {NAV_ITEMS.map(({ to, label, exact }) => (
             <NavLink
               key={to}
@@ -101,7 +113,7 @@ export default function Layout({ children }: LayoutProps) {
 
         <div
           style={{
-            marginTop: 'auto',
+            marginTop: isMobile ? 0 : 'auto',
             background: 'rgba(255,255,255,0.05)',
             border: '1px solid rgba(255,255,255,0.08)',
             borderRadius: 16,
@@ -109,13 +121,15 @@ export default function Layout({ children }: LayoutProps) {
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 6 }}>Рабочая сессия</div>
-          <div style={{ color: 'rgba(255,255,255,0.68)', fontSize: 13, marginBottom: 14 }}>
-            Все основные разделы доступны из бокового меню.
-          </div>
+          {!isMobile && (
+            <div style={{ color: 'rgba(255,255,255,0.68)', fontSize: 13, marginBottom: 14 }}>
+              Все основные разделы доступны из бокового меню.
+            </div>
+          )}
           <button
             onClick={handleLogout}
             style={{
-              width: '100%',
+              width: isMobile ? 'auto' : '100%',
               background: 'transparent',
               border: '1px solid rgba(255,255,255,0.16)',
               color: '#fff',
@@ -130,18 +144,18 @@ export default function Layout({ children }: LayoutProps) {
       <main
         style={{
           minWidth: 0,
-          padding: '16px 18px 20px',
+          padding: isMobile ? '12px' : isTablet ? '14px' : '16px 18px 20px',
         }}
       >
         <div
           style={{
-            minHeight: 'calc(100vh - 36px)',
-            borderRadius: 24,
+            minHeight: isMobile ? 'auto' : 'calc(100vh - 36px)',
+            borderRadius: isMobile ? 18 : 24,
             background: 'rgba(255,255,255,0.52)',
             border: '1px solid rgba(255,255,255,0.5)',
             boxShadow: '0 24px 60px rgba(27, 39, 52, 0.08)',
             backdropFilter: 'blur(16px)',
-            padding: 18,
+            padding: isMobile ? 12 : isTablet ? 14 : 18,
           }}
         >
           {children}

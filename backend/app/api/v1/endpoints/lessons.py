@@ -10,6 +10,11 @@ from app.models.lesson import ConductStatus, Lesson
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
 from app.schemas.lesson import LessonCreate, LessonOut, LessonReschedule, LessonUpdate
+from app.services.subscription_service import (
+    SubscriptionStateError,
+    apply_conduct_status_transition,
+    get_tutor_student_for_lesson,
+)
 
 router = APIRouter()
 
@@ -96,9 +101,31 @@ async def update_lesson(
     db: AsyncSession = Depends(get_db),
 ):
     lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
+    payload = data.model_dump(exclude_none=True)
 
-    for field, value in data.model_dump(exclude_none=True).items():
-        setattr(lesson, field, value)
+    next_start_time = payload.get("start_time", lesson.start_time)
+    next_end_time = payload.get("end_time", lesson.end_time)
+    if next_end_time <= next_start_time:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "INVALID_LESSON_TIME_RANGE",
+                "message": "Время окончания должно быть позже времени начала.",
+            },
+        )
+
+    tutor_student = None
+    if "conduct_status" in payload:
+        tutor_student = await get_tutor_student_for_lesson(db, lesson)
+
+    try:
+        for field, value in payload.items():
+            if field == "conduct_status":
+                apply_conduct_status_transition(lesson, tutor_student, value)
+                continue
+            setattr(lesson, field, value)
+    except SubscriptionStateError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.to_detail()) from error
 
     await db.commit()
     await db.refresh(lesson)
@@ -221,5 +248,9 @@ async def cancel_lesson(
     db: AsyncSession = Depends(get_db),
 ):
     lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
-    lesson.conduct_status = ConductStatus.cancelled
+    tutor_student = await get_tutor_student_for_lesson(db, lesson)
+    try:
+        apply_conduct_status_transition(lesson, tutor_student, ConductStatus.cancelled)
+    except SubscriptionStateError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.to_detail()) from error
     await db.commit()
