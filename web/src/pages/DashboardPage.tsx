@@ -1,3 +1,5 @@
+import { useMediaQuery } from '../hooks/useMediaQuery';
+
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
   padding: '24px',
@@ -7,12 +9,14 @@ const panelStyle = {
 } as const;
 
 export default function DashboardPage() {
+  const isMobile = useMediaQuery('(max-width: 720px)');
+
   return (
     <div>
       <section
         style={{
           ...panelStyle,
-          padding: 28,
+          padding: isMobile ? 18 : 28,
           background:
             'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
         }}

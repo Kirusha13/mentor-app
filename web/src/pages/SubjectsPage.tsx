@@ -6,6 +6,7 @@ import {
   updateSubject,
   type Subject,
 } from '../api/subjects';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -18,6 +19,8 @@ const panelStyle = {
 const DEFAULT_COLORS = ['#d96f32', '#2a6fdb', '#2f7d63', '#7b61c8', '#cc8b00', '#c9485b'];
 
 export default function SubjectsPage() {
+  const isTablet = useMediaQuery('(max-width: 1100px)');
+  const isMobile = useMediaQuery('(max-width: 720px)');
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -196,7 +199,7 @@ export default function SubjectsPage() {
 
           <div
             style={{
-              minWidth: 220,
+              minWidth: isMobile ? '100%' : 220,
               borderRadius: 22,
               padding: 18,
               background: '#172033',
@@ -220,7 +223,7 @@ export default function SubjectsPage() {
         style={{
           display: 'grid',
           gap: 18,
-          gridTemplateColumns: 'minmax(320px, 380px) minmax(0, 1fr)',
+          gridTemplateColumns: isTablet ? '1fr' : 'minmax(320px, 380px) minmax(0, 1fr)',
           alignItems: 'start',
         }}
       >

@@ -77,3 +77,7 @@ export const updateAssignment = async (
   const response = await apiClient.patch(`/assignments/${id}`, payload);
   return response.data;
 };
+
+export const deleteAssignment = async (id: number): Promise<void> => {
+  await apiClient.delete(`/assignments/${id}`);
+};

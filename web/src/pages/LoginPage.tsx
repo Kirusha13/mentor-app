@@ -1,8 +1,12 @@
+import { useMediaQuery } from '../hooks/useMediaQuery';
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
 const CALLBACK_URL = `${window.location.origin}/auth/callback`;
 
 export default function LoginPage() {
   const error = new URLSearchParams(window.location.search).get('error');
+  const isTablet = useMediaQuery('(max-width: 1100px)');
+  const isMobile = useMediaQuery('(max-width: 720px)');
 
   const handleLogin = () => {
     window.location.href = `${API_BASE}/telegram-login?redirect=${encodeURIComponent(CALLBACK_URL)}`;
@@ -21,14 +25,14 @@ export default function LoginPage() {
         style={{
           width: 'min(1120px, 100%)',
           display: 'grid',
-          gridTemplateColumns: '1.1fr 0.9fr',
+          gridTemplateColumns: isTablet ? '1fr' : '1.1fr 0.9fr',
           gap: 24,
           alignItems: 'stretch',
         }}
       >
         <section
           style={{
-            padding: '42px',
+            padding: isMobile ? '24px' : isTablet ? '32px' : '42px',
             borderRadius: 32,
             background:
               'linear-gradient(160deg, rgba(23,32,51,0.96) 0%, rgba(39,59,92,0.92) 100%)',
@@ -81,7 +85,7 @@ export default function LoginPage() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, minmax(0, 1fr))' : 'repeat(3, minmax(0, 1fr))',
               gap: 14,
             }}
           >
@@ -108,7 +112,7 @@ export default function LoginPage() {
 
         <section
           style={{
-            padding: '36px 32px',
+            padding: isMobile ? '24px 20px' : '36px 32px',
             borderRadius: 32,
             background: 'rgba(255,255,255,0.82)',
             border: '1px solid rgba(255,255,255,0.65)',
