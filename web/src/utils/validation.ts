@@ -6,6 +6,7 @@ export const MAX_ATTACHMENTS_COUNT = 5;
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 export const MAX_TOTAL_ATTACHMENTS_BYTES = 25 * 1024 * 1024;
 export const MAX_RATE = 100_000;
+export const MAX_SUBSCRIPTION_LESSONS = 100;
 
 const ALLOWED_FILE_TYPES = [
   'image/jpeg',
@@ -47,4 +48,8 @@ export function isReasonableTelegramId(value: string) {
 
 export function isReasonablePhone(value: string) {
   return /^[+\d\s\-()]{7,25}$/.test(value);
+}
+
+export function isNonNegativeIntegerString(value: string) {
+  return /^\d+$/.test(value);
 }

@@ -21,11 +21,14 @@ export interface CreateTutorStudentPayload {
   subject_id: number;
   hourly_rate: number;
   started_at: string;
+  subscription_lessons?: number | null;
 }
 
 export interface UpdateTutorStudentPayload {
   hourly_rate?: number;
   status?: TutorStudentStatus;
+  subscription_lessons?: number | null;
+  used_lessons?: number | null;
 }
 
 export const getTutorStudents = async (): Promise<TutorStudent[]> => {

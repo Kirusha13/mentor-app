@@ -4,7 +4,9 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
 const CALLBACK_URL = `${window.location.origin}/auth/callback`;
 
 export default function LoginPage() {
-  const error = new URLSearchParams(window.location.search).get('error');
+  const searchParams = new URLSearchParams(window.location.search);
+  const error = searchParams.get('error');
+  const reason = searchParams.get('reason');
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 720px)');
 
@@ -156,6 +158,21 @@ export default function LoginPage() {
               }}
             >
               Ошибка: {decodeURIComponent(error)}
+            </div>
+          )}
+
+          {!error && reason === 'session_expired' && (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: '14px 16px',
+                borderRadius: 16,
+                border: '1px solid rgba(217, 111, 50, 0.18)',
+                background: 'rgba(217, 111, 50, 0.08)',
+                color: '#b9551f',
+              }}
+            >
+              Сессия истекла. Войди снова через Telegram, и мы вернём тебя обратно в кабинет.
             </div>
           )}
 
