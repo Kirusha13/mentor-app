@@ -10,6 +10,7 @@ import {
 import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
+import { getApiErrorCode, getApiErrorMessage } from '../utils/apiError';
 
 type CalendarMode = 'day' | 'week' | 'month';
 
@@ -309,7 +310,14 @@ export default function SchedulePage() {
       setSelectedLessonId(updated.id);
     } catch (error) {
       console.error('Ошибка обновления занятия:', error);
-      alert('Не удалось обновить занятие');
+      const errorCode = getApiErrorCode(error);
+
+      if (errorCode === 'SUBSCRIPTION_EXHAUSTED') {
+        alert('У ученика закончились занятия по абонементу. Обнови абонемент и повтори действие.');
+        return;
+      }
+
+      alert(getApiErrorMessage(error, 'Не удалось обновить занятие'));
     }
   };
 

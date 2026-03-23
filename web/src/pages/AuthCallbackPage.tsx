@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loginWithTelegram } from '../api/auth';
+import { consumePostLoginRedirect } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
 export default function AuthCallbackPage() {
@@ -31,7 +32,8 @@ export default function AuthCallbackPage() {
     })
       .then((data) => {
         login(data.access_token);
-        navigate('/', { replace: true });
+        const redirectPath = consumePostLoginRedirect();
+        navigate(redirectPath || '/', { replace: true });
       })
       .catch((e) => {
         const msg = e?.response?.data?.detail ?? e?.message ?? 'unknown';
