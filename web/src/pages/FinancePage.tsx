@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { getLessons, type Lesson } from '../api/lessons';
 import { getStudents, type Student } from '../api/students';
 import {
@@ -18,6 +18,17 @@ const panelStyle = {
 } as const;
 
 type PresetRange = 'month' | 'quarter' | 'year';
+type RelationOption = {
+  id: number;
+  studentName: string;
+  subjectName: string;
+  label: string;
+  total: number;
+  used: number;
+  remaining: number;
+  status: TutorStudent['status'];
+  rate: number;
+};
 
 function formatDate(date: Date) {
   const year = date.getFullYear();
@@ -132,9 +143,15 @@ export default function FinancePage() {
   const [dateFrom, setDateFrom] = useState(() => getPresetDates('month').from);
   const [dateTo, setDateTo] = useState(() => getPresetDates('month').to);
   const [selectedTutorStudentId, setSelectedTutorStudentId] = useState('');
-  const [abonementLessons, setAbonementLessons] = useState('');
-  const [abonementUsedLessons, setAbonementUsedLessons] = useState('0');
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [savingAbonement, setSavingAbonement] = useState(false);
+  const [createTutorStudentId, setCreateTutorStudentId] = useState('');
+  const [createLessons, setCreateLessons] = useState('');
+  const [createUsedLessons, setCreateUsedLessons] = useState('0');
+  const [editingAbonement, setEditingAbonement] = useState(false);
+  const [editLessons, setEditLessons] = useState('');
+  const [editRate, setEditRate] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -160,14 +177,10 @@ export default function FinancePage() {
   }, []);
 
   const rangeError = useMemo(() => {
-    if (!dateFrom || !dateTo) {
-      return 'Укажи обе даты периода.';
-    }
-
+    if (!dateFrom || !dateTo) return 'Укажи обе даты периода.';
     if (new Date(`${dateFrom}T00:00:00`).getTime() > new Date(`${dateTo}T00:00:00`).getTime()) {
       return 'Дата начала не может быть позже даты окончания.';
     }
-
     return null;
   }, [dateFrom, dateTo]);
 
@@ -190,13 +203,11 @@ export default function FinancePage() {
   const previousConducted = previousLessons.filter((lesson) => lesson.conduct_status === 'conducted');
   const paidLessons = currentConducted.filter((lesson) => lesson.payment_status === 'paid');
   const unpaidLessons = currentConducted.filter((lesson) => lesson.payment_status === 'unpaid');
-
   const income = paidLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
   const previousIncome = previousConducted
     .filter((lesson) => lesson.payment_status === 'paid')
     .reduce((sum, lesson) => sum + lessonCost(lesson), 0);
   const debt = unpaidLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
-
   const lessonsDelta = percentageDelta(currentConducted.length, previousConducted.length);
   const incomeDelta = percentageDelta(income, previousIncome);
 
@@ -205,7 +216,7 @@ export default function FinancePage() {
     [students]
   );
 
-  const relationOptions = useMemo(() => {
+  const relationOptions = useMemo<RelationOption[]>(() => {
     return tutorStudents
       .map((relation) => {
         const student = studentMap.get(relation.student_id);
@@ -229,11 +240,36 @@ export default function FinancePage() {
       .sort((a, b) => a.label.localeCompare(b.label, 'ru-RU'));
   }, [studentMap, tutorStudents]);
 
+  const activeAbonements = useMemo(
+    () => relationOptions.filter((option) => option.total > 0),
+    [relationOptions]
+  );
+
+  const availableForCreation = useMemo(
+    () => relationOptions.filter((option) => option.total === 0),
+    [relationOptions]
+  );
+
+  const selectedRelation = useMemo(
+    () => relationOptions.find((option) => String(option.id) === selectedTutorStudentId) ?? null,
+    [relationOptions, selectedTutorStudentId]
+  );
+
+  useEffect(() => {
+    if (!selectedRelation) {
+      setEditingAbonement(false);
+      setEditLessons('');
+      setEditRate('');
+      return;
+    }
+
+    setEditLessons(selectedRelation.total > 0 ? String(selectedRelation.total) : '');
+    setEditRate(selectedRelation.rate > 0 ? String(selectedRelation.rate) : '');
+  }, [selectedRelation]);
+
   useEffect(() => {
     if (!relationOptions.length) {
       setSelectedTutorStudentId('');
-      setAbonementLessons('');
-      setAbonementUsedLessons('0');
       return;
     }
 
@@ -242,28 +278,16 @@ export default function FinancePage() {
         return current;
       }
 
-      return String(relationOptions[0].id);
+      const defaultRelation = activeAbonements[0] ?? null;
+      return defaultRelation ? String(defaultRelation.id) : '';
     });
-  }, [relationOptions]);
+  }, [activeAbonements, relationOptions]);
 
   useEffect(() => {
     if (!selectedTutorStudentId) {
       return;
     }
-
-    const relation = relationOptions.find((option) => String(option.id) === selectedTutorStudentId);
-    if (!relation) {
-      return;
-    }
-
-    setAbonementLessons(relation.total > 0 ? String(relation.total) : '');
-    setAbonementUsedLessons(String(relation.used));
   }, [relationOptions, selectedTutorStudentId]);
-
-  const selectedRelation = useMemo(
-    () => relationOptions.find((option) => String(option.id) === selectedTutorStudentId) ?? null,
-    [relationOptions, selectedTutorStudentId]
-  );
 
   const debtRows = unpaidLessons
     .map((lesson) => {
@@ -279,13 +303,6 @@ export default function FinancePage() {
       };
     })
     .sort((a, b) => a.lessonDate.localeCompare(b.lessonDate));
-
-  const applyPreset = (nextPreset: PresetRange) => {
-    const nextRange = getPresetDates(nextPreset);
-    setPreset(nextPreset);
-    setDateFrom(nextRange.from);
-    setDateTo(nextRange.to);
-  };
 
   const metricCards = [
     {
@@ -317,16 +334,37 @@ export default function FinancePage() {
     },
   ];
 
-  const handleSaveAbonement = async () => {
-    if (!selectedTutorStudentId) {
-      alert('Сначала выбери ученика и предмет для абонемента.');
+  const applyPreset = (nextPreset: PresetRange) => {
+    const nextRange = getPresetDates(nextPreset);
+    setPreset(nextPreset);
+    setDateFrom(nextRange.from);
+    setDateTo(nextRange.to);
+  };
+
+  const handleCreateNewAbonement = () => {
+    const nextRelation = availableForCreation[0] ?? null;
+    if (!nextRelation) return;
+    setCreateTutorStudentId(String(nextRelation.id));
+    setCreateLessons('');
+    setCreateUsedLessons('0');
+    setCreateModalOpen(true);
+  };
+
+  const handleOpenAbonementDetails = (relationId: number) => {
+    setSelectedTutorStudentId(String(relationId));
+    setDetailsModalOpen(true);
+  };
+
+  const handleSubmitCreateAbonement = async () => {
+    if (!createTutorStudentId) {
+      alert('Сначала выбери связку ученик-предмет.');
       return;
     }
 
-    const total = abonementLessons.trim() ? Number(abonementLessons) : null;
-    const used = abonementUsedLessons.trim() ? Number(abonementUsedLessons) : 0;
+    const total = Number(createLessons);
+    const used = Number(createUsedLessons || '0');
 
-    if (total !== null && (!Number.isInteger(total) || total < 1)) {
+    if (!Number.isInteger(total) || total < 1) {
       alert('Количество занятий в абонементе должно быть целым числом больше нуля.');
       return;
     }
@@ -336,29 +374,65 @@ export default function FinancePage() {
       return;
     }
 
-    if (total === null && used > 0) {
-      alert('Нельзя указать использованные занятия без активного абонемента.');
-      return;
-    }
-
-    if (total !== null && used > total) {
+    if (used > total) {
       alert('Использованные занятия не могут превышать размер абонемента.');
       return;
     }
 
     try {
       setSavingAbonement(true);
-
-      const updated = await updateTutorStudent(Number(selectedTutorStudentId), {
+      const updated = await updateTutorStudent(Number(createTutorStudentId), {
         subscription_lessons: total,
-        used_lessons: total === null ? 0 : used,
+        used_lessons: used,
       });
-
       setTutorStudents((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-      alert(total === null ? 'Абонемент очищен.' : 'Абонемент сохранён.');
+      setSelectedTutorStudentId(String(updated.id));
+      setCreateModalOpen(false);
+      alert('Абонемент создан.');
     } catch (error) {
-      console.error('Ошибка сохранения абонемента:', error);
-      alert(getApiErrorMessage(error, 'Не удалось сохранить абонемент.'));
+      console.error('Ошибка создания абонемента:', error);
+      alert(getApiErrorMessage(error, 'Не удалось создать абонемент.'));
+    } finally {
+      setSavingAbonement(false);
+    }
+  };
+
+  const handleSaveAbonementDetails = async () => {
+    if (!selectedRelation) {
+      return;
+    }
+
+    const total = Number(editLessons);
+    const rate = Number(editRate);
+
+    if (!Number.isInteger(total) || total < 1) {
+      alert('Количество занятий должно быть целым числом больше нуля.');
+      return;
+    }
+
+    if (!Number.isFinite(rate) || rate <= 0) {
+      alert('Ставка должна быть числом больше нуля.');
+      return;
+    }
+
+    if (selectedRelation.used > total) {
+      alert('Нельзя поставить количество занятий меньше уже использованных.');
+      return;
+    }
+
+    try {
+      setSavingAbonement(true);
+      const updated = await updateTutorStudent(selectedRelation.id, {
+        subscription_lessons: total,
+        used_lessons: selectedRelation.used,
+        hourly_rate: rate,
+      });
+      setTutorStudents((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setEditingAbonement(false);
+      alert('Абонемент обновлён.');
+    } catch (error) {
+      console.error('Ошибка обновления абонемента:', error);
+      alert(getApiErrorMessage(error, 'Не удалось обновить абонемент.'));
     } finally {
       setSavingAbonement(false);
     }
@@ -412,8 +486,8 @@ export default function FinancePage() {
               абонементы
             </h1>
             <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 16, marginBottom: 0 }}>
-              Здесь считаются оплаченные занятия, долги, динамика по урокам и текущий статус
-              абонемента по каждой связке ученик-предмет.
+              Здесь считаются оплаченные занятия, долги, динамика по урокам и текущие данные
+              по абонементам в разрезе связок ученик-предмет.
             </p>
           </div>
 
@@ -544,7 +618,7 @@ export default function FinancePage() {
                 marginBottom: 10,
               }}
             >
-              {loading || rangeError ? '—' : card.value}
+              {loading || rangeError ? 'вЂ”' : card.value}
             </div>
             <div
               style={{
@@ -632,10 +706,9 @@ export default function FinancePage() {
 
         <article style={panelStyle}>
           <div style={{ marginBottom: 14 }}>
-            <h3 style={{ fontSize: 20, marginBottom: 6 }}>Абонемент</h3>
+            <h3 style={{ fontSize: 20, marginBottom: 6 }}>Абонементы</h3>
             <div style={{ color: '#687486', fontSize: 14 }}>
-              Выбери связку ученик-предмет и задай размер пакета. После проведения занятия бэк
-              сам спишет одно занятие из абонемента.
+              В списке показаны только уже созданные абонементы. Новый абонемент создаётся отдельно.
             </div>
           </div>
 
@@ -645,150 +718,366 @@ export default function FinancePage() {
             </p>
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
-              <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-                Ученик и предмет
-                <select
-                  value={selectedTutorStudentId}
-                  onChange={(event) => setSelectedTutorStudentId(event.target.value)}
-                >
-                  {relationOptions.map((option) => (
-                    <option key={option.id} value={String(option.id)}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
               <div
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                  display: 'flex',
+                  justifyContent: 'space-between',
                   gap: 10,
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
                 }}
               >
-                <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-                  Всего занятий в абонементе
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={abonementLessons}
-                    onChange={(event) => setAbonementLessons(event.target.value)}
-                    placeholder="Например, 8"
-                  />
-                </label>
-                <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-                  Уже использовано
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={abonementUsedLessons}
-                    onChange={(event) => setAbonementUsedLessons(event.target.value)}
-                  />
-                </label>
+                <div style={{ color: '#556173', fontSize: 14 }}>
+                  В списке только активные абонементы. Новую связку можно настроить отдельно.
+                </div>
+                {availableForCreation.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleCreateNewAbonement}
+                    style={{ background: '#d96f32', boxShadow: 'none' }}
+                  >
+                    Создать новый
+                  </button>
+                )}
               </div>
 
-              {selectedRelation && (
+              {activeAbonements.length === 0 ? (
                 <div
                   style={{
-                    display: 'grid',
-                    gap: 10,
                     padding: 14,
                     borderRadius: 16,
                     border: '1px solid rgba(24,33,47,0.08)',
                     background: 'rgba(23,32,51,0.03)',
+                    color: '#556173',
+                    fontSize: 14,
                   }}
                 >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      gap: 10,
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 700, color: '#243041' }}>
-                        {selectedRelation.studentName}
-                      </div>
-                      <div style={{ color: '#687486', fontSize: 14 }}>
-                        {selectedRelation.subjectName}
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        display: 'inline-flex',
-                        padding: '6px 10px',
-                        borderRadius: 999,
-                        background: 'rgba(42,111,219,0.12)',
-                        color: '#2a6fdb',
-                        fontWeight: 700,
-                        fontSize: 13,
-                      }}
-                    >
-                      {selectedRelation.status}
-                    </div>
-                  </div>
+                  Активных абонементов пока нет.
+                  {availableForCreation.length > 0 ? ' Нажми «Создать новый», чтобы завести первый.' : ''}
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {activeAbonements.map((option) => {
+                    const active = String(option.id) === selectedTutorStudentId;
+                    const progress =
+                      option.total > 0 ? clampPercent((option.used / option.total) * 100) : 0;
 
-                  <div style={{ color: '#556173', fontSize: 14 }}>
-                    Ставка: {formatCurrency(selectedRelation.rate || 0)} в час
-                  </div>
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => handleOpenAbonementDetails(option.id)}
+                        style={{
+                          display: 'grid',
+                          gap: 10,
+                          textAlign: 'left',
+                          padding: 14,
+                          borderRadius: 18,
+                          background: active ? 'rgba(42,111,219,0.1)' : 'rgba(23,32,51,0.03)',
+                          color: '#1f2a3b',
+                          border: active
+                            ? '1px solid rgba(42,111,219,0.28)'
+                            : '1px solid rgba(24,33,47,0.08)',
+                          boxShadow: 'none',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                            alignItems: 'flex-start',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 700, marginBottom: 4 }}>{option.studentName}</div>
+                            <div style={{ color: '#687486', fontSize: 14 }}>{option.subjectName}</div>
+                          </div>
+                        </div>
 
-                  <div
-                    style={{
-                      height: 10,
-                      borderRadius: 999,
-                      background: 'rgba(23,32,51,0.08)',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: '100%',
-                        width: `${selectedRelation.total > 0 ? clampPercent((selectedRelation.used / selectedRelation.total) * 100) : 0}%`,
-                        background: 'linear-gradient(90deg, #2a6fdb 0%, #5d93ea 100%)',
-                        borderRadius: 999,
-                      }}
-                    />
-                  </div>
+                        <div
+                          style={{
+                            height: 8,
+                            borderRadius: 999,
+                            background: 'rgba(23,32,51,0.08)',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${progress}%`,
+                              height: '100%',
+                              borderRadius: 999,
+                              background: 'linear-gradient(90deg, #2a6fdb 0%, #5d93ea 100%)',
+                            }}
+                          />
+                        </div>
 
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
-                      gap: 10,
-                      color: '#435066',
-                      fontSize: 14,
-                    }}
-                  >
-                    <span>Использовано: {selectedRelation.used}</span>
-                    <span>Всего: {selectedRelation.total}</span>
-                    <span>Осталось: {selectedRelation.remaining}</span>
-                  </div>
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
+                            gap: 8,
+                            color: '#435066',
+                            fontSize: 13,
+                          }}
+                        >
+                          <span>Всего: {option.total}</span>
+                          <span>Использовано: {option.used}</span>
+                          <span>Осталось: {option.remaining}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button type="button" onClick={handleSaveAbonement} disabled={savingAbonement}>
-                  {savingAbonement ? 'Сохраняем...' : 'Сохранить абонемент'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAbonementLessons('');
-                    setAbonementUsedLessons('0');
-                  }}
-                  style={{ background: 'rgba(23,32,51,0.92)' }}
-                  disabled={savingAbonement}
-                >
-                  Очистить поля
-                </button>
-              </div>
             </div>
           )}
         </article>
       </section>
+
+      {createModalOpen && (
+        <div
+          onClick={() => setCreateModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.48)',
+            display: 'grid',
+            placeItems: 'center',
+            padding: 20,
+            zIndex: 40,
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: 'min(560px, 100%)',
+              background: '#fff',
+              borderRadius: 24,
+              border: '1px solid rgba(24,33,47,0.08)',
+              boxShadow: '0 30px 80px rgba(15,23,42,0.18)',
+              padding: isMobile ? 18 : 24,
+              display: 'grid',
+              gap: 14,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+              <div>
+                <h3 style={{ fontSize: 22, marginBottom: 6 }}>Создать абонемент</h3>
+                <div style={{ color: '#687486', fontSize: 14 }}>
+                  Выбери связку ученик-предмет и задай параметры нового абонемента.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(false)}
+                style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none', padding: '10px 14px' }}
+              >
+                Закрыть
+              </button>
+            </div>
+
+            <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+              Связь ученик-предмет
+              <select
+                value={createTutorStudentId}
+                onChange={(event) => setCreateTutorStudentId(event.target.value)}
+              >
+                {availableForCreation.map((option) => (
+                  <option key={option.id} value={String(option.id)}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                gap: 10,
+              }}
+            >
+              <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+                Количество занятий
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={createLessons}
+                  onChange={(event) => setCreateLessons(event.target.value)}
+                  placeholder="Например, 8"
+                />
+              </label>
+              <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+                Уже использовано
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={createUsedLessons}
+                  onChange={(event) => setCreateUsedLessons(event.target.value)}
+                />
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button type="button" onClick={handleSubmitCreateAbonement} disabled={savingAbonement}>
+                {savingAbonement ? 'Сохраняем...' : 'Создать абонемент'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(false)}
+                style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {detailsModalOpen && selectedRelation && (
+        <div
+          onClick={() => setDetailsModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.48)',
+            display: 'grid',
+            placeItems: 'center',
+            padding: 20,
+            zIndex: 40,
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: 'min(560px, 100%)',
+              background: '#fff',
+              borderRadius: 24,
+              border: '1px solid rgba(24,33,47,0.08)',
+              boxShadow: '0 30px 80px rgba(15,23,42,0.18)',
+              padding: isMobile ? 18 : 24,
+              display: 'grid',
+              gap: 14,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+              <div>
+                <h3 style={{ fontSize: 22, marginBottom: 6 }}>{selectedRelation.studentName}</h3>
+                <div style={{ color: '#687486', fontSize: 14 }}>{selectedRelation.subjectName}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingAbonement((current) => !current)}
+                  style={{ background: '#d96f32', boxShadow: 'none', padding: '10px 14px' }}
+                >
+                  {editingAbonement ? 'Скрыть редактирование' : 'Редактировать'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailsModalOpen(false);
+                    setEditingAbonement(false);
+                  }}
+                  style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none', padding: '10px 14px' }}
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                gap: 12,
+              }}
+            >
+              <div style={{ padding: 14, borderRadius: 16, background: 'rgba(23,32,51,0.03)' }}>
+                <div style={{ color: '#687486', fontSize: 13, marginBottom: 6 }}>Ставка</div>
+                {editingAbonement ? (
+                  <input
+                    type="number"
+                    min="1"
+                    step="50"
+                    value={editRate}
+                    onChange={(event) => setEditRate(event.target.value)}
+                  />
+                ) : (
+                  <div style={{ fontWeight: 700, color: '#1f2a3b' }}>
+                    {formatCurrency(selectedRelation.rate)} в час
+                  </div>
+                )}
+              </div>
+              <div style={{ padding: 14, borderRadius: 16, background: 'rgba(23,32,51,0.03)' }}>
+                <div style={{ color: '#687486', fontSize: 13, marginBottom: 6 }}>Всего занятий</div>
+                {editingAbonement ? (
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={editLessons}
+                    onChange={(event) => setEditLessons(event.target.value)}
+                  />
+                ) : (
+                  <div style={{ fontWeight: 700, color: '#1f2a3b' }}>{selectedRelation.total}</div>
+                )}
+              </div>
+              <div style={{ padding: 14, borderRadius: 16, background: 'rgba(23,32,51,0.03)' }}>
+                <div style={{ color: '#687486', fontSize: 13, marginBottom: 6 }}>Использовано</div>
+                <div style={{ fontWeight: 700, color: '#1f2a3b' }}>{selectedRelation.used}</div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                height: 10,
+                borderRadius: 999,
+                background: 'rgba(23,32,51,0.08)',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: `${selectedRelation.total > 0 ? clampPercent((selectedRelation.used / selectedRelation.total) * 100) : 0}%`,
+                  background: 'linear-gradient(90deg, #2a6fdb 0%, #5d93ea 100%)',
+                  borderRadius: 999,
+                }}
+              />
+            </div>
+
+            <div style={{ color: '#435066', fontSize: 14 }}>
+              Осталось занятий: <strong>{selectedRelation.remaining}</strong>
+            </div>
+
+            {editingAbonement && (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button type="button" onClick={handleSaveAbonementDetails} disabled={savingAbonement}>
+                  {savingAbonement ? 'Сохраняем...' : 'Сохранить изменения'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingAbonement(false);
+                    setEditLessons(String(selectedRelation.total));
+                    setEditRate(String(selectedRelation.rate));
+                  }}
+                  style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                >
+                  Отмена
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

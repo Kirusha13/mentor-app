@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   createLesson,
   getLessons,
+  rescheduleLesson,
   updateLesson,
   type ConductStatus,
   type Lesson,
@@ -127,6 +128,70 @@ function monthGrid(date: Date) {
   }));
 }
 
+function layoutTimelineLessons(items: Lesson[]) {
+  const sorted = [...items].sort((a, b) => {
+    const startDiff = toMinutes(a.start_time) - toMinutes(b.start_time);
+    if (startDiff !== 0) return startDiff;
+    return toMinutes(b.end_time) - toMinutes(a.end_time);
+  });
+
+  const positioned: Array<{
+    lesson: Lesson;
+    top: number;
+    height: number;
+    column: number;
+    columns: number;
+  }> = [];
+
+  let active: Array<{ end: number; column: number }> = [];
+  let groupIndices: number[] = [];
+  let groupMaxColumns = 1;
+
+  const finalizeGroup = () => {
+    groupIndices.forEach((index) => {
+      positioned[index].columns = groupMaxColumns;
+    });
+    groupIndices = [];
+    groupMaxColumns = 1;
+  };
+
+  for (const lesson of sorted) {
+    const start = toMinutes(lesson.start_time) - GRID_START_HOUR * 60;
+    const end = toMinutes(lesson.end_time) - GRID_START_HOUR * 60;
+
+    active = active.filter((item) => item.end > start);
+
+    if (active.length === 0 && groupIndices.length > 0) {
+      finalizeGroup();
+    }
+
+    const usedColumns = new Set(active.map((item) => item.column));
+    let column = 0;
+    while (usedColumns.has(column)) {
+      column += 1;
+    }
+
+    active.push({ end, column });
+    groupMaxColumns = Math.max(groupMaxColumns, active.length);
+
+    positioned.push({
+      lesson,
+      top: (start / 60) * HOUR_HEIGHT,
+      height: Math.max(((end - start) / 60) * HOUR_HEIGHT, 52),
+      column,
+      columns: 1,
+    });
+
+    groupIndices.push(positioned.length - 1);
+  }
+
+  if (groupIndices.length > 0) {
+    finalizeGroup();
+  }
+
+  return positioned;
+}
+
 export default function SchedulePage() {
   const [mode, setMode] = useState<CalendarMode>('week');
   const [anchorDate, setAnchorDate] = useState(() => atMidnight(new Date()));
@@ -147,6 +212,11 @@ export default function SchedulePage() {
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
   const [editCost, setEditCost] = useState('');
+  const [isReschedulingLesson, setIsReschedulingLesson] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleStartTime, setRescheduleStartTime] = useState('');
+  const [rescheduleEndTime, setRescheduleEndTime] = useState('');
+  const [showRescheduledLessons, setShowRescheduledLessons] = useState(true);
 
   const dayDate = useMemo(() => atMidnight(anchorDate), [anchorDate]);
   const weekStart = useMemo(() => startOfWeek(anchorDate), [anchorDate]);
@@ -170,6 +240,19 @@ export default function SchedulePage() {
     [lessons, selectedLessonId]
   );
 
+  const visibleLessons = useMemo(() => {
+    if (showRescheduledLessons) {
+      return lessons;
+    }
+
+    return lessons.filter((lesson) => lesson.conduct_status !== 'rescheduled');
+  }, [lessons, showRescheduledLessons]);
+
+  const hiddenRescheduledCount = useMemo(
+    () => lessons.filter((lesson) => lesson.conduct_status === 'rescheduled').length,
+    [lessons]
+  );
+
   const tutorStudentOptions = useMemo(() => {
     return tutorStudents.map((item) => {
       const student = students.find((entry) => entry.id === item.student_id);
@@ -183,40 +266,48 @@ export default function SchedulePage() {
   }, [students, subjects, tutorStudents]);
 
   const dayLessons = useMemo(
-    () => lessons.filter((lesson) => lesson.lesson_date === formatDate(dayDate)),
-    [dayDate, lessons]
+    () => visibleLessons.filter((lesson) => lesson.lesson_date === formatDate(dayDate)),
+    [dayDate, visibleLessons]
   );
 
   const weekLessonsByDay = useMemo(
-    () => weekDays.map((day) => lessons.filter((lesson) => lesson.lesson_date === formatDate(day))),
-    [lessons, weekDays]
+    () => weekDays.map((day) => visibleLessons.filter((lesson) => lesson.lesson_date === formatDate(day))),
+    [visibleLessons, weekDays]
   );
 
   const lessonsByDate = useMemo(() => {
     const map = new Map<string, Lesson[]>();
-    for (const lesson of lessons) {
+    for (const lesson of visibleLessons) {
       const existing = map.get(lesson.lesson_date) ?? [];
       existing.push(lesson);
       map.set(lesson.lesson_date, existing);
     }
     return map;
-  }, [lessons]);
+  }, [visibleLessons]);
 
   useEffect(() => {
     if (!selectedLesson) {
       setIsEditingLesson(false);
+      setIsReschedulingLesson(false);
       setEditLessonDate('');
       setEditStartTime('');
       setEditEndTime('');
       setEditCost('');
+      setRescheduleDate('');
+      setRescheduleStartTime('');
+      setRescheduleEndTime('');
       return;
     }
 
     setIsEditingLesson(false);
+    setIsReschedulingLesson(false);
     setEditLessonDate(selectedLesson.lesson_date);
     setEditStartTime(toTime(selectedLesson.start_time));
     setEditEndTime(toTime(selectedLesson.end_time));
     setEditCost(selectedLesson.cost ? String(selectedLesson.cost) : '');
+    setRescheduleDate(selectedLesson.lesson_date);
+    setRescheduleStartTime(toTime(selectedLesson.start_time));
+    setRescheduleEndTime(toTime(selectedLesson.end_time));
   }, [selectedLesson]);
 
   useEffect(() => {
@@ -343,6 +434,43 @@ export default function SchedulePage() {
     }
   };
 
+  const handleLessonReschedule = async () => {
+    if (!selectedLesson || !rescheduleDate || !rescheduleStartTime || !rescheduleEndTime) {
+      alert('Заполни новую дату и время переноса');
+      return;
+    }
+
+    if (rescheduleEndTime <= rescheduleStartTime) {
+      alert('Время окончания должно быть позже времени начала');
+      return;
+    }
+
+    try {
+      const movedLesson = await rescheduleLesson(selectedLesson.id, {
+        new_date: rescheduleDate,
+        new_start_time: `${rescheduleStartTime}:00`,
+        new_end_time: `${rescheduleEndTime}:00`,
+      });
+
+      const updatedOriginal = await updateLesson(selectedLesson.id, {
+        conduct_status: 'rescheduled',
+      });
+
+      setLessons((prev) =>
+        [...prev.filter((lesson) => lesson.id !== movedLesson.id && lesson.id !== updatedOriginal.id), updatedOriginal, movedLesson]
+          .sort((a, b) =>
+            `${a.lesson_date} ${a.start_time}`.localeCompare(`${b.lesson_date} ${b.start_time}`)
+          )
+      );
+
+      setSelectedLessonId(movedLesson.id);
+      setIsReschedulingLesson(false);
+    } catch (error) {
+      console.error('Ошибка переноса занятия:', error);
+      alert(getApiErrorMessage(error, 'Не удалось перенести занятие'));
+    }
+  };
+
   const moveRange = (direction: -1 | 1) => {
     if (mode === 'day') {
       setAnchorDate((prev) => addDays(prev, direction));
@@ -367,6 +495,10 @@ export default function SchedulePage() {
         key={lesson.id}
         onClick={() => setSelectedLessonId(lesson.id)}
         style={{
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
           padding: compact ? '8px 10px' : '10px',
           borderRadius: 16,
           background: `linear-gradient(135deg, ${accent} 0%, ${state} 100%)`,
@@ -385,7 +517,7 @@ export default function SchedulePage() {
           {subject?.name ?? 'Без предмета'} • {lesson.cost ?? '—'} ₽
         </div>
         {!compact && (
-          <div style={{ fontSize: 12, opacity: 0.9 }}>
+          <div style={{ fontSize: 12, opacity: 0.9, overflow: 'hidden' }}>
             {lesson.grade ? `Оценка: ${lesson.grade}` : 'Нажми для деталей'}
           </div>
         )}
@@ -422,14 +554,16 @@ export default function SchedulePage() {
         overflow: 'hidden',
       }}
     >
-      {items.map((lesson) => {
-        const start = toMinutes(lesson.start_time) - GRID_START_HOUR * 60;
-        const end = toMinutes(lesson.end_time) - GRID_START_HOUR * 60;
-        const top = (start / 60) * HOUR_HEIGHT;
-        const height = Math.max(((end - start) / 60) * HOUR_HEIGHT, 52);
+      {layoutTimelineLessons(items).map(({ lesson, top, height, column, columns }) => {
+        const laneGap = 6;
+        const width = `calc((100% - 16px - ${(columns - 1) * laneGap}px) / ${columns})`;
+        const left = `calc(8px + ${column} * (((100% - 16px - ${(columns - 1) * laneGap}px) / ${columns}) + ${laneGap}px))`;
 
         return (
-          <div key={lesson.id} style={{ position: 'absolute', top, left: 8, right: 8, height }}>
+          <div
+            key={lesson.id}
+            style={{ position: 'absolute', top, left, width, height, zIndex: column + 1 }}
+          >
             {renderLessonCard(lesson)}
           </div>
         );
@@ -544,7 +678,7 @@ export default function SchedulePage() {
           <div style={{ minWidth: 260, borderRadius: 22, padding: 18, background: '#172033', color: '#fff' }}>
             <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>Текущий диапазон</div>
             <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.1, marginBottom: 8 }}>{rangeLabel}</div>
-            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>Записей в диапазоне: {lessons.length}</div>
+            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>Записей в диапазоне: {visibleLessons.length}</div>
           </div>
         </div>
       </section>
@@ -619,6 +753,46 @@ export default function SchedulePage() {
             </div>
           </div>
 
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              marginBottom: 18,
+              padding: '12px 14px',
+              borderRadius: 16,
+              background: 'rgba(23,32,51,0.04)',
+              border: '1px solid rgba(24,33,47,0.06)',
+            }}
+          >
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                color: '#324055',
+                fontSize: 14,
+                fontWeight: 600,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={showRescheduledLessons}
+                onChange={(event) => setShowRescheduledLessons(event.target.checked)}
+                style={{ width: 16, height: 16 }}
+              />
+              Показывать перенесённые занятия
+            </label>
+
+            <div style={{ color: '#687486', fontSize: 13 }}>
+              {showRescheduledLessons || hiddenRescheduledCount === 0
+                ? `Показано записей: ${visibleLessons.length}`
+                : `Скрыто перенесённых: ${hiddenRescheduledCount}`}
+            </div>
+          </div>
+
           {loading ? <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка расписания...</p> : renderCalendarBody()}
         </section>
       </div>
@@ -671,10 +845,25 @@ export default function SchedulePage() {
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>Быстрые действия</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                    <button onClick={() => setIsEditingLesson((prev) => !prev)} style={{ background: isEditingLesson ? 'rgba(23,32,51,0.92)' : '#d96f32', boxShadow: 'none' }}>
+                    <button
+                      onClick={() => {
+                        setIsEditingLesson((prev) => !prev);
+                        setIsReschedulingLesson(false);
+                      }}
+                      style={{ background: isEditingLesson ? 'rgba(23,32,51,0.92)' : '#d96f32', boxShadow: 'none' }}
+                    >
                       {isEditingLesson ? 'Скрыть редактирование' : 'Редактировать'}
                     </button>
                     <button onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'conducted' })}>Проведено</button>
+                    <button
+                      onClick={() => {
+                        setIsReschedulingLesson((prev) => !prev);
+                        setIsEditingLesson(false);
+                      }}
+                      style={{ background: isReschedulingLesson ? '#7b61c8' : 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                    >
+                      {isReschedulingLesson ? 'Скрыть перенос' : 'Перенести'}
+                    </button>
                     <button
                       onClick={() =>
                         handleLessonPatch(selectedLesson.id, {
@@ -709,6 +898,34 @@ export default function SchedulePage() {
                           setEditEndTime(toTime(selectedLesson.end_time));
                           setEditCost(selectedLesson.cost ? String(selectedLesson.cost) : '');
                           setIsEditingLesson(false);
+                        }}
+                        style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {isReschedulingLesson && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>Перенос занятия</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12 }}>
+                      <input type="date" value={rescheduleDate} onChange={(event) => setRescheduleDate(event.target.value)} />
+                      <div />
+                      <input type="time" value={rescheduleStartTime} onChange={(event) => setRescheduleStartTime(event.target.value)} />
+                      <input type="time" value={rescheduleEndTime} onChange={(event) => setRescheduleEndTime(event.target.value)} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <button onClick={handleLessonReschedule} style={{ background: '#7b61c8', boxShadow: 'none' }}>
+                        Подтвердить перенос
+                      </button>
+                      <button
+                        onClick={() => {
+                          setRescheduleDate(selectedLesson.lesson_date);
+                          setRescheduleStartTime(toTime(selectedLesson.start_time));
+                          setRescheduleEndTime(toTime(selectedLesson.end_time));
+                          setIsReschedulingLesson(false);
                         }}
                         style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
                       >
