@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  createStudent,
-  getStudents,
-  type Student,
-} from '../api/students';
+  addStudentContact,
+  createContact,
+  getStudentContacts,
+  removeStudentContact,
+  type RelationshipType,
+  type StudentContact,
+} from '../api/contacts';
+import { createStudent, getStudents, type Student } from '../api/students';
+import { getSubjects, type Subject } from '../api/subjects';
 import {
   createTutorStudent,
   getTutorStudents,
@@ -11,12 +16,12 @@ import {
   type TutorStudent,
   type TutorStudentStatus,
 } from '../api/tutorStudents';
-import { getSubjects, type Subject } from '../api/subjects';
 
 interface StudentCardData {
   student: Student;
   tutorStudent?: TutorStudent;
   subject?: Subject;
+  contacts: StudentContact[];
 }
 
 const panelStyle = {
@@ -27,10 +32,17 @@ const panelStyle = {
   boxShadow: 'var(--shadow-card)',
 } as const;
 
+const relationshipLabels: Record<RelationshipType, string> = {
+  parent: 'Родитель',
+  guardian: 'Опекун',
+  other: 'Другое',
+};
+
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [contactsByStudent, setContactsByStudent] = useState<Record<number, StudentContact[]>>({});
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -51,6 +63,13 @@ export default function StudentsPage() {
   const [startedAt, setStartedAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [creatingTutorStudent, setCreatingTutorStudent] = useState(false);
 
+  const [contactStudentId, setContactStudentId] = useState('');
+  const [contactRelationship, setContactRelationship] = useState<RelationshipType>('parent');
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactTelegramId, setContactTelegramId] = useState('');
+  const [creatingContact, setCreatingContact] = useState(false);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -64,6 +83,20 @@ export default function StudentsPage() {
       setStudents(studentsData);
       setTutorStudents(tutorStudentsData);
       setSubjects(subjectsData);
+
+      if (!studentsData.length) {
+        setContactsByStudent({});
+        return;
+      }
+
+      const contactsEntries = await Promise.all(
+        studentsData.map(async (student) => {
+          const contacts = await getStudentContacts(student.id);
+          return [student.id, contacts] as const;
+        })
+      );
+
+      setContactsByStudent(Object.fromEntries(contactsEntries));
     } catch (error) {
       console.error('Ошибка загрузки учеников:', error);
       alert('Не удалось загрузить данные учеников');
@@ -85,12 +118,15 @@ export default function StudentsPage() {
         student,
         tutorStudent,
         subject,
+        contacts: contactsByStudent[student.id] ?? [],
       };
     });
-  }, [students, tutorStudents, subjects]);
+  }, [contactsByStudent, students, subjects, tutorStudents]);
 
-  const filteredCards = studentCards.filter(({ student, subject }) => {
-    const text = `${student.full_name} ${subject?.name ?? ''}`.toLowerCase();
+  const filteredCards = studentCards.filter(({ student, subject, contacts }) => {
+    const text = `${student.full_name} ${subject?.name ?? ''} ${contacts
+      .map((item) => item.contact.full_name)
+      .join(' ')}`.toLowerCase();
     return text.includes(search.toLowerCase());
   });
 
@@ -114,6 +150,21 @@ export default function StudentsPage() {
       return String(availableStudents[0].id);
     });
   }, [availableStudents]);
+
+  useEffect(() => {
+    if (!students.length) {
+      setContactStudentId('');
+      return;
+    }
+
+    setContactStudentId((current) => {
+      if (current && students.some((student) => String(student.id) === current)) {
+        return current;
+      }
+
+      return String(students[0].id);
+    });
+  }, [students]);
 
   useEffect(() => {
     if (!subjects.length) {
@@ -202,6 +253,7 @@ export default function StudentsPage() {
 
       setStudents((prev) => [...prev, createdStudent]);
       setTutorStudents((prev) => [...prev, createdTutorStudent]);
+      setContactsByStudent((prev) => ({ ...prev, [createdStudent.id]: [] }));
 
       setNewStudentName('');
       setNewStudentTelegramId('');
@@ -226,9 +278,7 @@ export default function StudentsPage() {
     try {
       const updated = await updateTutorStudent(id, payload);
 
-      setTutorStudents((prev) =>
-        prev.map((item) => (item.id === updated.id ? updated : item))
-      );
+      setTutorStudents((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
     } catch (error) {
       console.error('Ошибка обновления связи tutor-student:', error);
       alert('Не удалось обновить тариф или статус');
@@ -259,6 +309,64 @@ export default function StudentsPage() {
       alert('Не удалось привязать ученика');
     } finally {
       setCreatingTutorStudent(false);
+    }
+  };
+
+  const handleCreateContact = async () => {
+    if (!contactStudentId || !contactName.trim()) {
+      alert('Выбери ученика и укажи ФИО контактного лица');
+      return;
+    }
+
+    if (!contactPhone.trim() && !contactTelegramId.trim()) {
+      alert('Укажи номер телефона или Telegram ID контактного лица');
+      return;
+    }
+
+    try {
+      setCreatingContact(true);
+
+      const contact = await createContact({
+        full_name: contactName.trim(),
+        phone_number: contactPhone.trim() || undefined,
+        telegram_id: contactTelegramId.trim() ? Number(contactTelegramId) : undefined,
+      });
+
+      const linked = await addStudentContact(Number(contactStudentId), {
+        contact_id: contact.id,
+        relationship_type: contactRelationship,
+      });
+
+      setContactsByStudent((prev) => ({
+        ...prev,
+        [Number(contactStudentId)]: [...(prev[Number(contactStudentId)] ?? []), linked],
+      }));
+
+      setContactName('');
+      setContactPhone('');
+      setContactTelegramId('');
+      setContactRelationship('parent');
+
+      alert('Контактное лицо создано и привязано к ученику');
+    } catch (error) {
+      console.error('Ошибка создания контактного лица:', error);
+      alert('Не удалось создать или привязать контактное лицо');
+    } finally {
+      setCreatingContact(false);
+    }
+  };
+
+  const handleRemoveContact = async (studentId: number, studentContactId: number) => {
+    try {
+      await removeStudentContact(studentId, studentContactId);
+
+      setContactsByStudent((prev) => ({
+        ...prev,
+        [studentId]: (prev[studentId] ?? []).filter((item) => item.id !== studentContactId),
+      }));
+    } catch (error) {
+      console.error('Ошибка отвязки контактного лица:', error);
+      alert('Не удалось отвязать контактное лицо');
     }
   };
 
@@ -305,19 +413,19 @@ export default function StudentsPage() {
                 marginBottom: 12,
               }}
             >
-              Ученики и привязка
+              Ученики, предметы
               <br />
-              к предметам
+              и контактные лица
             </h1>
             <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 14, marginBottom: 0 }}>
-              Теперь можно создавать ученика прямо здесь и сразу привязывать его к предмету,
-              чтобы не блокировать тестирование следующих этапов.
+              Здесь мы уже закрываем не только карточки учеников, но и важную для диплома часть:
+              привязку контактных лиц, через которых дальше пойдут уведомления и отчёты.
             </p>
           </div>
 
           <div
             style={{
-              minWidth: 200,
+              minWidth: 220,
               borderRadius: 18,
               padding: 14,
               background: '#172033',
@@ -331,7 +439,7 @@ export default function StudentsPage() {
               {filteredCards.length}
             </div>
             <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>
-              Ученики, найденные по текущему фильтру
+              Учеников найдено по текущему фильтру
             </div>
           </div>
         </div>
@@ -348,12 +456,12 @@ export default function StudentsPage() {
         <section style={panelStyle}>
           <h3 style={{ fontSize: 19, marginBottom: 8 }}>Поиск</h3>
           <p style={{ color: '#687486', marginBottom: 10, fontSize: 14 }}>
-            Быстрый фильтр по имени ученика и названию предмета.
+            Быстрый фильтр по ученику, предмету и контактным лицам.
           </p>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Например: Иван или Математика"
+            placeholder="Например: Иван, Математика, мама"
           />
         </section>
 
@@ -372,7 +480,7 @@ export default function StudentsPage() {
                 color: '#b9551f',
               }}
             >
-              Сначала создай предмет на странице "Предметы".
+              Сначала создай предмет на странице «Предметы».
             </div>
           ) : (
             <div style={{ display: 'grid', gap: '8px' }}>
@@ -411,9 +519,7 @@ export default function StudentsPage() {
                   );
 
                   setNewStudentSubjectId(nextSubjectId);
-                  setNewStudentRate(
-                    nextSubject?.default_rate ? String(nextSubject.default_rate) : ''
-                  );
+                  setNewStudentRate(nextSubject?.default_rate ? String(nextSubject.default_rate) : '');
                 }}
               >
                 {subjects.map((subject) => (
@@ -480,7 +586,7 @@ export default function StudentsPage() {
                 color: '#b9551f',
               }}
             >
-              Сначала создай предмет на отдельной странице "Предметы".
+              Сначала создай предмет на странице «Предметы».
             </div>
           ) : (
             <div style={{ display: 'grid', gap: '8px' }}>
@@ -501,9 +607,7 @@ export default function StudentsPage() {
                   );
 
                   setSelectedSubjectId(nextSubjectId);
-                  setHourlyRate(
-                    nextSubject?.default_rate ? String(nextSubject.default_rate) : ''
-                  );
+                  setHourlyRate(nextSubject?.default_rate ? String(nextSubject.default_rate) : '');
                 }}
               >
                 {subjects.map((subject) => (
@@ -528,6 +632,68 @@ export default function StudentsPage() {
             </div>
           )}
         </section>
+
+        <section style={panelStyle}>
+          <h3 style={{ fontSize: 19, marginBottom: 8 }}>Добавить контактное лицо</h3>
+          <p style={{ color: '#687486', marginBottom: 10, fontSize: 14 }}>
+            Контакты родителей и опекунов будем дальше использовать для уведомлений и отчётов.
+          </p>
+
+          {students.length === 0 ? (
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 16,
+                background: 'rgba(23,32,51,0.06)',
+                color: '#566173',
+              }}
+            >
+              Сначала создай ученика, чтобы можно было привязать контактное лицо.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: '8px' }}>
+              <select value={contactStudentId} onChange={(e) => setContactStudentId(e.target.value)}>
+                {students.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.full_name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={contactRelationship}
+                onChange={(e) => setContactRelationship(e.target.value as RelationshipType)}
+              >
+                <option value="parent">Родитель</option>
+                <option value="guardian">Опекун</option>
+                <option value="other">Другое</option>
+              </select>
+
+              <input
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                placeholder="ФИО контактного лица"
+              />
+
+              <input
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                placeholder="Телефон"
+              />
+
+              <input
+                value={contactTelegramId}
+                onChange={(e) => setContactTelegramId(e.target.value)}
+                placeholder="Telegram ID"
+                type="number"
+              />
+
+              <button onClick={handleCreateContact} disabled={creatingContact}>
+                {creatingContact ? 'Сохраняем...' : 'Создать и привязать контакт'}
+              </button>
+            </div>
+          )}
+        </section>
       </div>
 
       <section style={panelStyle}>
@@ -536,8 +702,8 @@ export default function StudentsPage() {
         ) : filteredCards.length === 0 ? (
           <p style={{ color: '#687486', marginBottom: 0 }}>Ученики не найдены</p>
         ) : (
-            <div style={{ display: 'grid', gap: '12px' }}>
-            {filteredCards.map(({ student, tutorStudent, subject }) => (
+          <div style={{ display: 'grid', gap: '12px' }}>
+            {filteredCards.map(({ student, tutorStudent, subject, contacts }) => (
               <article
                 key={student.id}
                 style={{
@@ -557,7 +723,7 @@ export default function StudentsPage() {
                     flexWrap: 'wrap',
                   }}
                 >
-                  <div>
+                  <div style={{ width: '100%' }}>
                     <h3 style={{ marginBottom: '8px', fontSize: 21 }}>{student.full_name}</h3>
 
                     <div
@@ -593,9 +759,79 @@ export default function StudentsPage() {
                       <strong>Тариф:</strong>{' '}
                       {tutorStudent?.hourly_rate ? `${tutorStudent.hourly_rate} ₽/ч` : '—'}
                     </p>
-                    <p style={{ marginBottom: 0, color: '#435066', fontSize: 14 }}>
+                    <p style={{ marginBottom: 12, color: '#435066', fontSize: 14 }}>
                       <strong>Статус:</strong> {tutorStudent?.status || '—'}
                     </p>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gap: 10,
+                        padding: 14,
+                        borderRadius: 16,
+                        background: 'rgba(23,32,51,0.04)',
+                        border: '1px solid rgba(24,33,47,0.06)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div style={{ fontWeight: 700, color: '#243041' }}>Контактные лица</div>
+                        <div style={{ color: '#687486', fontSize: 13 }}>
+                          {contacts.length} {contacts.length === 1 ? 'контакт' : 'контакта'}
+                        </div>
+                      </div>
+
+                      {contacts.length === 0 ? (
+                        <p style={{ color: '#687486', marginBottom: 0, fontSize: 14 }}>
+                          Пока нет привязанных контактных лиц.
+                        </p>
+                      ) : (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          {contacts.map((item) => (
+                            <div
+                              key={item.id}
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: '1fr auto',
+                                gap: 10,
+                                alignItems: 'center',
+                                padding: 12,
+                                borderRadius: 14,
+                                background: '#fff',
+                                border: '1px solid rgba(24,33,47,0.08)',
+                              }}
+                            >
+                              <div>
+                                <div style={{ fontWeight: 700, color: '#243041', marginBottom: 4 }}>
+                                  {item.contact.full_name}
+                                </div>
+                                <div style={{ color: '#556173', fontSize: 14, marginBottom: 4 }}>
+                                  {relationshipLabels[item.relationship_type]}
+                                </div>
+                                <div style={{ color: '#687486', fontSize: 13 }}>
+                                  Телефон: {item.contact.phone_number || '—'} | Telegram ID:{' '}
+                                  {item.contact.telegram_id || '—'}
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveContact(student.id, item.id)}
+                                style={{ background: 'rgba(166,63,59,0.92)', boxShadow: 'none' }}
+                              >
+                                Убрать
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

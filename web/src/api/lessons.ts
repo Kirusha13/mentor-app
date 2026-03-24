@@ -48,6 +48,12 @@ export interface UpdateLessonPayload {
   topic_id?: number | null;
 }
 
+export interface RescheduleLessonPayload {
+  new_date: string;
+  new_start_time: string;
+  new_end_time: string;
+}
+
 export interface LessonQuery {
   date_from?: string;
   date_to?: string;
@@ -69,5 +75,13 @@ export const updateLesson = async (
   payload: UpdateLessonPayload
 ): Promise<Lesson> => {
   const response = await apiClient.patch(`/lessons/${id}`, payload);
+  return response.data;
+};
+
+export const rescheduleLesson = async (
+  id: number,
+  payload: RescheduleLessonPayload
+): Promise<Lesson> => {
+  const response = await apiClient.post(`/lessons/${id}/reschedule`, payload);
   return response.data;
 };
