@@ -1,13 +1,15 @@
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
 from app.core.telegram_auth import verify_telegram_data
 from app.models.student import Student
+from app.models.subject import Subject
+from app.models.tutor_student import TutorStudent
 from app.schemas.auth import StudentLoginData, StudentRegisterData
 from app.services.student_service import get_student_by_telegram_id
-from app.services.tutor_service import get_tutor_by_invitation_token
 
 
 async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
@@ -15,27 +17,51 @@ async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
     if not verify_telegram_data(tg_dict):
         raise ValueError("invalid_telegram_hash")
 
-    tutor = await get_tutor_by_invitation_token(db, data.invitation_token)
-    if tutor is None:
+    subject_result = await db.execute(
+        select(Subject).where(Subject.invitation_token == data.invitation_token)
+    )
+    subject = subject_result.scalar_one_or_none()
+    if subject is None:
         raise LookupError("invalid_invitation_token")
 
-    # Если ученик с таким telegram_id уже есть — просто выдаём ему токен
-    existing = await get_student_by_telegram_id(db, data.id)
-    if existing:
-        existing.last_visited_at = datetime.now(timezone.utc)
-        await db.commit()
-        return create_access_token(existing.id, role="student")
+    existing_student = await get_student_by_telegram_id(db, data.id)
+    if existing_student:
+        existing_student.last_visited_at = datetime.now(timezone.utc)
+        student = existing_student
+    else:
+        now = datetime.now(timezone.utc)
+        student = Student(
+            full_name=data.full_name,
+            telegram_id=data.id,
+            phone_number=data.phone_number,
+            avatar_url=data.photo_url,
+            started_at=now,
+            last_visited_at=now,
+        )
+        db.add(student)
+        await db.flush()
 
-    now = datetime.now(timezone.utc)
-    student = Student(
-        full_name=data.full_name,
-        telegram_id=data.id,
-        phone_number=data.phone_number,
-        avatar_url=data.photo_url,
-        started_at=now,
-        last_visited_at=now,
+    existing_relation_result = await db.execute(
+        select(TutorStudent).where(
+            TutorStudent.student_id == student.id,
+            TutorStudent.tutor_id == subject.tutor_id,
+            TutorStudent.subject_id == subject.id,
+        )
     )
-    db.add(student)
+    existing_relation = existing_relation_result.scalar_one_or_none()
+
+    if existing_relation is None:
+        db.add(
+            TutorStudent(
+                tutor_id=subject.tutor_id,
+                student_id=student.id,
+                subject_id=subject.id,
+                hourly_rate=subject.default_rate or 0,
+                rate_set_at=datetime.now(timezone.utc),
+                started_at=datetime.now(timezone.utc).date(),
+            )
+        )
+
     await db.commit()
     await db.refresh(student)
     return create_access_token(student.id, role="student")
