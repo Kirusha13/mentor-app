@@ -10,6 +10,7 @@ interface LayoutProps {
 const NAV_ITEMS = [
   { to: '/', label: 'Главная', exact: true },
   { to: '/students', label: 'Ученики' },
+  { to: '/contacts', label: 'Контакты' },
   { to: '/schedule', label: 'Расписание' },
   { to: '/assignments', label: 'Задания' },
   { to: '/subjects', label: 'Предметы' },
@@ -33,7 +34,11 @@ export default function Layout({ children }: LayoutProps) {
       style={{
         minHeight: '100vh',
         display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : isTablet ? '220px minmax(0, 1fr)' : '248px minmax(0, 1fr)',
+        gridTemplateColumns: isMobile
+          ? '1fr'
+          : isTablet
+            ? '220px minmax(0, 1fr)'
+            : '248px minmax(0, 1fr)',
       }}
     >
       <aside
@@ -44,7 +49,9 @@ export default function Layout({ children }: LayoutProps) {
           padding: isMobile ? '14px 14px 12px' : '20px 14px 16px',
           borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.06)',
           borderBottom: isMobile ? '1px solid rgba(255,255,255,0.06)' : 'none',
-          boxShadow: isMobile ? '0 14px 32px rgba(18, 26, 38, 0.12)' : '18px 0 40px rgba(18, 26, 38, 0.12)',
+          boxShadow: isMobile
+            ? '0 14px 32px rgba(18, 26, 38, 0.12)'
+            : '18px 0 40px rgba(18, 26, 38, 0.12)',
           position: isMobile ? 'relative' : 'sticky',
           top: 0,
           height: isMobile ? 'auto' : '100vh',
@@ -70,10 +77,13 @@ export default function Layout({ children }: LayoutProps) {
           >
             Mentor App
           </div>
-          <div style={{ fontSize: isMobile ? 24 : 28, fontWeight: 800, lineHeight: 1.05 }}>Кабинет</div>
+          <div style={{ fontSize: isMobile ? 24 : 28, fontWeight: 800, lineHeight: 1.05 }}>
+            Кабинет
+          </div>
           {!isMobile && (
             <div style={{ marginTop: 8, color: 'rgba(255,255,255,0.68)', fontSize: 14 }}>
-              Панель репетитора для работы с учениками, занятиями и материалами.
+              Панель репетитора для работы с учениками, занятиями, заданиями, финансами и
+              контактными лицами.
             </div>
           )}
         </div>

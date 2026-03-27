@@ -3,6 +3,7 @@ import Layout from '../components/Layout';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AuthCallbackPage from '../pages/AuthCallbackPage';
 import AssignmentsPage from '../pages/AssignmentsPage';
+import ContactsPage from '../pages/ContactsPage';
 import DashboardPage from '../pages/DashboardPage';
 import FinancePage from '../pages/FinancePage';
 import LoginPage from '../pages/LoginPage';
@@ -29,6 +30,7 @@ export default function AppRouter() {
 
         <Route path="/" element={<ProtectedLayout><DashboardPage /></ProtectedLayout>} />
         <Route path="/students" element={<ProtectedLayout><StudentsPage /></ProtectedLayout>} />
+        <Route path="/contacts" element={<ProtectedLayout><ContactsPage /></ProtectedLayout>} />
         <Route path="/schedule" element={<ProtectedLayout><SchedulePage /></ProtectedLayout>} />
         <Route path="/assignments" element={<ProtectedLayout><AssignmentsPage /></ProtectedLayout>} />
         <Route path="/subjects" element={<ProtectedLayout><SubjectsPage /></ProtectedLayout>} />

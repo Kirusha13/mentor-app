@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_tutor
 from app.core.database import get_db
+from app.models.assignment import Assignment
+from app.models.lesson import Lesson
 from app.models.subject import Subject
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
@@ -116,3 +118,36 @@ async def update_tutor_student(
     await db.commit()
     await db.refresh(ts)
     return ts
+
+
+@router.delete("/{ts_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Удалить связь репетитор-ученик")
+async def delete_tutor_student(
+    ts_id: int,
+    tutor: Tutor = Depends(get_current_tutor),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(TutorStudent).where(TutorStudent.id == ts_id, TutorStudent.tutor_id == tutor.id)
+    )
+    ts = result.scalar_one_or_none()
+    if ts is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связь не найдена")
+
+    lesson_exists = await db.execute(select(Lesson.id).where(Lesson.tutor_student_id == ts_id).limit(1))
+    if lesson_exists.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Нельзя удалить связь, у которой уже есть история занятий",
+        )
+
+    assignment_exists = await db.execute(
+        select(Assignment.id).where(Assignment.tutor_student_id == ts_id).limit(1)
+    )
+    if assignment_exists.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Нельзя удалить связь, у которой уже есть история домашних заданий",
+        )
+
+    await db.delete(ts)
+    await db.commit()

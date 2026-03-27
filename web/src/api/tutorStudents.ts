@@ -50,3 +50,7 @@ export const updateTutorStudent = async (
   const response = await apiClient.patch(`/tutor-students/${id}`, payload);
   return response.data;
 };
+
+export const deleteTutorStudent = async (id: number): Promise<void> => {
+  await apiClient.delete(`/tutor-students/${id}`);
+};
