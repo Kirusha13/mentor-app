@@ -351,7 +351,7 @@ export default function ScheduleScreen() {
 
       {selected && (
         <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelected(null)}>
-          <LessonModal lesson={selected} onClose={() => setSelected(null)} onRefresh={load} />
+          <LessonModal lesson={selected} onClose={() => setSelected(null)} onRefresh={() => { load(); loadUnpaid(); }} />
         </Modal>
       )}
 
