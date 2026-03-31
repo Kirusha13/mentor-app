@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.models.lesson import ConductStatus, Lesson
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
-from app.schemas.lesson import LessonCreate, LessonOut, LessonReschedule, LessonUpdate
+from app.schemas.lesson import ConfirmPaymentRequest, LessonCreate, LessonOut, LessonReschedule, LessonUpdate
 
 router = APIRouter()
 
@@ -140,3 +140,20 @@ async def cancel_lesson(
     lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
     lesson.conduct_status = ConductStatus.cancelled
     await db.commit()
+
+
+@router.post("/{lesson_id}/confirm-payment", response_model=LessonOut, summary="Подтвердить или отклонить оплату")
+async def confirm_payment(
+    lesson_id: int,
+    data: ConfirmPaymentRequest,
+    tutor: Tutor = Depends(get_current_tutor),
+    db: AsyncSession = Depends(get_db),
+):
+    lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
+    if lesson.payment_status != "payment_pending":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Занятие не ожидает подтверждения оплаты")
+
+    lesson.payment_status = "paid" if data.confirm else "unpaid"
+    await db.commit()
+    await db.refresh(lesson)
+    return lesson
