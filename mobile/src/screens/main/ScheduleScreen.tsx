@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getLessons, Lesson } from '../../api/lessons';
+import { Ionicons } from '@expo/vector-icons';
+import { getLessons, reportPayment, Lesson } from '../../api/lessons';
 import RescheduleScreen from './RescheduleScreen';
 import BookingScreen from './BookingScreen';
 
@@ -92,6 +93,13 @@ function getTodayDayIndex(): number {
 function formatDate(dateStr: string): string {
   const [y, m, d] = dateStr.slice(0, 10).split('-');
   return `${parseInt(d)} ${MONTHS_RU[parseInt(m) - 1]} ${y}`;
+}
+function pluralLesson(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'занятие';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'занятия';
+  return 'занятий';
 }
 
 // ─── Модальное окно ────────────────────────────────────────────────────────────
@@ -186,6 +194,7 @@ export default function ScheduleScreen() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Lesson | null>(null);
   const [showBooking, setShowBooking] = useState(false);
+  const [unpaidInfo, setUnpaidInfo] = useState<{ count: number; total: number } | null>(null);
   const weekEnd = addDays(weekStart, 6);
 
   const load = useCallback(async () => {
@@ -201,7 +210,18 @@ export default function ScheduleScreen() {
     }
   }, [weekStart]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const loadUnpaid = useCallback(async () => {
+    const all = await getLessons();
+    const unpaid = all.filter(l => l.conduct_status === 'conducted' && l.payment_status === 'unpaid');
+    if (unpaid.length === 0) {
+      setUnpaidInfo(null);
+    } else {
+      const total = unpaid.reduce((sum, l) => sum + (l.cost ?? 0), 0);
+      setUnpaidInfo({ count: unpaid.length, total });
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => { load(); loadUnpaid(); }, [load, loadUnpaid]));
 
   const todayStr = toISODate(new Date());
   const selectedDate = toISODate(addDays(weekStart, selectedDay));
@@ -298,6 +318,15 @@ export default function ScheduleScreen() {
         />
       </Modal>
 
+      {unpaidInfo && (
+        <View style={styles.unpaidBanner}>
+          <Ionicons name="wallet-outline" size={16} color="#E65100" />
+          <Text style={styles.unpaidBannerText}>
+            Не оплачено: {unpaidInfo.total.toLocaleString('ru-RU')} ₽ ({unpaidInfo.count} {pluralLesson(unpaidInfo.count)})
+          </Text>
+        </View>
+      )}
+
       {/* FAB */}
       <TouchableOpacity style={styles.fab} onPress={() => setShowBooking(true)} activeOpacity={0.85}>
         <Text style={styles.fabText}>+</Text>
@@ -382,6 +411,17 @@ const styles = StyleSheet.create({
   cardPaymentRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
   paymentDot: { width: 7, height: 7, borderRadius: 3.5 },
   paymentLabel: { fontSize: 11, fontWeight: '500' },
+  unpaidBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#FFE0B2',
+  },
+  unpaidBannerText: { fontSize: 13, color: '#E65100', fontWeight: '500' },
 });
 
 const modal = StyleSheet.create({
