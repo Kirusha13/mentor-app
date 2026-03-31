@@ -53,7 +53,14 @@ const STATUS_BG: Record<Lesson['conduct_status'], string> = {
 };
 const PAYMENT_LABEL: Record<Lesson['payment_status'], string> = {
   unpaid: 'Не оплачено',
+  payment_pending: 'Ожидает подтверждения',
   paid: 'Оплачено',
+};
+
+const PAYMENT_DOT_COLOR: Record<Lesson['payment_status'], string> = {
+  unpaid: '#F44336',
+  payment_pending: '#FF9800',
+  paid: '#4CAF50',
 };
 
 function getWeekStart(d: Date): Date {
@@ -264,6 +271,14 @@ export default function ScheduleScreen() {
                 {lesson.tutor_name ? <Text style={styles.cardMeta}>{lesson.tutor_name}</Text> : null}
                 {lesson.subject_name ? <Text style={styles.cardSubject}>{lesson.subject_name}</Text> : null}
                 <Text style={styles.cardCost}>{lesson.cost} ₽</Text>
+                {lesson.conduct_status === 'conducted' && (
+                  <View style={styles.cardPaymentRow}>
+                    <View style={[styles.paymentDot, { backgroundColor: PAYMENT_DOT_COLOR[lesson.payment_status] }]} />
+                    <Text style={[styles.paymentLabel, { color: PAYMENT_DOT_COLOR[lesson.payment_status] }]}>
+                      {PAYMENT_LABEL[lesson.payment_status]}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -364,6 +379,9 @@ const styles = StyleSheet.create({
   cardMeta: { fontSize: 14, color: '#333', fontWeight: '500' },
   cardSubject: { fontSize: 13, color: '#666', marginTop: 2 },
   cardCost: { fontSize: 13, fontWeight: '600', color: '#1a1a1a', marginTop: 6 },
+  cardPaymentRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+  paymentDot: { width: 7, height: 7, borderRadius: 3.5 },
+  paymentLabel: { fontSize: 11, fontWeight: '500' },
 });
 
 const modal = StyleSheet.create({
