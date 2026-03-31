@@ -105,16 +105,43 @@ function pluralLesson(n: number): string {
 // ─── Модальное окно ────────────────────────────────────────────────────────────
 
 function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: () => void; onRefresh: () => void }) {
-  const color = STATUS_COLOR[lesson.conduct_status];
-  const bg = STATUS_BG[lesson.conduct_status];
+  const [localLesson, setLocalLesson] = useState(lesson);
+  const color = STATUS_COLOR[localLesson.conduct_status];
+  const bg = STATUS_BG[localLesson.conduct_status];
   const [showReschedule, setShowReschedule] = useState(false);
+  const [reporting, setReporting] = useState(false);
+
+  const handleReportPayment = async () => {
+    Alert.alert(
+      'Подтвердить оплату',
+      `Вы сообщаете репетитору об оплате ${localLesson.cost} ₽?`,
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Подтвердить',
+          onPress: async () => {
+            setReporting(true);
+            try {
+              const updated = await reportPayment(localLesson.id);
+              setLocalLesson(updated);
+              onRefresh();
+            } catch {
+              Alert.alert('Ошибка', 'Не удалось отправить запрос. Попробуйте ещё раз.');
+            } finally {
+              setReporting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (showReschedule) {
     return (
       <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowReschedule(false)}>
         <RescheduleScreen
-          lessonId={lesson.id}
-          tutorStudentId={lesson.tutor_student_id}
+          lessonId={localLesson.id}
+          tutorStudentId={localLesson.tutor_student_id}
           onClose={() => setShowReschedule(false)}
           onSuccess={() => { setShowReschedule(false); onClose(); onRefresh(); }}
         />
@@ -122,7 +149,8 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
     );
   }
 
-  const canReschedule = lesson.conduct_status === 'scheduled';
+  const canReschedule = localLesson.conduct_status === 'scheduled';
+  const canReportPayment = localLesson.conduct_status === 'conducted' && localLesson.payment_status !== 'paid';
 
   return (
     <View style={modal.container}>
@@ -135,35 +163,51 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
 
       <ScrollView contentContainerStyle={modal.body}>
         <View style={[modal.statusBadge, { backgroundColor: bg, borderLeftColor: color }]}>
-          <Text style={[modal.statusText, { color }]}>{STATUS_LABEL[lesson.conduct_status]}</Text>
+          <Text style={[modal.statusText, { color }]}>{STATUS_LABEL[localLesson.conduct_status]}</Text>
         </View>
 
         <View style={modal.section}>
-          <Row label="Дата" value={formatDate(String(lesson.lesson_date))} />
-          <Row label="Время" value={`${lesson.start_time.slice(0, 5)} – ${lesson.end_time.slice(0, 5)}`} />
-          {lesson.tutor_name ? <Row label="Репетитор" value={lesson.tutor_name} /> : null}
-          {lesson.subject_name ? <Row label="Предмет" value={lesson.subject_name} /> : null}
+          <Row label="Дата" value={formatDate(String(localLesson.lesson_date))} />
+          <Row label="Время" value={`${localLesson.start_time.slice(0, 5)} – ${localLesson.end_time.slice(0, 5)}`} />
+          {localLesson.tutor_name ? <Row label="Репетитор" value={localLesson.tutor_name} /> : null}
+          {localLesson.subject_name ? <Row label="Предмет" value={localLesson.subject_name} /> : null}
         </View>
 
         <View style={modal.section}>
-          <Row label="Стоимость" value={`${lesson.cost} ₽`} bold />
+          <Row label="Стоимость" value={`${localLesson.cost} ₽`} bold />
           <Row
             label="Оплата"
-            value={PAYMENT_LABEL[lesson.payment_status]}
-            valueColor={lesson.payment_status === 'paid' ? '#4CAF50' : '#F44336'}
+            value={PAYMENT_LABEL[localLesson.payment_status]}
+            valueColor={
+              localLesson.payment_status === 'paid' ? '#4CAF50'
+              : localLesson.payment_status === 'payment_pending' ? '#FF9800'
+              : '#F44336'
+            }
             last
           />
         </View>
 
-        {lesson.grade != null && (
+        {localLesson.grade != null && (
           <View style={modal.section}>
-            <Row label="Оценка" value={String(lesson.grade)} bold last />
+            <Row label="Оценка" value={String(localLesson.grade)} bold last />
           </View>
         )}
 
         {canReschedule && (
           <TouchableOpacity style={modal.rescheduleBtn} onPress={() => setShowReschedule(true)}>
             <Text style={modal.rescheduleBtnText}>Перенести занятие</Text>
+          </TouchableOpacity>
+        )}
+
+        {canReportPayment && (
+          <TouchableOpacity
+            style={[modal.paymentBtn, localLesson.payment_status === 'payment_pending' && modal.paymentBtnDisabled]}
+            onPress={localLesson.payment_status === 'unpaid' && !reporting ? handleReportPayment : undefined}
+            activeOpacity={localLesson.payment_status === 'unpaid' ? 0.85 : 1}
+          >
+            <Text style={[modal.paymentBtnText, localLesson.payment_status === 'payment_pending' && modal.paymentBtnTextDisabled]}>
+              {localLesson.payment_status === 'payment_pending' ? 'Ожидает подтверждения' : 'Сообщить об оплате'}
+            </Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -460,4 +504,22 @@ const modal = StyleSheet.create({
     alignItems: 'center',
   },
   rescheduleBtnText: { color: '#2AABEE', fontSize: 15, fontWeight: '600' },
+  paymentBtn: {
+    marginTop: 8,
+    backgroundColor: '#2AABEE',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  paymentBtnDisabled: {
+    backgroundColor: '#E0E0E0',
+  },
+  paymentBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  paymentBtnTextDisabled: {
+    color: '#9E9E9E',
+  },
 });
