@@ -6,7 +6,7 @@ export interface Lesson {
   start_time: string;
   end_time: string;
   conduct_status: 'scheduled' | 'conducted' | 'cancelled' | 'rescheduled' | 'reschedule_pending' | 'reschedule_rejected' | 'booking_pending' | 'booking_rejected';
-  payment_status: 'unpaid' | 'paid';
+  payment_status: 'unpaid' | 'payment_pending' | 'paid';
   cost: number | null;
   grade: number | null;
   tutor_student_id: number | null;
@@ -52,5 +52,10 @@ export async function requestReschedule(
   data: { lesson_date: string; start_time: string; end_time: string }
 ): Promise<Lesson> {
   const res = await client.post(`/student/reschedule/${lessonId}`, data);
+  return res.data;
+}
+
+export async function reportPayment(lessonId: number): Promise<Lesson> {
+  const res = await client.post(`/student/lessons/${lessonId}/report-payment`);
   return res.data;
 }
