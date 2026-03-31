@@ -20,6 +20,7 @@ class ConductStatus(str, enum.Enum):
 
 class PaymentStatus(str, enum.Enum):
     unpaid = "unpaid"
+    payment_pending = "payment_pending"
     paid = "paid"
 
 

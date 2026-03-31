@@ -99,3 +99,7 @@ class LessonReschedule(BaseModel):
         if self.new_end_time <= self.new_start_time:
             raise ValueError("new_end_time должно быть позже new_start_time")
         return self
+
+
+class ConfirmPaymentRequest(BaseModel):
+    confirm: bool
