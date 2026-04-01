@@ -7,28 +7,48 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import text
+from sqlalchemy import select, text
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.api.v1.router import api_router
+from app.models.lesson import ConductStatus, Lesson
+from app.services.subscription_service import apply_conduct_status_transition
 
 
 async def auto_conduct_lessons():
-    """Помечает прошедшие запланированные занятия как проведённые."""
+    """Обновляет статусы прошедших занятий."""
     async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Lesson)
+            .options(selectinload(Lesson.tutor_student))
+            .where(
+                Lesson.lesson_date < text("CURRENT_DATE"),
+                Lesson.conduct_status == ConductStatus.scheduled,
+                Lesson.tutor_student_id.is_not(None),
+            )
+        )
+        for lesson in result.scalars().all():
+            apply_conduct_status_transition(lesson, lesson.tutor_student, ConductStatus.conducted)
         await db.execute(text("""
             UPDATE lessons
-            SET conduct_status = 'conducted'
+            SET conduct_status = 'reschedule_rejected'
             WHERE lesson_date < CURRENT_DATE
-              AND conduct_status = 'scheduled'
-              AND tutor_student_id IS NOT NULL
+              AND conduct_status = 'reschedule_pending'
+        """))
+        await db.execute(text("""
+            UPDATE lessons
+            SET conduct_status = 'booking_rejected'
+            WHERE lesson_date < CURRENT_DATE
+              AND conduct_status = 'booking_pending'
         """))
         await db.commit()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await auto_conduct_lessons()
     scheduler = AsyncIOScheduler()
     scheduler.add_job(auto_conduct_lessons, "cron", hour=0, minute=5)
     scheduler.start()

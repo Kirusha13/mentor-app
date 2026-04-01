@@ -96,9 +96,31 @@ async def update_lesson(
     db: AsyncSession = Depends(get_db),
 ):
     lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
+    payload = data.model_dump(exclude_none=True)
 
-    for field, value in data.model_dump(exclude_none=True).items():
-        setattr(lesson, field, value)
+    next_start_time = payload.get("start_time", lesson.start_time)
+    next_end_time = payload.get("end_time", lesson.end_time)
+    if next_end_time <= next_start_time:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "INVALID_LESSON_TIME_RANGE",
+                "message": "Время окончания должно быть позже времени начала.",
+            },
+        )
+
+    tutor_student = None
+    if "conduct_status" in payload:
+        tutor_student = await get_tutor_student_for_lesson(db, lesson)
+
+    try:
+        for field, value in payload.items():
+            if field == "conduct_status":
+                apply_conduct_status_transition(lesson, tutor_student, value)
+                continue
+            setattr(lesson, field, value)
+    except SubscriptionStateError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.to_detail()) from error
 
     await db.commit()
     await db.refresh(lesson)
@@ -131,6 +153,89 @@ async def reschedule_lesson(
     return new_lesson
 
 
+@router.post("/{lesson_id}/approve-booking", response_model=LessonOut, summary="Одобрить запрос на запись")
+async def approve_booking(
+    lesson_id: int,
+    tutor: Tutor = Depends(get_current_tutor),
+    db: AsyncSession = Depends(get_db),
+):
+    lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
+    if lesson.conduct_status != ConductStatus.booking_pending:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Занятие не является ожидающим подтверждения")
+
+    conflict = await db.execute(
+        select(Lesson)
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(
+            TutorStudent.tutor_id == tutor.id,
+            Lesson.lesson_date == lesson.lesson_date,
+            Lesson.conduct_status == ConductStatus.scheduled,
+            Lesson.start_time < lesson.end_time,
+            Lesson.end_time > lesson.start_time,
+            Lesson.id != lesson.id,
+        )
+    )
+    if conflict.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Этот слот уже занят другим занятием")
+
+    lesson.conduct_status = ConductStatus.scheduled
+    await db.commit()
+    await db.refresh(lesson)
+    return lesson
+
+
+@router.post("/{lesson_id}/reject-booking", response_model=LessonOut, summary="Отклонить запрос на запись")
+async def reject_booking(
+    lesson_id: int,
+    tutor: Tutor = Depends(get_current_tutor),
+    db: AsyncSession = Depends(get_db),
+):
+    lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
+    if lesson.conduct_status != ConductStatus.booking_pending:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Занятие не является ожидающим подтверждения")
+    lesson.conduct_status = ConductStatus.booking_rejected
+    await db.commit()
+    await db.refresh(lesson)
+    return lesson
+
+
+@router.post("/{lesson_id}/approve-reschedule", response_model=LessonOut, summary="Одобрить перенос занятия")
+async def approve_reschedule(
+    lesson_id: int,
+    tutor: Tutor = Depends(get_current_tutor),
+    db: AsyncSession = Depends(get_db),
+):
+    new_lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
+    if new_lesson.conduct_status != ConductStatus.reschedule_pending:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Занятие не является ожидающим переноса")
+
+    new_lesson.conduct_status = ConductStatus.scheduled
+
+    if new_lesson.original_lesson_id:
+        original = await db.get(Lesson, new_lesson.original_lesson_id)
+        if original:
+            original.conduct_status = ConductStatus.rescheduled
+
+    await db.commit()
+    await db.refresh(new_lesson)
+    return new_lesson
+
+
+@router.post("/{lesson_id}/reject-reschedule", response_model=LessonOut, summary="Отклонить перенос занятия")
+async def reject_reschedule(
+    lesson_id: int,
+    tutor: Tutor = Depends(get_current_tutor),
+    db: AsyncSession = Depends(get_db),
+):
+    lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
+    if lesson.conduct_status != ConductStatus.reschedule_pending:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Занятие не является ожидающим переноса")
+    lesson.conduct_status = ConductStatus.reschedule_rejected
+    await db.commit()
+    await db.refresh(lesson)
+    return lesson
+
+
 @router.delete("/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Отменить занятие")
 async def cancel_lesson(
     lesson_id: int,
@@ -138,7 +243,11 @@ async def cancel_lesson(
     db: AsyncSession = Depends(get_db),
 ):
     lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
-    lesson.conduct_status = ConductStatus.cancelled
+    tutor_student = await get_tutor_student_for_lesson(db, lesson)
+    try:
+        apply_conduct_status_transition(lesson, tutor_student, ConductStatus.cancelled)
+    except SubscriptionStateError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.to_detail()) from error
     await db.commit()
 
 

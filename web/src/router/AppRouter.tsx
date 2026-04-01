@@ -2,9 +2,24 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Layout from '../components/Layout';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AuthCallbackPage from '../pages/AuthCallbackPage';
+import AssignmentsPage from '../pages/AssignmentsPage';
+import ContactsPage from '../pages/ContactsPage';
 import DashboardPage from '../pages/DashboardPage';
+import FinancePage from '../pages/FinancePage';
 import LoginPage from '../pages/LoginPage';
 import NotFoundPage from '../pages/NotFoundPage';
+import PortfolioPage from '../pages/PortfolioPage';
+import SchedulePage from '../pages/SchedulePage';
+import StudentsPage from '../pages/StudentsPage';
+import SubjectsPage from '../pages/SubjectsPage';
+
+function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ProtectedRoute>
+      <Layout>{children}</Layout>
+    </ProtectedRoute>
+  );
+}
 
 export default function AppRouter() {
   return (
@@ -13,16 +28,14 @@ export default function AppRouter() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <DashboardPage />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/" element={<ProtectedLayout><DashboardPage /></ProtectedLayout>} />
+        <Route path="/students" element={<ProtectedLayout><StudentsPage /></ProtectedLayout>} />
+        <Route path="/contacts" element={<ProtectedLayout><ContactsPage /></ProtectedLayout>} />
+        <Route path="/schedule" element={<ProtectedLayout><SchedulePage /></ProtectedLayout>} />
+        <Route path="/assignments" element={<ProtectedLayout><AssignmentsPage /></ProtectedLayout>} />
+        <Route path="/subjects" element={<ProtectedLayout><SubjectsPage /></ProtectedLayout>} />
+        <Route path="/finance" element={<ProtectedLayout><FinancePage /></ProtectedLayout>} />
+        <Route path="/portfolio" element={<ProtectedLayout><PortfolioPage /></ProtectedLayout>} />
 
         <Route path="*" element={<NotFoundPage />} />
         <Route path="" element={<Navigate to="/" replace />} />

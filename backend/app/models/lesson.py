@@ -16,6 +16,8 @@ class ConductStatus(str, enum.Enum):
     rescheduled = "rescheduled"
     reschedule_pending = "reschedule_pending"
     reschedule_rejected = "reschedule_rejected"
+    booking_pending = "booking_pending"
+    booking_rejected = "booking_rejected"
 
 
 class PaymentStatus(str, enum.Enum):

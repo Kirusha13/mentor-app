@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,12 +13,18 @@ from app.schemas.subject import SubjectCreate, SubjectOut, SubjectUpdate
 router = APIRouter()
 
 
+def generate_invitation_token() -> str:
+    return secrets.token_urlsafe(16)
+
+
 @router.get("", response_model=list[SubjectOut], summary="Список предметов репетитора")
 async def list_subjects(
     tutor: Tutor = Depends(get_current_tutor),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Subject).where(Subject.tutor_id == tutor.id))
+    result = await db.execute(
+        select(Subject).where(Subject.tutor_id == tutor.id)
+    )
     return list(result.scalars().all())
 
 
@@ -26,14 +34,21 @@ async def create_subject(
     tutor: Tutor = Depends(get_current_tutor),
     db: AsyncSession = Depends(get_db),
 ):
-    subject = Subject(name=data.name, tutor_id=tutor.id)
+    subject = Subject(
+        name=data.name,
+        tutor_id=tutor.id,
+        invitation_token=generate_invitation_token(),
+        default_rate=data.default_rate,
+        color=data.color,
+    )
+
     db.add(subject)
     await db.commit()
     await db.refresh(subject)
     return subject
 
 
-@router.patch("/{subject_id}", response_model=SubjectOut, summary="Переименовать предмет")
+@router.patch("/{subject_id}", response_model=SubjectOut, summary="Обновить предмет")
 async def update_subject(
     subject_id: int,
     data: SubjectUpdate,
@@ -41,12 +56,28 @@ async def update_subject(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Subject).where(Subject.id == subject_id, Subject.tutor_id == tutor.id)
+        select(Subject).where(
+            Subject.id == subject_id,
+            Subject.tutor_id == tutor.id,
+        )
     )
     subject = result.scalar_one_or_none()
+
     if subject is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Предмет не найден")
-    subject.name = data.name
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Предмет не найден",
+        )
+
+    if data.name is not None:
+        subject.name = data.name
+
+    if data.default_rate is not None:
+        subject.default_rate = data.default_rate
+
+    if data.color is not None:
+        subject.color = data.color
+
     await db.commit()
     await db.refresh(subject)
     return subject
@@ -59,10 +90,18 @@ async def delete_subject(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Subject).where(Subject.id == subject_id, Subject.tutor_id == tutor.id)
+        select(Subject).where(
+            Subject.id == subject_id,
+            Subject.tutor_id == tutor.id,
+        )
     )
     subject = result.scalar_one_or_none()
+
     if subject is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Предмет не найден")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Предмет не найден",
+        )
+
     await db.delete(subject)
     await db.commit()
