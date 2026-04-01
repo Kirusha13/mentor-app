@@ -10,11 +10,6 @@ from app.models.lesson import ConductStatus, Lesson
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
 from app.schemas.lesson import ConfirmPaymentRequest, LessonCreate, LessonOut, LessonReschedule, LessonUpdate
-from app.services.subscription_service import (
-    SubscriptionStateError,
-    apply_conduct_status_transition,
-    get_tutor_student_for_lesson,
-)
 
 router = APIRouter()
 

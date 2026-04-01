@@ -544,3 +544,40 @@ async def my_materials(
         q = q.where(Material.topic_id == topic_id)
     result = await db.execute(q.order_by(Material.created_at.desc()))
     return list(result.scalars().all())
+
+
+@router.post("/lessons/{lesson_id}/report-payment", response_model=LessonOut, summary="Сообщить об оплате")
+async def report_payment(
+    lesson_id: int,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Lesson)
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(Lesson.id == lesson_id, TutorStudent.student_id == student.id)
+    )
+    lesson = result.scalar_one_or_none()
+    if lesson is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Занятие не найдено")
+    if lesson.conduct_status != "conducted":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Сообщить об оплате можно только для проведённых занятий")
+    if lesson.payment_status != "unpaid":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Занятие уже оплачено или ожидает подтверждения")
+
+    lesson.payment_status = "payment_pending"
+    await db.commit()
+    await db.refresh(lesson)
+
+    d = LessonOut.model_validate(lesson).model_dump()
+    ts_result = await db.execute(
+        select(TutorStudent, Tutor.full_name.label("tutor_name"), Subject.name.label("subject_name"))
+        .join(Tutor, Tutor.id == TutorStudent.tutor_id)
+        .join(Subject, Subject.id == TutorStudent.subject_id)
+        .where(TutorStudent.id == lesson.tutor_student_id)
+    )
+    row = ts_result.first()
+    if row:
+        d["tutor_name"] = row.tutor_name
+        d["subject_name"] = row.subject_name
+    return d
