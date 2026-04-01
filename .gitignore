@@ -33,6 +33,9 @@ mobile/ios/
 *.key
 *.mobileprovision
 
+# Internal planning/tooling docs
+docs/
+
 # Misc
 .DS_Store
 *.tsbuildinfo
