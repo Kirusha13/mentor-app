@@ -21,6 +21,7 @@ import {
   uploadAssignmentPhoto,
 } from '../../api/assignments';
 import { AssignmentsStackParamList } from '../../navigation/AppNavigator';
+import { API_BASE_URL } from '../../api/client';
 
 const STATUS_LABEL: Record<Assignment['completion_status'], string> = {
   assigned: 'Назначено',
@@ -35,7 +36,7 @@ const STATUS_COLOR: Record<Assignment['completion_status'], string> = {
   overdue: '#F44336',
 };
 
-const API_BASE = 'https://mentor-app-f3cl.onrender.com';
+const API_BASE = API_BASE_URL.replace('/api/v1', '');
 
 type Props = NativeStackScreenProps<AssignmentsStackParamList, 'AssignmentDetail'>;
 

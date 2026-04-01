@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -241,8 +242,10 @@ export default function ScheduleScreen() {
   const [unpaidInfo, setUnpaidInfo] = useState<{ count: number; total: number } | null>(null);
   const weekEnd = addDays(weekStart, 6);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
       const data = await getLessons({
         date_from: toISODate(weekStart),
@@ -250,7 +253,7 @@ export default function ScheduleScreen() {
       });
       setLessons(data);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, [weekStart]);
 
@@ -264,6 +267,12 @@ export default function ScheduleScreen() {
       setUnpaidInfo({ count: unpaid.length, total });
     }
   }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([load(false), loadUnpaid()]);
+    setRefreshing(false);
+  }, [load, loadUnpaid]);
 
   useFocusEffect(useCallback(() => { load(); loadUnpaid(); }, [load, loadUnpaid]));
 
@@ -310,13 +319,14 @@ export default function ScheduleScreen() {
       {/* Контент */}
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color="#2AABEE" />
-      ) : dayLessons.length === 0 ? (
-        <View style={styles.emptyDay}>
-          <Text style={styles.emptyDayText}>Занятий нет</Text>
-        </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
-          {dayLessons.map((lesson) => {
+        <ScrollView
+          contentContainerStyle={dayLessons.length === 0 ? styles.emptyDay : styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2AABEE" colors={['#2AABEE']} />}
+        >
+          {dayLessons.length === 0 ? (
+            <Text style={styles.emptyDayText}>Занятий нет</Text>
+          ) : dayLessons.map((lesson) => {
             const color = STATUS_COLOR[lesson.conduct_status];
             const bg = STATUS_BG[lesson.conduct_status];
             return (

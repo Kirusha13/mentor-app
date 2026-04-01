@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { getStudentMe, StudentProfile, updateStudentMe, uploadStudentAvatar } from '../../api/student';
+import { getStudentMe, getTutors, StudentProfile, TutorStudent, updateStudentMe, uploadStudentAvatar } from '../../api/student';
 import { API_BASE_URL } from '../../api/client';
 import JoinScreen from './JoinScreen';
 
@@ -68,6 +68,7 @@ function Avatar({ hasAvatar, avatarUrl, name, token, onPress }: {
 export default function ProfileScreen() {
   const { signOut, token } = useAuth();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [tutors, setTutors] = useState<TutorStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [joinVisible, setJoinVisible] = useState(false);
 
@@ -79,10 +80,11 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      getStudentMe().then(p => {
+      Promise.all([getStudentMe(), getTutors()]).then(([p, ts]) => {
         setProfile(p);
         setEditName(p.full_name);
         setEditPhone(p.phone_number ?? '');
+        setTutors(ts);
       }).finally(() => setLoading(false));
     }, []),
   );
@@ -219,6 +221,33 @@ export default function ProfileScreen() {
         )}
       </View>
 
+      {/* Репетиторы */}
+      {tutors.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Мои репетиторы</Text>
+          {tutors.map((ts, i) => {
+            const remaining = ts.subscription_lessons != null
+              ? ts.subscription_lessons - (ts.used_lessons ?? 0)
+              : null;
+            return (
+              <View key={ts.id} style={[styles.tutorRow, i > 0 && styles.tutorRowBorder]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.tutorName}>{ts.tutor_name ?? '—'}</Text>
+                  <Text style={styles.tutorSubject}>{ts.subject_name ?? '—'}</Text>
+                </View>
+                {remaining != null && remaining > 0 && (
+                  <View style={styles.subscriptionBadge}>
+                    <Text style={styles.subscriptionBadgeText}>
+                      {`${remaining} из ${ts.subscription_lessons} зан.`}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
       {/* Действия */}
       <View style={styles.settingsCard}>
         <TouchableOpacity style={styles.settingsItem} onPress={() => setJoinVisible(true)}>
@@ -334,6 +363,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+
+  sectionTitle: { fontSize: 12, fontWeight: '600', color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  tutorRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 8 },
+  tutorRowBorder: { borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  tutorName: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
+  tutorSubject: { fontSize: 13, color: '#888', marginTop: 2 },
+  subscriptionBadge: { backgroundColor: '#EFF9FF', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  subscriptionBadgeText: { fontSize: 12, fontWeight: '600', color: '#2AABEE' },
 
   settingsCard: {
     backgroundColor: '#fff',
