@@ -1,4 +1,4 @@
-"""
+﻿"""
 Эндпоинты для ученика: только свои данные.
 """
 from datetime import date, datetime, time
@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from pydantic import BaseModel
 from fastapi.responses import Response
 from telegram import Bot
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_student
@@ -205,7 +205,6 @@ async def book_lesson(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
-    # Проверяем что tutor_student_id принадлежит этому ученику
     ts_result = await db.execute(
         select(TutorStudent).where(
             TutorStudent.id == data.tutor_student_id,
@@ -215,15 +214,32 @@ async def book_lesson(
     ts = ts_result.scalar_one_or_none()
     if ts is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связка не найдена")
+    if str(ts.status) != "active":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Записаться можно только по активной связи")
 
-    # Проверяем отсутствие конфликта — нет другого scheduled занятия в это время у этого репетитора
+    requested_at = datetime.combine(data.lesson_date, data.start_time)
+    if requested_at <= datetime.now():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Нельзя записаться на время в прошлом")
+
+    window_result = await db.execute(
+        select(Lesson).where(
+            Lesson.tutor_id == ts.tutor_id,
+            Lesson.tutor_student_id.is_(None),
+            Lesson.lesson_date == data.lesson_date,
+            Lesson.start_time <= data.start_time,
+            Lesson.end_time >= data.end_time,
+        )
+    )
+    if window_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Выбранный слот не существует или уже недоступен")
+
     conflict_result = await db.execute(
         select(Lesson)
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .where(
             TutorStudent.tutor_id == ts.tutor_id,
             Lesson.lesson_date == data.lesson_date,
-            Lesson.conduct_status == "scheduled",
+            Lesson.conduct_status.in_(("scheduled", "booking_pending", "reschedule_pending")),
             Lesson.start_time < data.end_time,
             Lesson.end_time > data.start_time,
         )
@@ -231,10 +247,9 @@ async def book_lesson(
     if conflict_result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Этот слот уже занят")
 
-    # Рассчитываем стоимость: hourly_rate * длительность в часах
     duration_hours = (
-        (data.end_time.hour * 60 + data.end_time.minute) -
-        (data.start_time.hour * 60 + data.start_time.minute)
+        (data.end_time.hour * 60 + data.end_time.minute)
+        - (data.start_time.hour * 60 + data.start_time.minute)
     ) / 60
     cost = float(ts.hourly_rate) * duration_hours
 
@@ -251,12 +266,10 @@ async def book_lesson(
     await db.commit()
     await db.refresh(lesson)
 
-    # Добавляем имена для ответа
     d = LessonOut.model_validate(lesson).model_dump()
     d["tutor_name"] = (await db.execute(select(Tutor.full_name).where(Tutor.id == ts.tutor_id))).scalar_one_or_none()
     d["subject_name"] = (await db.execute(select(Subject.name).where(Subject.id == ts.subject_id))).scalar_one_or_none()
     return d
-
 
 @router.get("/assignments", response_model=list[AssignmentOut], summary="Мои задания")
 async def my_assignments(
@@ -416,7 +429,6 @@ async def _get_available_windows(student, db):
     tutors_map = {t.id: t.full_name for t in tutors_result.scalars().all()}
 
     # Получаем окна (tutor_student_id IS NULL)
-    from sqlalchemy import text
     windows_result = await db.execute(
         text("""
             SELECT id, lesson_date, start_time, end_time, tutor_id
@@ -436,7 +448,8 @@ async def _get_available_windows(student, db):
             SELECT l.lesson_date, l.start_time, l.end_time, l.tutor_student_id
             FROM lessons l
             JOIN tutor_student ts ON ts.id = l.tutor_student_id
-            WHERE ts.tutor_id = ANY(:tutor_ids) AND l.conduct_status = 'scheduled'
+            WHERE ts.tutor_id = ANY(:tutor_ids)
+              AND l.conduct_status IN ('scheduled', 'booking_pending', 'reschedule_pending')
         """),
         {"tutor_ids": tutor_ids},
     )

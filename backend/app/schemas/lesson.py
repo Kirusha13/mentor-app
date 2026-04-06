@@ -49,11 +49,12 @@ class RescheduleRequest(BaseModel):
 
 
 class LessonCreate(BaseModel):
-    tutor_student_id: int
+    tutor_student_id: int | None = None
     lesson_date: date
     start_time: time
     end_time: time
-    cost: Decimal
+    cost: Decimal | None = None
+    is_window: bool = False
     topic_id: int | None = None
 
     @model_validator(mode="after")

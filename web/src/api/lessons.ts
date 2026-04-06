@@ -6,9 +6,11 @@ export type ConductStatus =
   | 'cancelled'
   | 'rescheduled'
   | 'reschedule_pending'
-  | 'reschedule_rejected';
+  | 'reschedule_rejected'
+  | 'booking_pending'
+  | 'booking_rejected';
 
-export type PaymentStatus = 'unpaid' | 'paid';
+export type PaymentStatus = 'unpaid' | 'payment_pending' | 'paid';
 
 export interface Lesson {
   id: number;
@@ -29,11 +31,12 @@ export interface Lesson {
 }
 
 export interface CreateLessonPayload {
-  tutor_student_id: number;
+  tutor_student_id?: number | null;
   lesson_date: string;
   start_time: string;
   end_time: string;
-  cost: number;
+  cost?: number;
+  is_window?: boolean;
   topic_id?: number;
 }
 
@@ -52,6 +55,10 @@ export interface RescheduleLessonPayload {
   new_date: string;
   new_start_time: string;
   new_end_time: string;
+}
+
+export interface ConfirmPaymentPayload {
+  confirm: boolean;
 }
 
 export interface LessonQuery {
@@ -84,4 +91,26 @@ export const rescheduleLesson = async (
 ): Promise<Lesson> => {
   const response = await apiClient.post(`/lessons/${id}/reschedule`, payload);
   return response.data;
+};
+
+export const approveBooking = async (id: number): Promise<Lesson> => {
+  const response = await apiClient.post(`/lessons/${id}/approve-booking`);
+  return response.data;
+};
+
+export const rejectBooking = async (id: number): Promise<Lesson> => {
+  const response = await apiClient.post(`/lessons/${id}/reject-booking`);
+  return response.data;
+};
+
+export const confirmPayment = async (
+  id: number,
+  payload: ConfirmPaymentPayload
+): Promise<Lesson> => {
+  const response = await apiClient.post(`/lessons/${id}/confirm-payment`, payload);
+  return response.data;
+};
+
+export const deleteLesson = async (id: number): Promise<void> => {
+  await apiClient.delete(`/lessons/${id}`);
 };
