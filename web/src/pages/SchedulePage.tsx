@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  approveBooking,
+  confirmPayment,
   createLesson,
+  deleteLesson,
   getLessons,
+  rejectBooking,
   rescheduleLesson,
   updateLesson,
   type ConductStatus,
@@ -14,6 +18,11 @@ import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { getApiErrorCode, getApiErrorMessage } from '../utils/apiError';
 
 type CalendarMode = 'day' | 'week' | 'month';
+type SlotDayDraft = {
+  enabled: boolean;
+  start: string;
+  end: string;
+};
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -27,6 +36,14 @@ const GRID_START_HOUR = 8;
 const GRID_END_HOUR = 22;
 const HOUR_HEIGHT = 72;
 const WEEK_DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+function createDefaultSlotDrafts(): SlotDayDraft[] {
+  return Array.from({ length: 7 }, () => ({
+    enabled: false,
+    start: '17:00',
+    end: '18:00',
+  }));
+}
 
 function atMidnight(date: Date) {
   const copy = new Date(date);
@@ -104,6 +121,8 @@ function statusColor(status: ConductStatus) {
   if (status === 'rescheduled') return '#7b61c8';
   if (status === 'reschedule_pending') return '#d96f32';
   if (status === 'reschedule_rejected') return '#7b3f00';
+  if (status === 'booking_pending') return '#9c27b0';
+  if (status === 'booking_rejected') return '#8a4f1d';
   return '#2a6fdb';
 }
 
@@ -113,7 +132,19 @@ function statusLabel(status: ConductStatus) {
   if (status === 'rescheduled') return 'Перенесено';
   if (status === 'reschedule_pending') return 'Ждёт переноса';
   if (status === 'reschedule_rejected') return 'Перенос отклонён';
+  if (status === 'booking_pending') return 'Ждёт подтверждения записи';
+  if (status === 'booking_rejected') return 'Запись отклонена';
   return 'Запланировано';
+}
+
+function paymentLabel(status: PaymentStatus) {
+  if (status === 'paid') return 'Оплачено';
+  if (status === 'payment_pending') return 'Ожидает подтверждения';
+  return 'Не оплачено';
+}
+
+function isWindow(lesson: Lesson) {
+  return lesson.tutor_student_id == null;
 }
 
 function monthGrid(date: Date) {
@@ -206,6 +237,10 @@ export default function SchedulePage() {
   const [startTime, setStartTime] = useState('10:00');
   const [endTime, setEndTime] = useState('11:00');
   const [cost, setCost] = useState('');
+  const [isSlotPlannerOpen, setIsSlotPlannerOpen] = useState(false);
+  const [slotWeekOffset, setSlotWeekOffset] = useState<0 | 1>(0);
+  const [slotDurationMinutes, setSlotDurationMinutes] = useState('60');
+  const [slotDrafts, setSlotDrafts] = useState<SlotDayDraft[]>(() => createDefaultSlotDrafts());
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [isEditingLesson, setIsEditingLesson] = useState(false);
   const [editLessonDate, setEditLessonDate] = useState('');
@@ -221,6 +256,7 @@ export default function SchedulePage() {
   const dayDate = useMemo(() => atMidnight(anchorDate), [anchorDate]);
   const weekStart = useMemo(() => startOfWeek(anchorDate), [anchorDate]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  const slotPlannerWeekStart = useMemo(() => addDays(weekStart, slotWeekOffset * 7), [slotWeekOffset, weekStart]);
   const monthDays = useMemo(() => monthGrid(anchorDate), [anchorDate]);
 
   const range = useMemo(() => {
@@ -333,6 +369,12 @@ export default function SchedulePage() {
   }, [selectedTutorStudentId, tutorStudentOptions]);
 
   useEffect(() => {
+    if (!isSlotPlannerOpen) return;
+    setSlotDrafts(createDefaultSlotDrafts());
+    setSlotDurationMinutes('60');
+  }, [isSlotPlannerOpen, slotWeekOffset]);
+
+  useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
@@ -365,7 +407,7 @@ export default function SchedulePage() {
   };
 
   const handleCreateLesson = async () => {
-    if (!selectedTutorStudentId || !lessonDate || !startTime || !endTime || !cost) {
+    if (!lessonDate || !startTime || !endTime || !selectedTutorStudentId || !cost) {
       alert('Заполни все поля для создания занятия');
       return;
     }
@@ -382,10 +424,123 @@ export default function SchedulePage() {
       setLessons((prev) =>
         [...prev, created].sort((a, b) => `${a.lesson_date} ${a.start_time}`.localeCompare(`${b.lesson_date} ${b.start_time}`))
       );
+      setSelectedLessonId(created.id);
       alert('Занятие создано');
     } catch (error) {
-      console.error('Ошибка создания занятия:', error);
-      alert('Не удалось создать занятие');
+      console.error('Ошибка создания записи:', error);
+      alert(getApiErrorMessage(error, 'Не удалось создать занятие'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSlotDraftChange = (index: number, patch: Partial<SlotDayDraft>) => {
+    setSlotDrafts((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+  };
+
+  const handleCreateSlots = async () => {
+    const duration = Number(slotDurationMinutes);
+    if (!duration || duration <= 0) {
+      alert('Укажи корректную длительность слота в минутах');
+      return;
+    }
+
+    const enabledDays = slotDrafts
+      .map((draft, index) => ({ draft, index }))
+      .filter(({ draft }) => draft.enabled);
+
+    if (enabledDays.length === 0) {
+      alert('Выбери хотя бы один день недели для создания слотов');
+      return;
+    }
+
+    const payloads: Array<{ lesson_date: string; start_time: string; end_time: string; label: string }> = [];
+    const now = new Date();
+
+    for (const { draft, index } of enabledDays) {
+      if (!draft.start || !draft.end || draft.end <= draft.start) {
+        alert(`Проверь время для дня ${WEEK_DAYS[index]}`);
+        return;
+      }
+
+      const dayDate = addDays(slotPlannerWeekStart, index);
+      const startMinutes = toMinutes(draft.start);
+      const endMinutes = toMinutes(draft.end);
+
+      if (endMinutes - startMinutes < duration) {
+        alert(`Для дня ${WEEK_DAYS[index]} диапазон меньше длительности слота`);
+        return;
+      }
+
+      for (let cursor = startMinutes; cursor + duration <= endMinutes; cursor += duration) {
+        const slotStartHours = String(Math.floor(cursor / 60)).padStart(2, '0');
+        const slotStartMinutes = String(cursor % 60).padStart(2, '0');
+        const slotEndValue = cursor + duration;
+        const slotEndHours = String(Math.floor(slotEndValue / 60)).padStart(2, '0');
+        const slotEndMinutes = String(slotEndValue % 60).padStart(2, '0');
+
+        const slotDate = formatDate(dayDate);
+        const slotStart = new Date(`${slotDate}T${slotStartHours}:${slotStartMinutes}:00`);
+        if (slotStart <= now) {
+          continue;
+        }
+
+        payloads.push({
+          lesson_date: slotDate,
+          start_time: `${slotStartHours}:${slotStartMinutes}:00`,
+          end_time: `${slotEndHours}:${slotEndMinutes}:00`,
+          label: `${WEEK_DAYS[index]} ${slotStartHours}:${slotStartMinutes}-${slotEndHours}:${slotEndMinutes}`,
+        });
+      }
+    }
+
+    if (payloads.length === 0) {
+      alert('Не осталось ни одного будущего слота для создания. Проверь неделю и время.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const results = await Promise.allSettled(
+        payloads.map((payload) =>
+          createLesson({
+            lesson_date: payload.lesson_date,
+            start_time: payload.start_time,
+            end_time: payload.end_time,
+            tutor_student_id: null,
+            cost: 0,
+            is_window: true,
+          })
+        )
+      );
+      const created = results
+        .filter((result): result is PromiseFulfilledResult<Lesson> => result.status === 'fulfilled')
+        .map((result) => result.value);
+      const failed = results
+        .map((result, index) => ({ result, payload: payloads[index] }))
+        .filter((item): item is { result: PromiseRejectedResult; payload: { lesson_date: string; start_time: string; end_time: string; label: string } } => item.result.status === 'rejected');
+
+      setLessons((prev) =>
+        [...prev, ...created].sort((a, b) => `${a.lesson_date} ${a.start_time}`.localeCompare(`${b.lesson_date} ${b.start_time}`))
+      );
+
+      if (created.length > 0 && failed.length === 0) {
+        setIsSlotPlannerOpen(false);
+        alert(`Создано слотов: ${created.length}`);
+        return;
+      }
+
+      if (created.length > 0 && failed.length > 0) {
+        const firstError = getApiErrorMessage(failed[0].result.reason, 'Часть слотов не удалось создать');
+        alert(`Создано слотов: ${created.length}. Не удалось создать: ${failed.length}. Первая ошибка: ${firstError}`);
+        return;
+      }
+
+      const firstError = getApiErrorMessage(failed[0]?.result.reason, 'Не удалось создать свободные слоты');
+      alert(firstError);
+    } catch (error) {
+      console.error('Ошибка создания свободных слотов:', error);
+      alert(getApiErrorMessage(error, 'Не удалось создать свободные слоты'));
     } finally {
       setSaving(false);
     }
@@ -412,9 +567,57 @@ export default function SchedulePage() {
     }
   };
 
+  const handleBookingDecision = async (lessonId: number, approve: boolean) => {
+    try {
+      const updated = approve ? await approveBooking(lessonId) : await rejectBooking(lessonId);
+      upsertLesson(updated);
+      setSelectedLessonId(updated.id);
+    } catch (error) {
+      console.error('Ошибка обработки запроса на запись:', error);
+      alert(
+        getApiErrorMessage(
+          error,
+          approve ? 'Не удалось подтвердить запись ученика' : 'Не удалось отклонить запись ученика'
+        )
+      );
+    }
+  };
+
+  const handlePaymentDecision = async (lessonId: number, confirm: boolean) => {
+    try {
+      const updated = await confirmPayment(lessonId, { confirm });
+      upsertLesson(updated);
+      setSelectedLessonId(updated.id);
+    } catch (error) {
+      console.error('Ошибка подтверждения оплаты:', error);
+      alert(
+        getApiErrorMessage(
+          error,
+          confirm ? 'Не удалось подтвердить оплату' : 'Не удалось отклонить оплату'
+        )
+      );
+    }
+  };
+
+  const handleLessonDelete = async (lesson: Lesson) => {
+    try {
+      await deleteLesson(lesson.id);
+      setLessons((prev) => prev.filter((item) => item.id !== lesson.id));
+      setSelectedLessonId(null);
+    } catch (error) {
+      console.error('Ошибка удаления записи из расписания:', error);
+      alert(
+        getApiErrorMessage(
+          error,
+          isWindow(lesson) ? 'Не удалось удалить свободный слот' : 'Не удалось отменить занятие'
+        )
+      );
+    }
+  };
+
   const handleLessonDetailsSave = async () => {
-    if (!selectedLesson || !editLessonDate || !editStartTime || !editEndTime || !editCost) {
-      alert('Заполни дату, время и стоимость');
+    if (!selectedLesson || !editLessonDate || !editStartTime || !editEndTime || (!isWindow(selectedLesson) && !editCost)) {
+      alert(isWindow(selectedLesson as Lesson) ? 'Заполни дату и время' : 'Заполни дату, время и стоимость');
       return;
     }
 
@@ -423,14 +626,14 @@ export default function SchedulePage() {
         lesson_date: editLessonDate,
         start_time: `${editStartTime}:00`,
         end_time: `${editEndTime}:00`,
-        cost: Number(editCost),
+        ...(isWindow(selectedLesson) ? {} : { cost: Number(editCost) }),
       });
       upsertLesson(updated);
       setSelectedLessonId(updated.id);
       setIsEditingLesson(false);
     } catch (error) {
       console.error('Ошибка редактирования занятия:', error);
-      alert('Не удалось сохранить изменения занятия');
+      alert(getApiErrorMessage(error, isWindow(selectedLesson) ? 'Не удалось сохранить слот' : 'Не удалось сохранить изменения занятия'));
     }
   };
 
@@ -487,7 +690,8 @@ export default function SchedulePage() {
     const relation = tutorStudents.find((item) => item.id === lesson.tutor_student_id);
     const student = students.find((item) => item.id === relation?.student_id);
     const subject = subjects.find((item) => item.id === relation?.subject_id);
-    const accent = subject?.color || '#d96f32';
+    const windowCard = isWindow(lesson);
+    const accent = windowCard ? '#2a6fdb' : subject?.color || '#d96f32';
     const state = statusColor(lesson.conduct_status);
 
     return (
@@ -501,7 +705,9 @@ export default function SchedulePage() {
           justifyContent: 'space-between',
           padding: compact ? '8px 10px' : '10px',
           borderRadius: 16,
-          background: `linear-gradient(135deg, ${accent} 0%, ${state} 100%)`,
+          background: windowCard
+            ? 'linear-gradient(135deg, rgba(42,111,219,0.92) 0%, rgba(23,32,51,0.92) 100%)'
+            : `linear-gradient(135deg, ${accent} 0%, ${state} 100%)`,
           color: '#fff',
           boxShadow: `0 12px 22px ${accent}33`,
           overflow: 'hidden',
@@ -512,13 +718,13 @@ export default function SchedulePage() {
         <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 4 }}>
           {toTime(lesson.start_time)} - {toTime(lesson.end_time)}
         </div>
-        <div style={{ fontWeight: 700, marginBottom: 4 }}>{student?.full_name ?? 'Ученик'}</div>
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>{windowCard ? 'Свободный слот' : student?.full_name ?? 'Ученик'}</div>
         <div style={{ fontSize: 13, opacity: 0.92, marginBottom: compact ? 0 : 6 }}>
-          {subject?.name ?? 'Без предмета'} • {lesson.cost ?? '—'} ₽
+          {windowCard ? 'Окно для записи учеников' : `${subject?.name ?? 'Без предмета'} • ${lesson.cost ?? '—'} ₽`}
         </div>
         {!compact && (
           <div style={{ fontSize: 12, opacity: 0.9, overflow: 'hidden' }}>
-            {lesson.grade ? `Оценка: ${lesson.grade}` : 'Нажми для деталей'}
+            {windowCard ? 'Нажми для управления слотом' : lesson.grade ? `Оценка: ${lesson.grade}` : 'Нажми для деталей'}
           </div>
         )}
       </div>
@@ -687,6 +893,14 @@ export default function SchedulePage() {
         <section style={panelStyle}>
           <h3 style={{ fontSize: 22, marginBottom: 16 }}>Создать занятие</h3>
           <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setIsSlotPlannerOpen(true)}
+                style={{ background: 'rgba(42,111,219,0.92)', boxShadow: 'none' }}
+              >
+                Создать слоты
+              </button>
+            </div>
             <select
               value={selectedTutorStudentId}
               onChange={(event) => {
@@ -797,11 +1011,131 @@ export default function SchedulePage() {
         </section>
       </div>
 
+      {isSlotPlannerOpen && (
+        <div
+          onClick={() => setIsSlotPlannerOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.34)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 24, zIndex: 1000 }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: 'min(820px, 100%)', borderRadius: 28, background: 'rgba(255,255,255,0.98)', boxShadow: '0 28px 70px rgba(15, 23, 42, 0.22)', border: '1px solid rgba(24,33,47,0.08)', overflow: 'hidden' }}
+          >
+            <div style={{ padding: '22px 24px 18px', background: 'rgba(42,111,219,0.08)', borderBottom: '1px solid rgba(24,33,47,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ display: 'inline-flex', padding: '8px 12px', borderRadius: 999, background: '#2a6fdb', color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
+                    Свободные слоты
+                  </div>
+                  <h3 style={{ fontSize: 28, lineHeight: 1.02, marginBottom: 8 }}>Создать слоты на неделю</h3>
+                  <p style={{ color: '#5d6778', marginBottom: 0 }}>
+                    Укажи по дням диапазон времени, а система сама разобьёт его на слоты нужной длительности.
+                  </p>
+                </div>
+                <button onClick={() => setIsSlotPlannerOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>×</button>
+              </div>
+            </div>
+
+            <div style={{ padding: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 12, marginBottom: 20 }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setSlotWeekOffset(0)}
+                    style={{ background: slotWeekOffset === 0 ? 'rgba(217,111,50,0.92)' : 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                  >
+                    Текущая неделя
+                  </button>
+                  <button
+                    onClick={() => setSlotWeekOffset(1)}
+                    style={{ background: slotWeekOffset === 1 ? 'rgba(217,111,50,0.92)' : 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                  >
+                    Следующая неделя
+                  </button>
+                </div>
+                <input
+                  type="number"
+                  min="15"
+                  step="15"
+                  value={slotDurationMinutes}
+                  onChange={(event) => setSlotDurationMinutes(event.target.value)}
+                  placeholder="Длительность, мин"
+                />
+              </div>
+
+              <div style={{ display: 'grid', gap: 10, marginBottom: 20 }}>
+                {slotDrafts.map((draft, index) => {
+                  const dayDate = addDays(slotPlannerWeekStart, index);
+                  return (
+                    <div
+                      key={index}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '180px 1fr 1fr',
+                        gap: 10,
+                        alignItems: 'center',
+                        padding: 14,
+                        borderRadius: 16,
+                        background: 'rgba(23,32,51,0.04)',
+                        border: '1px solid rgba(24,33,47,0.06)',
+                      }}
+                    >
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700, color: '#1f2a3b' }}>
+                        <input
+                          type="checkbox"
+                          checked={draft.enabled}
+                          onChange={(event) => handleSlotDraftChange(index, { enabled: event.target.checked })}
+                        />
+                        {WEEK_DAYS[index]} • {formatDayShort(dayDate)}
+                      </label>
+                      <input
+                        type="time"
+                        value={draft.start}
+                        disabled={!draft.enabled}
+                        onChange={(event) => handleSlotDraftChange(index, { start: event.target.value })}
+                      />
+                      <input
+                        type="time"
+                        value={draft.end}
+                        disabled={!draft.enabled}
+                        onChange={(event) => handleSlotDraftChange(index, { end: event.target.value })}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button onClick={handleCreateSlots} disabled={saving}>
+                  {saving ? 'Сохраняем...' : 'Создать слоты'}
+                </button>
+                <button
+                  onClick={() => setIsSlotPlannerOpen(false)}
+                  style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedLesson && (() => {
         const relation = tutorStudents.find((item) => item.id === selectedLesson.tutor_student_id);
         const student = students.find((item) => item.id === relation?.student_id);
         const subject = subjects.find((item) => item.id === relation?.subject_id);
-        const currentStatusColor = statusColor(selectedLesson.conduct_status);
+        const selectedWindow = isWindow(selectedLesson);
+        const currentStatusColor = selectedWindow ? '#2a6fdb' : statusColor(selectedLesson.conduct_status);
+        const canMarkConducted = !selectedWindow && selectedLesson.conduct_status === 'scheduled';
+        const canOpenReschedule = !selectedWindow && selectedLesson.conduct_status === 'scheduled';
+        const canApproveBooking = !selectedWindow && selectedLesson.conduct_status === 'booking_pending';
+        const canRejectBooking = !selectedWindow && selectedLesson.conduct_status === 'booking_pending';
+        const canApprovePayment = !selectedWindow && selectedLesson.payment_status === 'payment_pending';
+        const canRejectPayment = !selectedWindow && selectedLesson.payment_status === 'payment_pending';
+        const canCancelLesson =
+          !selectedWindow &&
+          selectedLesson.conduct_status !== 'cancelled' &&
+          selectedLesson.conduct_status !== 'booking_rejected' &&
+          selectedLesson.conduct_status !== 'rescheduled';
 
         return (
           <div
@@ -816,10 +1150,14 @@ export default function SchedulePage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                   <div>
                     <div style={{ display: 'inline-flex', padding: '8px 12px', borderRadius: 999, background: currentStatusColor, color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
-                      {statusLabel(selectedLesson.conduct_status)}
+                      {selectedWindow ? 'Свободный слот' : statusLabel(selectedLesson.conduct_status)}
                     </div>
-                    <h3 style={{ fontSize: 28, lineHeight: 1.02, marginBottom: 8 }}>{student?.full_name ?? 'Ученик'}</h3>
-                    <p style={{ color: '#5d6778', marginBottom: 0 }}>{subject?.name ?? 'Без предмета'} • {selectedLesson.lesson_date}</p>
+                    <h3 style={{ fontSize: 28, lineHeight: 1.02, marginBottom: 8 }}>{selectedWindow ? 'Свободный слот' : student?.full_name ?? 'Ученик'}</h3>
+                    <p style={{ color: '#5d6778', marginBottom: 0 }}>
+                      {selectedWindow
+                        ? `Окно репетитора • ${selectedLesson.lesson_date}`
+                        : `${subject?.name ?? 'Без предмета'} • ${selectedLesson.lesson_date}`}
+                    </p>
                   </div>
                   <button onClick={() => setSelectedLessonId(null)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>×</button>
                 </div>
@@ -827,14 +1165,22 @@ export default function SchedulePage() {
 
               <div style={{ padding: 24 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, marginBottom: 20 }}>
-                  {[
-                    ['Дата', selectedLesson.lesson_date],
-                    ['Время', `${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`],
-                    ['Стоимость', `${selectedLesson.cost ?? '—'} ₽`],
-                    ['Оплата', selectedLesson.payment_status === 'paid' ? 'Оплачено' : 'Не оплачено'],
-                    ['Оценка', selectedLesson.grade ? String(selectedLesson.grade) : 'Не выставлена'],
-                    ['ID связки', selectedLesson.tutor_student_id ? String(selectedLesson.tutor_student_id) : '—'],
-                  ].map(([label, value]) => (
+                  {(selectedWindow
+                    ? [
+                        ['Дата', selectedLesson.lesson_date],
+                        ['Время', `${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`],
+                        ['Тип записи', 'Свободный слот'],
+                        ['Статус', 'Доступен для записи'],
+                      ]
+                    : [
+                        ['Дата', selectedLesson.lesson_date],
+                        ['Время', `${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`],
+                        ['Стоимость', `${selectedLesson.cost ?? '—'} ₽`],
+                        ['Оплата', paymentLabel(selectedLesson.payment_status)],
+                        ['Оценка', selectedLesson.grade ? String(selectedLesson.grade) : 'Не выставлена'],
+                        ['ID связки', selectedLesson.tutor_student_id ? String(selectedLesson.tutor_student_id) : '—'],
+                      ]
+                  ).map(([label, value]) => (
                     <div key={label} style={{ padding: 14, borderRadius: 16, background: 'rgba(23,32,51,0.04)', border: '1px solid rgba(24,33,47,0.06)' }}>
                       <div style={{ fontSize: 13, color: '#768294', marginBottom: 6 }}>{label}</div>
                       <div style={{ fontWeight: 700, color: '#1f2a3b' }}>{value}</div>
@@ -854,38 +1200,83 @@ export default function SchedulePage() {
                     >
                       {isEditingLesson ? 'Скрыть редактирование' : 'Редактировать'}
                     </button>
-                    <button onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'conducted' })}>Проведено</button>
-                    <button
-                      onClick={() => {
-                        setIsReschedulingLesson((prev) => !prev);
-                        setIsEditingLesson(false);
-                      }}
-                      style={{ background: isReschedulingLesson ? '#7b61c8' : 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
-                    >
-                      {isReschedulingLesson ? 'Скрыть перенос' : 'Перенести'}
-                    </button>
-                    <button
-                      onClick={() =>
-                        handleLessonPatch(selectedLesson.id, {
-                          payment_status: selectedLesson.payment_status === 'paid' ? 'unpaid' : 'paid',
-                        })
-                      }
-                      style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
-                    >
-                      {selectedLesson.payment_status === 'paid' ? 'Вернуть в долг' : 'Отметить оплату'}
-                    </button>
-                    <button onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'cancelled' })} style={{ background: '#a63f3b', boxShadow: 'none' }}>
-                      Отменить занятие
-                    </button>
+                    {canMarkConducted && (
+                      <button onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'conducted' })}>
+                        Проведено
+                      </button>
+                    )}
+                    {canOpenReschedule && (
+                      <button
+                        onClick={() => {
+                          setIsReschedulingLesson((prev) => !prev);
+                          setIsEditingLesson(false);
+                        }}
+                        style={{ background: isReschedulingLesson ? '#7b61c8' : 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                      >
+                        {isReschedulingLesson ? 'Скрыть перенос' : 'Перенести'}
+                      </button>
+                    )}
+                    {canApproveBooking && (
+                      <button
+                        onClick={() => handleBookingDecision(selectedLesson.id, true)}
+                        style={{ background: '#2f7d63', boxShadow: 'none' }}
+                      >
+                        Подтвердить запись
+                      </button>
+                    )}
+                    {canRejectBooking && (
+                      <button
+                        onClick={() => handleBookingDecision(selectedLesson.id, false)}
+                        style={{ background: '#a63f3b', boxShadow: 'none' }}
+                      >
+                        Отклонить запись
+                      </button>
+                    )}
+                    {canApprovePayment && (
+                      <button
+                        onClick={() => handlePaymentDecision(selectedLesson.id, true)}
+                        style={{ background: '#2f7d63', boxShadow: 'none' }}
+                      >
+                        Подтвердить оплату
+                      </button>
+                    )}
+                    {canRejectPayment && (
+                      <button
+                        onClick={() => handlePaymentDecision(selectedLesson.id, false)}
+                        style={{ background: '#a63f3b', boxShadow: 'none' }}
+                      >
+                        Отклонить оплату
+                      </button>
+                    )}
+                    {selectedWindow && (
+                      <button
+                        onClick={() => handleLessonDelete(selectedLesson)}
+                        style={{ background: '#a63f3b', boxShadow: 'none' }}
+                      >
+                        Удалить слот
+                      </button>
+                    )}
+                    {canCancelLesson && (
+                      <button
+                        onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'cancelled' })}
+                        style={{ background: '#a63f3b', boxShadow: 'none' }}
+                      >
+                        Отменить занятие
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 {isEditingLesson && (
                   <div style={{ marginBottom: 20 }}>
-                    <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>Редактирование занятия</div>
+                    <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>
+                      {selectedWindow ? 'Редактирование свободного слота' : 'Редактирование занятия'}
+                    </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12 }}>
                       <input type="date" value={editLessonDate} onChange={(event) => setEditLessonDate(event.target.value)} />
-                      <input type="number" value={editCost} onChange={(event) => setEditCost(event.target.value)} placeholder="Стоимость" />
+                      {!selectedWindow && (
+                        <input type="number" value={editCost} onChange={(event) => setEditCost(event.target.value)} placeholder="Стоимость" />
+                      )}
                       <input type="time" value={editStartTime} onChange={(event) => setEditStartTime(event.target.value)} />
                       <input type="time" value={editEndTime} onChange={(event) => setEditEndTime(event.target.value)} />
                     </div>
@@ -935,24 +1326,26 @@ export default function SchedulePage() {
                   </div>
                 )}
 
-                <div>
-                  <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>Оценка</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <input
-                      type="number"
-                      min="1"
-                      max="5"
-                      defaultValue={selectedLesson.grade ?? ''}
-                      onBlur={(event) => {
-                        const value = Number(event.target.value);
-                        if (!value || value === selectedLesson.grade) return;
-                        handleLessonPatch(selectedLesson.id, { grade: value });
-                      }}
-                      style={{ maxWidth: 100 }}
-                    />
-                    <span style={{ color: '#5d6778' }}>Оценка от 1 до 5</span>
+                {!selectedWindow && (
+                  <div>
+                    <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>Оценка</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="5"
+                        defaultValue={selectedLesson.grade ?? ''}
+                        onBlur={(event) => {
+                          const value = Number(event.target.value);
+                          if (!value || value === selectedLesson.grade) return;
+                          handleLessonPatch(selectedLesson.id, { grade: value });
+                        }}
+                        style={{ maxWidth: 100 }}
+                      />
+                      <span style={{ color: '#5d6778' }}>Оценка от 1 до 5</span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
