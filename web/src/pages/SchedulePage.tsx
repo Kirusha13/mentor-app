@@ -147,6 +147,14 @@ function isWindow(lesson: Lesson) {
   return lesson.tutor_student_id == null;
 }
 
+function overlaps(first: Lesson, second: Lesson) {
+  return (
+    first.lesson_date === second.lesson_date &&
+    toMinutes(first.start_time) < toMinutes(second.end_time) &&
+    toMinutes(first.end_time) > toMinutes(second.start_time)
+  );
+}
+
 function monthGrid(date: Date) {
   const monthStart = startOfMonth(date);
   const monthEnd = endOfMonth(date);
@@ -277,11 +285,34 @@ export default function SchedulePage() {
   );
 
   const visibleLessons = useMemo(() => {
-    if (showRescheduledLessons) {
-      return lessons;
-    }
+    const hiddenRequestStatuses: ConductStatus[] = [
+      'booking_pending',
+      'booking_rejected',
+      'reschedule_pending',
+      'reschedule_rejected',
+    ];
 
-    return lessons.filter((lesson) => lesson.conduct_status !== 'rescheduled');
+    const occupiedLessons = lessons.filter(
+      (lesson) =>
+        !isWindow(lesson) &&
+        ['scheduled', 'booking_pending', 'reschedule_pending'].includes(lesson.conduct_status)
+    );
+
+    return lessons.filter((lesson) => {
+      if (hiddenRequestStatuses.includes(lesson.conduct_status)) {
+        return false;
+      }
+
+      if (!showRescheduledLessons && lesson.conduct_status === 'rescheduled') {
+        return false;
+      }
+
+      if (isWindow(lesson)) {
+        return !occupiedLessons.some((occupied) => overlaps(lesson, occupied));
+      }
+
+      return true;
+    });
   }, [lessons, showRescheduledLessons]);
 
   const hiddenRescheduledCount = useMemo(
