@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getStudentContacts, type StudentContact } from '../api/contacts';
-import { createStudent, getStudents, type Student } from '../api/students';
+import { createStudent, getStudents, updateStudent, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import {
   createTutorStudent,
@@ -29,9 +29,9 @@ const panelStyle = {
 } as const;
 
 const statusLabels: Record<TutorStudentStatus, string> = {
-  active: 'Активен',
-  paused: 'На паузе',
-  completed: 'Завершён',
+  active: 'РђРєС‚РёРІРµРЅ',
+  paused: 'РќР° РїР°СѓР·Рµ',
+  completed: 'Р—Р°РІРµСЂС€С‘РЅ',
 };
 
 const mutedTextStyle = {
@@ -50,6 +50,8 @@ export default function StudentsPage() {
   const [contactsByStudent, setContactsByStudent] = useState<Record<number, StudentContact[]>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [classFilter, setClassFilter] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('');
   const [showInactiveStudents, setShowInactiveStudents] = useState(false);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -66,6 +68,7 @@ export default function StudentsPage() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [detailRate, setDetailRate] = useState('');
   const [detailStatus, setDetailStatus] = useState<TutorStudentStatus>('active');
+  const [detailGrade, setDetailGrade] = useState('');
   const [savingTutorStudent, setSavingTutorStudent] = useState(false);
 
   const loadData = async () => {
@@ -96,8 +99,8 @@ export default function StudentsPage() {
 
       setContactsByStudent(Object.fromEntries(contactsEntries));
     } catch (error) {
-      console.error('Ошибка загрузки учеников:', error);
-      alert('Не удалось загрузить список учеников');
+      console.error('РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё СѓС‡РµРЅРёРєРѕРІ:', error);
+      alert('РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРїРёСЃРѕРє СѓС‡РµРЅРёРєРѕРІ');
     } finally {
       setLoading(false);
     }
@@ -154,13 +157,11 @@ export default function StudentsPage() {
 
   const filteredCards = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) {
-      return studentCards;
-    }
 
     return studentCards.filter(({ student, subject, contacts }) => {
       const haystack = [
         student.full_name,
+        student.grade ? String(student.grade) : '',
         subject?.name ?? '',
         student.phone_number ?? '',
         student.telegram_id ?? '',
@@ -171,9 +172,13 @@ export default function StudentsPage() {
         .join(' ')
         .toLowerCase();
 
-      return haystack.includes(query);
+      const matchesSearch = !query || haystack.includes(query);
+      const matchesClass = !classFilter || String(student.grade ?? '') === classFilter;
+      const matchesSubject = !subjectFilter || String(subject?.id ?? '') === subjectFilter;
+
+      return matchesSearch && matchesClass && matchesSubject;
     });
-  }, [search, studentCards]);
+  }, [classFilter, search, studentCards, subjectFilter]);
 
   const activeCards = useMemo(
     () => filteredCards.filter(({ tutorStudent }) => tutorStudent.status === 'active'),
@@ -194,11 +199,13 @@ export default function StudentsPage() {
     if (!selectedCard?.tutorStudent) {
       setDetailRate('');
       setDetailStatus('active');
+      setDetailGrade('');
       return;
     }
 
     setDetailRate(String(selectedCard.tutorStudent.hourly_rate));
     setDetailStatus(selectedCard.tutorStudent.status);
+    setDetailGrade(selectedCard.student.grade ? String(selectedCard.student.grade) : '');
   }, [selectedCard]);
 
   const resetCreateStudentForm = () => {
@@ -223,7 +230,7 @@ export default function StudentsPage() {
       !newStudentRate.trim() ||
       !newStudentStartedAt
     ) {
-      alert('Заполни обязательные поля для создания ученика');
+      alert('Р—Р°РїРѕР»РЅРё РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Рµ РїРѕР»СЏ РґР»СЏ СЃРѕР·РґР°РЅРёСЏ СѓС‡РµРЅРёРєР°');
       return;
     }
 
@@ -250,10 +257,10 @@ export default function StudentsPage() {
 
       resetCreateStudentForm();
       setCreateModalOpen(false);
-      alert('Ученик создан и привязан к предмету');
+      alert('РЈС‡РµРЅРёРє СЃРѕР·РґР°РЅ Рё РїСЂРёРІСЏР·Р°РЅ Рє РїСЂРµРґРјРµС‚Сѓ');
     } catch (error) {
-      console.error('Ошибка создания ученика:', error);
-      alert(getApiErrorMessage(error, 'Не удалось создать ученика'));
+      console.error('РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ СѓС‡РµРЅРёРєР°:', error);
+      alert(getApiErrorMessage(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ СѓС‡РµРЅРёРєР°'));
     } finally {
       setCreatingStudent(false);
     }
@@ -266,23 +273,44 @@ export default function StudentsPage() {
 
     const rate = Number(detailRate);
     if (!Number.isFinite(rate) || rate <= 0) {
-      alert('Ставка должна быть числом больше нуля');
+      alert('РЎС‚Р°РІРєР° РґРѕР»Р¶РЅР° Р±С‹С‚СЊ С‡РёСЃР»РѕРј Р±РѕР»СЊС€Рµ РЅСѓР»СЏ');
+      return;
+    }
+
+    const trimmedGrade = detailGrade.trim();
+    const parsedGrade = trimmedGrade ? Number(trimmedGrade) : undefined;
+    if (
+      trimmedGrade &&
+      (parsedGrade === undefined ||
+        !Number.isInteger(parsedGrade) ||
+        parsedGrade < 1 ||
+        parsedGrade > 11)
+    ) {
+      alert('РљР»Р°СЃСЃ РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ С†РµР»С‹Рј С‡РёСЃР»РѕРј РѕС‚ 1 РґРѕ 11');
       return;
     }
 
     try {
       setSavingTutorStudent(true);
 
-      const updated = await updateTutorStudent(selectedCard.tutorStudent.id, {
-        hourly_rate: rate,
-        status: detailStatus,
-      });
+      const [updatedTutorStudent, updatedStudent] = await Promise.all([
+        updateTutorStudent(selectedCard.tutorStudent.id, {
+          hourly_rate: rate,
+          status: detailStatus,
+        }),
+        updateStudent(selectedCard.student.id, {
+          grade: parsedGrade,
+        }),
+      ]);
 
-      setTutorStudents((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-      alert('Параметры ученика обновлены');
+      setTutorStudents((prev) =>
+        prev.map((item) => (item.id === updatedTutorStudent.id ? updatedTutorStudent : item))
+      );
+      setStudents((prev) => prev.map((item) => (item.id === updatedStudent.id ? updatedStudent : item)));
+      alert('РџР°СЂР°РјРµС‚СЂС‹ СѓС‡РµРЅРёРєР° РѕР±РЅРѕРІР»РµРЅС‹');
     } catch (error) {
-      console.error('Ошибка обновления связи tutor-student:', error);
-      alert(getApiErrorMessage(error, 'Не удалось сохранить изменения'));
+      console.error('РћС€РёР±РєР° РѕР±РЅРѕРІР»РµРЅРёСЏ СЃРІСЏР·Рё tutor-student:', error);
+      alert(getApiErrorMessage(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёСЏ'));
     } finally {
       setSavingTutorStudent(false);
     }
@@ -294,7 +322,7 @@ export default function StudentsPage() {
     }
 
     const confirmed = window.confirm(
-      `Удалить связь с учеником "${selectedCard.student.full_name}"? Ученик останется в системе, но исчезнет из твоего списка по этому предмету.`
+      `РЈРґР°Р»РёС‚СЊ СЃРІСЏР·СЊ СЃ СѓС‡РµРЅРёРєРѕРј "${selectedCard.student.full_name}"? РЈС‡РµРЅРёРє РѕСЃС‚Р°РЅРµС‚СЃСЏ РІ СЃРёСЃС‚РµРјРµ, РЅРѕ РёСЃС‡РµР·РЅРµС‚ РёР· С‚РІРѕРµРіРѕ СЃРїРёСЃРєР° РїРѕ СЌС‚РѕРјСѓ РїСЂРµРґРјРµС‚Сѓ.`
     );
 
     if (!confirmed) {
@@ -307,13 +335,13 @@ export default function StudentsPage() {
       setTutorStudents((prev) => prev.filter((item) => item.id !== selectedCard.tutorStudent?.id));
       setDetailsModalOpen(false);
       setSelectedTutorStudentId(null);
-      alert('Связь с учеником удалена');
+      alert('РЎРІСЏР·СЊ СЃ СѓС‡РµРЅРёРєРѕРј СѓРґР°Р»РµРЅР°');
     } catch (error) {
-      console.error('Ошибка удаления связи tutor-student:', error);
+      console.error('РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ СЃРІСЏР·Рё tutor-student:', error);
       alert(
         getApiErrorMessage(
           error,
-          'Не удалось удалить связь. Если по ней уже есть занятия или задания, историю нужно сохранить.'
+          'РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ СЃРІСЏР·СЊ. Р•СЃР»Рё РїРѕ РЅРµР№ СѓР¶Рµ РµСЃС‚СЊ Р·Р°РЅСЏС‚РёСЏ РёР»Рё Р·Р°РґР°РЅРёСЏ, РёСЃС‚РѕСЂРёСЋ РЅСѓР¶РЅРѕ СЃРѕС…СЂР°РЅРёС‚СЊ.'
         )
       );
     }
@@ -346,7 +374,7 @@ export default function StudentsPage() {
         >
           <div>
             <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 6 }}>{card.student.full_name}</div>
-            <div style={{ color: '#687486', fontSize: 14 }}>{card.subject?.name ?? 'Предмет не привязан'}</div>
+            <div style={{ color: '#687486', fontSize: 14 }}>{card.subject?.name ?? 'РџСЂРµРґРјРµС‚ РЅРµ РїСЂРёРІСЏР·Р°РЅ'}</div>
           </div>
 
           <div
@@ -357,9 +385,9 @@ export default function StudentsPage() {
               fontSize: 14,
             }}
           >
-            <span>Тариф: {`${card.tutorStudent.hourly_rate} ₽/ч`}</span>
-            <span>Статус: {statusLabels[card.tutorStudent.status]}</span>
-            <span>Контактов: {card.contacts.length}</span>
+            <span>РўР°СЂРёС„: {`${card.tutorStudent.hourly_rate} в‚Ѕ/С‡`}</span>
+            <span>РЎС‚Р°С‚СѓСЃ: {statusLabels[card.tutorStudent.status]}</span>
+            <span>РљРѕРЅС‚Р°РєС‚РѕРІ: {card.contacts.length}</span>
           </div>
         </button>
       ))}
@@ -399,7 +427,7 @@ export default function StudentsPage() {
                 marginBottom: 10,
               }}
             >
-              Этап 1
+              Р­С‚Р°Рї 1
             </div>
             <h1
               style={{
@@ -409,11 +437,11 @@ export default function StudentsPage() {
                 marginBottom: 12,
               }}
             >
-              Ученики
+              РЈС‡РµРЅРёРєРё
             </h1>
             <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 14, marginBottom: 0 }}>
-              Перед тобой только список учеников. Подробная информация, ставка, статус и удаление
-              связи открываются по клику на карточку ученика.
+              РџРµСЂРµРґ С‚РѕР±РѕР№ С‚РѕР»СЊРєРѕ СЃРїРёСЃРѕРє СѓС‡РµРЅРёРєРѕРІ. РџРѕРґСЂРѕР±РЅР°СЏ РёРЅС„РѕСЂРјР°С†РёСЏ, СЃС‚Р°РІРєР°, СЃС‚Р°С‚СѓСЃ Рё СѓРґР°Р»РµРЅРёРµ
+              СЃРІСЏР·Рё РѕС‚РєСЂС‹РІР°СЋС‚СЃСЏ РїРѕ РєР»РёРєСѓ РЅР° РєР°СЂС‚РѕС‡РєСѓ СѓС‡РµРЅРёРєР°.
             </p>
           </div>
 
@@ -427,13 +455,13 @@ export default function StudentsPage() {
             }}
           >
             <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>
-              Найдено учеников
+              РќР°Р№РґРµРЅРѕ СѓС‡РµРЅРёРєРѕРІ
             </div>
             <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, marginBottom: 8 }}>
               {filteredCards.length}
             </div>
             <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>
-              Активных: {activeCards.length} • Неактивных: {inactiveCards.length}
+              РђРєС‚РёРІРЅС‹С…: {activeCards.length} вЂў РќРµР°РєС‚РёРІРЅС‹С…: {inactiveCards.length}
             </div>
           </div>
         </div>
@@ -451,10 +479,10 @@ export default function StudentsPage() {
         >
           <div style={{ flex: '1 1 320px' }}>
             <div style={{ fontSize: 19, fontWeight: 800, color: '#1f2a3b', marginBottom: 6 }}>
-              Список учеников
+              РЎРїРёСЃРѕРє СѓС‡РµРЅРёРєРѕРІ
             </div>
             <div style={mutedTextStyle}>
-              Поиск работает по ученику, предмету, телефону, Telegram ID и привязанным контактным лицам.
+              РџРѕРёСЃРє СЂР°Р±РѕС‚Р°РµС‚ РїРѕ СѓС‡РµРЅРёРєСѓ, РїСЂРµРґРјРµС‚Сѓ, С‚РµР»РµС„РѕРЅСѓ, Telegram ID Рё РїСЂРёРІСЏР·Р°РЅРЅС‹Рј РєРѕРЅС‚Р°РєС‚РЅС‹Рј Р»РёС†Р°Рј.
             </div>
           </div>
           <div
@@ -463,17 +491,41 @@ export default function StudentsPage() {
               gap: 10,
               flexWrap: 'wrap',
               justifyContent: 'flex-end',
-              width: 'min(100%, 560px)',
+              width: 'min(100%, 860px)',
             }}
           >
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Например: Иван, математика, мама"
+              placeholder="РќР°РїСЂРёРјРµСЂ: РРІР°РЅ, РјР°С‚РµРјР°С‚РёРєР°, РјР°РјР°"
               style={{ flex: '1 1 260px' }}
             />
+            <select
+              value={classFilter}
+              onChange={(event) => setClassFilter(event.target.value)}
+              style={{ flex: '0 1 150px' }}
+            >
+              <option value="">Все классы</option>
+              {Array.from({ length: 11 }, (_, index) => index + 1).map((grade) => (
+                <option key={grade} value={grade}>
+                  {grade} класс
+                </option>
+              ))}
+            </select>
+            <select
+              value={subjectFilter}
+              onChange={(event) => setSubjectFilter(event.target.value)}
+              style={{ flex: '1 1 190px' }}
+            >
+              <option value="">Все предметы</option>
+              {subjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.name}
+                </option>
+              ))}
+            </select>
             <button type="button" onClick={() => setCreateModalOpen(true)}>
-              Создать ученика
+              РЎРѕР·РґР°С‚СЊ СѓС‡РµРЅРёРєР°
             </button>
           </div>
         </div>
@@ -481,9 +533,9 @@ export default function StudentsPage() {
 
       <section style={panelStyle}>
         {loading ? (
-          <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Загрузка...</p>
+          <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Р—Р°РіСЂСѓР·РєР°...</p>
         ) : filteredCards.length === 0 ? (
-          <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Ученики не найдены</p>
+          <p style={{ ...mutedTextStyle, marginBottom: 0 }}>РЈС‡РµРЅРёРєРё РЅРµ РЅР°Р№РґРµРЅС‹</p>
         ) : (
           <div style={{ display: 'grid', gap: 16 }}>
             {activeCards.length > 0 ? (
@@ -497,7 +549,7 @@ export default function StudentsPage() {
                   color: '#687486',
                 }}
               >
-                Активных учеников по текущему фильтру нет.
+                РђРєС‚РёРІРЅС‹С… СѓС‡РµРЅРёРєРѕРІ РїРѕ С‚РµРєСѓС‰РµРјСѓ С„РёР»СЊС‚СЂСѓ РЅРµС‚.
               </div>
             )}
 
@@ -520,8 +572,8 @@ export default function StudentsPage() {
                   }}
                 >
                   {showInactiveStudents
-                    ? `Скрыть неактивных (${inactiveCards.length})`
-                    : `Показать неактивных (${inactiveCards.length})`}
+                    ? `РЎРєСЂС‹С‚СЊ РЅРµР°РєС‚РёРІРЅС‹С… (${inactiveCards.length})`
+                    : `РџРѕРєР°Р·Р°С‚СЊ РЅРµР°РєС‚РёРІРЅС‹С… (${inactiveCards.length})`}
                 </button>
 
                 {showInactiveStudents && renderStudentGrid(inactiveCards)}
@@ -559,9 +611,9 @@ export default function StudentsPage() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
               <div>
-                <h3 style={{ fontSize: 22, marginBottom: 6 }}>Создать ученика</h3>
+                <h3 style={{ fontSize: 22, marginBottom: 6 }}>РЎРѕР·РґР°С‚СЊ СѓС‡РµРЅРёРєР°</h3>
                 <div style={mutedTextStyle}>
-                  Новый ученик сразу создаётся и привязывается к выбранному предмету.
+                  РќРѕРІС‹Р№ СѓС‡РµРЅРёРє СЃСЂР°Р·Сѓ СЃРѕР·РґР°С‘С‚СЃСЏ Рё РїСЂРёРІСЏР·С‹РІР°РµС‚СЃСЏ Рє РІС‹Р±СЂР°РЅРЅРѕРјСѓ РїСЂРµРґРјРµС‚Сѓ.
                 </div>
               </div>
               <button
@@ -569,7 +621,7 @@ export default function StudentsPage() {
                 onClick={() => setCreateModalOpen(false)}
                 style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none', padding: '10px 14px' }}
               >
-                Закрыть
+                Р—Р°РєСЂС‹С‚СЊ
               </button>
             </div>
 
@@ -582,14 +634,14 @@ export default function StudentsPage() {
                   color: '#b9551f',
                 }}
               >
-                Сначала создай предмет на странице «Предметы».
+                РЎРЅР°С‡Р°Р»Р° СЃРѕР·РґР°Р№ РїСЂРµРґРјРµС‚ РЅР° СЃС‚СЂР°РЅРёС†Рµ В«РџСЂРµРґРјРµС‚С‹В».
               </div>
             ) : (
               <>
                 <input
                   value={newStudentName}
                   onChange={(event) => setNewStudentName(event.target.value)}
-                  placeholder="ФИО ученика"
+                  placeholder="Р¤РРћ СѓС‡РµРЅРёРєР°"
                 />
                 <input
                   value={newStudentTelegramId}
@@ -600,13 +652,13 @@ export default function StudentsPage() {
                 <input
                   value={newStudentGrade}
                   onChange={(event) => setNewStudentGrade(event.target.value)}
-                  placeholder="Класс"
+                  placeholder="РљР»Р°СЃСЃ"
                   type="number"
                 />
                 <input
                   value={newStudentPhone}
                   onChange={(event) => setNewStudentPhone(event.target.value)}
-                  placeholder="Телефон"
+                  placeholder="РўРµР»РµС„РѕРЅ"
                 />
                 <select
                   value={newStudentSubjectId}
@@ -626,7 +678,7 @@ export default function StudentsPage() {
                 <input
                   value={newStudentRate}
                   onChange={(event) => setNewStudentRate(event.target.value)}
-                  placeholder="Ставка"
+                  placeholder="РЎС‚Р°РІРєР°"
                   type="number"
                 />
                 <input
@@ -636,14 +688,14 @@ export default function StudentsPage() {
                 />
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button type="button" onClick={handleCreateStudent} disabled={creatingStudent}>
-                    {creatingStudent ? 'Создаём...' : 'Создать ученика'}
+                    {creatingStudent ? 'РЎРѕР·РґР°С‘Рј...' : 'РЎРѕР·РґР°С‚СЊ СѓС‡РµРЅРёРєР°'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setCreateModalOpen(false)}
                     style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
                   >
-                    Отмена
+                    РћС‚РјРµРЅР°
                   </button>
                 </div>
               </>
@@ -683,7 +735,7 @@ export default function StudentsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
               <div>
                 <h3 style={{ fontSize: 22, marginBottom: 6 }}>{selectedCard.student.full_name}</h3>
-                <div style={mutedTextStyle}>{selectedCard.subject?.name ?? 'Предмет не привязан'}</div>
+                <div style={mutedTextStyle}>{selectedCard.subject?.name ?? 'РџСЂРµРґРјРµС‚ РЅРµ РїСЂРёРІСЏР·Р°РЅ'}</div>
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button
@@ -691,24 +743,24 @@ export default function StudentsPage() {
                   onClick={handleDeleteTutorStudent}
                   style={{ background: 'rgba(166,63,59,0.92)', boxShadow: 'none', padding: '10px 14px' }}
                 >
-                  Удалить связь
+                  РЈРґР°Р»РёС‚СЊ СЃРІСЏР·СЊ
                 </button>
                 <button
                   type="button"
                   onClick={() => setDetailsModalOpen(false)}
                   style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none', padding: '10px 14px' }}
                 >
-                  Закрыть
+                  Р—Р°РєСЂС‹С‚СЊ
                 </button>
               </div>
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {[
-                `Телефон: ${selectedCard.student.phone_number || '—'}`,
-                `Класс: ${selectedCard.student.grade || '—'}`,
-                `Telegram ID: ${selectedCard.student.telegram_id || '—'}`,
-                `Контактов: ${selectedCard.contacts.length}`,
+                `РўРµР»РµС„РѕРЅ: ${selectedCard.student.phone_number || 'вЂ”'}`,
+                `РљР»Р°СЃСЃ: ${selectedCard.student.grade || 'вЂ”'}`,
+                `Telegram ID: ${selectedCard.student.telegram_id || 'вЂ”'}`,
+                `РљРѕРЅС‚Р°РєС‚РѕРІ: ${selectedCard.contacts.length}`,
               ].map((item) => (
                 <span
                   key={item}
@@ -726,7 +778,7 @@ export default function StudentsPage() {
             </div>
 
             <section style={{ ...panelStyle, padding: 14 }}>
-              <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 10 }}>Основные параметры</div>
+              <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 10 }}>РћСЃРЅРѕРІРЅС‹Рµ РїР°СЂР°РјРµС‚СЂС‹</div>
               <div
                 style={{
                   display: 'grid',
@@ -736,7 +788,7 @@ export default function StudentsPage() {
                 }}
               >
                 <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-                  Ставка
+                  РЎС‚Р°РІРєР°
                   <input
                     type="number"
                     value={detailRate}
@@ -744,7 +796,7 @@ export default function StudentsPage() {
                   />
                 </label>
                 <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-                  Статус
+                  РЎС‚Р°С‚СѓСЃ
                   <select
                     value={detailStatus}
                     onChange={(event) => setDetailStatus(event.target.value as TutorStudentStatus)}
@@ -754,17 +806,28 @@ export default function StudentsPage() {
                     <option value="completed">completed</option>
                   </select>
                 </label>
+                <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+                  Класс
+                  <input
+                    type="number"
+                    min={1}
+                    max={11}
+                    value={detailGrade}
+                    onChange={(event) => setDetailGrade(event.target.value)}
+                    placeholder="1-11"
+                  />
+                </label>
               </div>
               <button type="button" onClick={handleSaveTutorStudent} disabled={savingTutorStudent}>
-                {savingTutorStudent ? 'Сохраняем...' : 'Сохранить изменения'}
+                {savingTutorStudent ? 'РЎРѕС…СЂР°РЅСЏРµРј...' : 'РЎРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёСЏ'}
               </button>
             </section>
 
             <section style={{ ...panelStyle, padding: 14 }}>
-              <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 8 }}>Контактные лица</div>
+              <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 8 }}>РљРѕРЅС‚Р°РєС‚РЅС‹Рµ Р»РёС†Р°</div>
               {selectedCard.contacts.length === 0 ? (
                 <p style={{ ...mutedTextStyle, marginBottom: 12 }}>
-                  У этого ученика пока нет привязанных контактных лиц.
+                  РЈ СЌС‚РѕРіРѕ СѓС‡РµРЅРёРєР° РїРѕРєР° РЅРµС‚ РїСЂРёРІСЏР·Р°РЅРЅС‹С… РєРѕРЅС‚Р°РєС‚РЅС‹С… Р»РёС†.
                 </p>
               ) : (
                 <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
@@ -782,7 +845,7 @@ export default function StudentsPage() {
                         {item.contact.full_name}
                       </div>
                       <div style={{ color: '#556173', fontSize: 14 }}>
-                        Телефон: {item.contact.phone_number || '—'} • Telegram ID: {item.contact.telegram_id || '—'}
+                        РўРµР»РµС„РѕРЅ: {item.contact.phone_number || 'вЂ”'} вЂў Telegram ID: {item.contact.telegram_id || 'вЂ”'}
                       </div>
                     </div>
                   ))}
@@ -794,7 +857,7 @@ export default function StudentsPage() {
                 onClick={() => navigate('/contacts')}
                 style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
               >
-                Открыть контактную книжку
+                РћС‚РєСЂС‹С‚СЊ РєРѕРЅС‚Р°РєС‚РЅСѓСЋ РєРЅРёР¶РєСѓ
               </button>
             </section>
           </div>
@@ -803,3 +866,4 @@ export default function StudentsPage() {
     </div>
   );
 }
+

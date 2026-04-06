@@ -103,6 +103,16 @@ export const rejectBooking = async (id: number): Promise<Lesson> => {
   return response.data;
 };
 
+export const approveReschedule = async (id: number): Promise<Lesson> => {
+  const response = await apiClient.post(`/lessons/${id}/approve-reschedule`);
+  return response.data;
+};
+
+export const rejectReschedule = async (id: number): Promise<Lesson> => {
+  const response = await apiClient.post(`/lessons/${id}/reject-reschedule`);
+  return response.data;
+};
+
 export const confirmPayment = async (
   id: number,
   payload: ConfirmPaymentPayload

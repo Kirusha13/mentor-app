@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+﻿import type { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: '/students', label: 'Ученики' },
   { to: '/contacts', label: 'Контакты' },
   { to: '/schedule', label: 'Расписание' },
+  { to: '/requests', label: 'Запросы' },
   { to: '/assignments', label: 'Задания' },
   { to: '/subjects', label: 'Предметы' },
   { to: '/finance', label: 'Финансы' },
