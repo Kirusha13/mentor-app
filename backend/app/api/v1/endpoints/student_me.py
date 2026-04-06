@@ -25,7 +25,7 @@ from app.models.student import Student
 from app.models.subject import Subject
 from app.models.theory_topic import TheoryTopic
 from app.models.tutor import Tutor
-from app.models.tutor_student import TutorStudent
+from app.models.tutor_student import TutorStudent, TutorStudentStatus
 from app.schemas.assignment import AssignmentOut, AssignmentUpdate, StudentAssignmentUpdate
 from app.schemas.lesson import AvailableSlot, LessonOut, RescheduleRequest, StudentLessonCreate
 from app.schemas.material import MaterialOut
@@ -214,7 +214,7 @@ async def book_lesson(
     ts = ts_result.scalar_one_or_none()
     if ts is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связка не найдена")
-    if str(ts.status) != "active":
+    if ts.status != TutorStudentStatus.active:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Записаться можно только по активной связи")
 
     requested_at = datetime.combine(data.lesson_date, data.start_time)
