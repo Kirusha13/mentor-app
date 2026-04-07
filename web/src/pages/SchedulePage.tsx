@@ -305,7 +305,10 @@ export default function SchedulePage() {
         return false;
       }
 
-      if (!showRescheduledLessons && lesson.conduct_status === 'rescheduled') {
+      if (
+        !showRescheduledLessons &&
+        (lesson.conduct_status === 'rescheduled' || lesson.conduct_status === 'cancelled')
+      ) {
         return false;
       }
 
@@ -318,7 +321,11 @@ export default function SchedulePage() {
   }, [lessons, showRescheduledLessons]);
 
   const hiddenRescheduledCount = useMemo(
-    () => lessons.filter((lesson) => lesson.conduct_status === 'rescheduled').length,
+    () =>
+      lessons.filter(
+        (lesson) =>
+          lesson.conduct_status === 'rescheduled' || lesson.conduct_status === 'cancelled'
+      ).length,
     [lessons]
   );
 
@@ -1030,13 +1037,13 @@ export default function SchedulePage() {
                 onChange={(event) => setShowRescheduledLessons(event.target.checked)}
                 style={{ width: 16, height: 16 }}
               />
-              Показывать перенесённые занятия
+              Показывать перенесённые и отменённые занятия
             </label>
 
             <div style={{ color: '#687486', fontSize: 13 }}>
               {showRescheduledLessons || hiddenRescheduledCount === 0
                 ? `Показано записей: ${visibleLessons.length}`
-                : `Скрыто перенесённых: ${hiddenRescheduledCount}`}
+                : `Скрыто перенесённых и отменённых: ${hiddenRescheduledCount}`}
             </div>
           </div>
 

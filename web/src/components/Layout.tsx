@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { to: '/requests', label: 'Запросы' },
   { to: '/assignments', label: 'Задания' },
   { to: '/subjects', label: 'Предметы' },
+  { to: '/materials', label: 'Материалы' },
   { to: '/finance', label: 'Финансы' },
   { to: '/portfolio', label: 'Портфолио' },
 ];

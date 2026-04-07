@@ -7,6 +7,7 @@ import ContactsPage from '../pages/ContactsPage';
 import DashboardPage from '../pages/DashboardPage';
 import FinancePage from '../pages/FinancePage';
 import LoginPage from '../pages/LoginPage';
+import MaterialsPage from '../pages/MaterialsPage';
 import NotFoundPage from '../pages/NotFoundPage';
 import PortfolioPage from '../pages/PortfolioPage';
 import RequestsPage from '../pages/RequestsPage';
@@ -36,6 +37,7 @@ export default function AppRouter() {
         <Route path="/requests" element={<ProtectedLayout><RequestsPage /></ProtectedLayout>} />
         <Route path="/assignments" element={<ProtectedLayout><AssignmentsPage /></ProtectedLayout>} />
         <Route path="/subjects" element={<ProtectedLayout><SubjectsPage /></ProtectedLayout>} />
+        <Route path="/materials" element={<ProtectedLayout><MaterialsPage /></ProtectedLayout>} />
         <Route path="/finance" element={<ProtectedLayout><FinancePage /></ProtectedLayout>} />
         <Route path="/portfolio" element={<ProtectedLayout><PortfolioPage /></ProtectedLayout>} />
 
