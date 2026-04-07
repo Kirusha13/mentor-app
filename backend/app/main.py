@@ -1,6 +1,8 @@
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
@@ -14,7 +16,12 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.api.v1.router import api_router
 from app.models.lesson import ConductStatus, Lesson
+from app.models.student import Student
 from app.services.subscription_service import apply_conduct_status_transition
+from app.services.telegram_service import send_to_user
+
+
+APP_TIMEZONE = ZoneInfo("Asia/Yekaterinburg")
 
 
 async def auto_conduct_lessons():
@@ -46,11 +53,41 @@ async def auto_conduct_lessons():
         await db.commit()
 
 
+async def send_reminders():
+    reminder_date = datetime.now(APP_TIMEZONE).date() + timedelta(days=1)
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Lesson)
+            .options(selectinload(Lesson.tutor_student))
+            .where(
+                Lesson.lesson_date == reminder_date,
+                Lesson.conduct_status == ConductStatus.scheduled,
+                Lesson.reminder_sent.is_(False),
+                Lesson.tutor_student_id.is_not(None),
+            )
+        )
+
+        for lesson in result.scalars().all():
+            if lesson.tutor_student is None:
+                continue
+
+            student = await db.get(Student, lesson.tutor_student.student_id)
+            await send_to_user(
+                student.telegram_id if student else None,
+                f"Напоминание: завтра занятие в {lesson.start_time.strftime('%H:%M')}",
+            )
+            lesson.reminder_sent = True
+
+        await db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await auto_conduct_lessons()
-    scheduler = AsyncIOScheduler()
+    scheduler = AsyncIOScheduler(timezone=APP_TIMEZONE)
     scheduler.add_job(auto_conduct_lessons, "cron", hour=0, minute=5)
+    scheduler.add_job(send_reminders, "cron", hour=18, minute=0)
     scheduler.start()
     yield
     scheduler.shutdown()

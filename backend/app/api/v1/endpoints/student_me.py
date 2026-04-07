@@ -32,6 +32,7 @@ from app.schemas.material import MaterialOut
 from app.schemas.student import StudentOut, StudentUpdate
 from app.schemas.theory_topic import TheoryTopicOut
 from app.schemas.tutor_student import TutorStudentOut
+from app.services.telegram_service import send_to_user
 
 router = APIRouter()
 
@@ -261,10 +262,16 @@ async def book_lesson(
         conduct_status="booking_pending",
         payment_status="unpaid",
         cost=cost,
+        reminder_sent=False,
     )
     db.add(lesson)
     await db.commit()
     await db.refresh(lesson)
+    tutor = await db.get(Tutor, ts.tutor_id)
+    await send_to_user(
+        tutor.telegram_id if tutor else None,
+        f"Ученик {student.full_name} запрашивает запись на {lesson.lesson_date.strftime('%d.%m.%Y')} в {lesson.start_time.strftime('%H:%M')}",
+    )
 
     d = LessonOut.model_validate(lesson).model_dump()
     d["tutor_name"] = (await db.execute(select(Tutor.full_name).where(Tutor.id == ts.tutor_id))).scalar_one_or_none()
@@ -531,10 +538,17 @@ async def request_reschedule(
         tutor_student_id=lesson.tutor_student_id,
         topic_id=lesson.topic_id,
         original_lesson_id=lesson_id,
+        reminder_sent=False,
     )
     db.add(new_lesson)
     await db.commit()
     await db.refresh(new_lesson)
+    ts = await db.get(TutorStudent, lesson.tutor_student_id)
+    tutor = await db.get(Tutor, ts.tutor_id) if ts else None
+    await send_to_user(
+        tutor.telegram_id if tutor else None,
+        f"Ученик {student.full_name} запрашивает перенос занятия {lesson.lesson_date.strftime('%d.%m.%Y')} на {new_lesson.lesson_date.strftime('%d.%m.%Y')} в {new_lesson.start_time.strftime('%H:%M')}",
+    )
     return new_lesson
 
 
@@ -581,6 +595,12 @@ async def report_payment(
     lesson.payment_status = "payment_pending"
     await db.commit()
     await db.refresh(lesson)
+    ts = await db.get(TutorStudent, lesson.tutor_student_id)
+    tutor = await db.get(Tutor, ts.tutor_id) if ts else None
+    await send_to_user(
+        tutor.telegram_id if tutor else None,
+        f"Ученик {student.full_name} сообщил об оплате занятия {lesson.lesson_date.strftime('%d.%m.%Y')}",
+    )
 
     d = LessonOut.model_validate(lesson).model_dump()
     ts_result = await db.execute(

@@ -67,8 +67,17 @@ export interface LessonQuery {
   tutor_student_id?: number;
 }
 
+export interface PendingCountResponse {
+  count: number;
+}
+
 export const getLessons = async (params?: LessonQuery): Promise<Lesson[]> => {
   const response = await apiClient.get('/lessons', { params });
+  return response.data;
+};
+
+export const getPendingCount = async (): Promise<PendingCountResponse> => {
+  const response = await apiClient.get('/lessons/pending-count');
   return response.data;
 };
 
