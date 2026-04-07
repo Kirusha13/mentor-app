@@ -1,12 +1,13 @@
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_tutor
 from app.core.database import get_db
-from app.models.lesson import ConductStatus, Lesson
+from app.models.lesson import ConductStatus, Lesson, PaymentStatus
+from app.models.student import Student
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
 from app.schemas.lesson import ConfirmPaymentRequest, LessonCreate, LessonOut, LessonReschedule, LessonUpdate
@@ -15,6 +16,7 @@ from app.services.subscription_service import (
     apply_conduct_status_transition,
     get_tutor_student_for_lesson,
 )
+from app.services.telegram_service import send_to_user
 
 router = APIRouter()
 
@@ -42,6 +44,13 @@ async def _get_lesson_for_tutor(db: AsyncSession, lesson_id: int, tutor_id: int)
     if lesson is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Занятие не найдено")
     return lesson
+
+
+async def _get_student_for_lesson(db: AsyncSession, lesson: Lesson) -> Student | None:
+    tutor_student = await get_tutor_student_for_lesson(db, lesson)
+    if tutor_student is None:
+        return None
+    return await db.get(Student, tutor_student.student_id)
 
 
 def _ensure_not_past(lesson_date: date, start_time) -> None:
@@ -148,6 +157,27 @@ async def list_lessons(
     return list(result.scalars().all())
 
 
+@router.get("/pending-count", response_model=dict, summary="Количество ожидающих запросов")
+async def pending_count(
+    tutor: Tutor = Depends(get_current_tutor),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(func.count(Lesson.id))
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(
+            TutorStudent.tutor_id == tutor.id,
+            or_(
+                Lesson.conduct_status.in_(
+                    [ConductStatus.booking_pending, ConductStatus.reschedule_pending]
+                ),
+                Lesson.payment_status == PaymentStatus.payment_pending,
+            ),
+        )
+    )
+    return {"count": result.scalar_one()}
+
+
 @router.post("", response_model=LessonOut, status_code=status.HTTP_201_CREATED, summary="Создать занятие или свободный слот")
 async def create_lesson(
     data: LessonCreate,
@@ -167,6 +197,7 @@ async def create_lesson(
             end_time=data.end_time,
             cost=data.cost or 0,
             topic_id=data.topic_id,
+            reminder_sent=False,
         )
     else:
         ts_result = await db.execute(
@@ -188,6 +219,7 @@ async def create_lesson(
             end_time=data.end_time,
             cost=data.cost or 0,
             topic_id=data.topic_id,
+            reminder_sent=False,
         )
 
     db.add(lesson)
@@ -239,6 +271,9 @@ async def update_lesson(
     except SubscriptionStateError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.to_detail()) from error
 
+    if "lesson_date" in payload or "start_time" in payload or "end_time" in payload:
+        lesson.reminder_sent = False
+
     await db.commit()
     await db.refresh(lesson)
     return lesson
@@ -264,6 +299,7 @@ async def reschedule_lesson(
         cost=original.cost,
         topic_id=original.topic_id,
         original_lesson_id=original.id,
+        reminder_sent=False,
     )
     db.add(new_lesson)
     await db.commit()
@@ -301,6 +337,11 @@ async def approve_booking(
     lesson.conduct_status = ConductStatus.scheduled
     await db.commit()
     await db.refresh(lesson)
+    student = await _get_student_for_lesson(db, lesson)
+    await send_to_user(
+        student.telegram_id if student else None,
+        f"Репетитор подтвердил запись на {lesson.lesson_date.strftime('%d.%m.%Y')} в {lesson.start_time.strftime('%H:%M')}",
+    )
     return lesson
 
 
@@ -317,6 +358,11 @@ async def reject_booking(
     lesson.conduct_status = ConductStatus.booking_rejected
     await db.commit()
     await db.refresh(lesson)
+    student = await _get_student_for_lesson(db, lesson)
+    await send_to_user(
+        student.telegram_id if student else None,
+        f"Репетитор отклонил запрос на запись ({lesson.lesson_date.strftime('%d.%m.%Y')} {lesson.start_time.strftime('%H:%M')})",
+    )
     return lesson
 
 
@@ -338,6 +384,11 @@ async def approve_reschedule(
 
     await db.commit()
     await db.refresh(new_lesson)
+    student = await _get_student_for_lesson(db, new_lesson)
+    await send_to_user(
+        student.telegram_id if student else None,
+        f"Перенос подтверждён — новое занятие {new_lesson.lesson_date.strftime('%d.%m.%Y')} в {new_lesson.start_time.strftime('%H:%M')}",
+    )
     return new_lesson
 
 
@@ -354,6 +405,11 @@ async def reject_reschedule(
     lesson.conduct_status = ConductStatus.reschedule_rejected
     await db.commit()
     await db.refresh(lesson)
+    student = await _get_student_for_lesson(db, lesson)
+    await send_to_user(
+        student.telegram_id if student else None,
+        f"Репетитор отклонил запрос на перенос занятия {lesson.lesson_date.strftime('%d.%m.%Y')}",
+    )
     return lesson
 
 
@@ -377,6 +433,11 @@ async def cancel_lesson(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.to_detail()) from error
 
     await db.commit()
+    student = await _get_student_for_lesson(db, lesson)
+    await send_to_user(
+        student.telegram_id if student else None,
+        f"Занятие {lesson.lesson_date.strftime('%d.%m.%Y')} в {lesson.start_time.strftime('%H:%M')} отменено репетитором",
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -388,10 +449,19 @@ async def confirm_payment(
     db: AsyncSession = Depends(get_db),
 ):
     lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
-    if lesson.payment_status != "payment_pending":
+    if lesson.payment_status != PaymentStatus.payment_pending:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Занятие не ожидает подтверждения оплаты")
 
-    lesson.payment_status = "paid" if data.confirm else "unpaid"
+    lesson.payment_status = PaymentStatus.paid if data.confirm else PaymentStatus.unpaid
     await db.commit()
     await db.refresh(lesson)
+    student = await _get_student_for_lesson(db, lesson)
+    await send_to_user(
+        student.telegram_id if student else None,
+        (
+            f"Оплата за занятие {lesson.lesson_date.strftime('%d.%m.%Y')} подтверждена"
+            if data.confirm
+            else f"Репетитор не подтвердил оплату за занятие {lesson.lesson_date.strftime('%d.%m.%Y')}"
+        ),
+    )
     return lesson

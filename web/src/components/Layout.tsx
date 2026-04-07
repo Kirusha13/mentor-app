@@ -1,5 +1,6 @@
-﻿import type { ReactNode } from 'react';
+﻿import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { getPendingCount } from '../api/lessons';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
@@ -25,6 +26,32 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 820px)');
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPendingCount = async () => {
+      try {
+        const result = await getPendingCount();
+        if (!cancelled) {
+          setPendingCount(result.count ?? 0);
+        }
+      } catch {
+        if (!cancelled) {
+          setPendingCount(0);
+        }
+      }
+    };
+
+    loadPendingCount();
+    const intervalId = window.setInterval(loadPendingCount, 60_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -105,6 +132,7 @@ export default function Layout({ children }: LayoutProps) {
               style={({ isActive }) => ({
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between',
                 minHeight: 40,
                 padding: '0 12px',
                 borderRadius: 12,
@@ -116,9 +144,30 @@ export default function Layout({ children }: LayoutProps) {
                 boxShadow: isActive ? '0 10px 24px rgba(217,111,50,0.24)' : 'none',
                 fontSize: 14,
                 fontWeight: 700,
+                gap: 10,
               })}
             >
-              {label}
+              <span>{label}</span>
+              {to === '/requests' && pendingCount > 0 ? (
+                <span
+                  style={{
+                    minWidth: 22,
+                    height: 22,
+                    padding: '0 6px',
+                    borderRadius: 999,
+                    background: '#d94b4b',
+                    color: '#fff',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    boxShadow: '0 8px 18px rgba(217,75,75,0.28)',
+                  }}
+                >
+                  {pendingCount > 99 ? '99+' : pendingCount}
+                </span>
+              ) : null}
             </NavLink>
           ))}
         </nav>
