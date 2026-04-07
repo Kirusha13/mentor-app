@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.lesson import ConductStatus, Lesson
+from app.models.lesson import ConductStatus, Lesson, PaymentStatus
 from app.models.tutor_student import TutorStudent
 
 
@@ -101,6 +101,7 @@ def apply_conduct_status_transition(
                 remaining_lessons=0,
             )
         tutor_student.used_lessons = used + 1
+        lesson.payment_status = PaymentStatus.paid
 
     if old_status == ConductStatus.conducted and new_status != ConductStatus.conducted:
         if used <= 0:
@@ -112,5 +113,6 @@ def apply_conduct_status_transition(
                 remaining_lessons=remaining_lessons(tutor_student),
             )
         tutor_student.used_lessons = used - 1
+        lesson.payment_status = PaymentStatus.unpaid
 
     lesson.conduct_status = new_status
