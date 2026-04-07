@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { getLessons, type Lesson } from '../api/lessons';
 import { getStudents, type Student } from '../api/students';
+import { getSubjects, type Subject } from '../api/subjects';
 import {
   getTutorStudents,
   updateTutorStudent,
@@ -138,6 +139,7 @@ export default function FinancePage() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [preset, setPreset] = useState<PresetRange>('month');
   const [dateFrom, setDateFrom] = useState(() => getPresetDates('month').from);
@@ -157,14 +159,16 @@ export default function FinancePage() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [lessonData, tutorStudentData, studentData] = await Promise.all([
+        const [lessonData, tutorStudentData, studentData, subjectData] = await Promise.all([
           getLessons(),
           getTutorStudents(),
           getStudents(),
+          getSubjects(),
         ]);
         setLessons(lessonData);
         setTutorStudents(tutorStudentData);
         setStudents(studentData);
+        setSubjects(subjectData);
       } catch (error) {
         console.error('Ошибка загрузки финансовых данных:', error);
         alert('Не удалось загрузить данные для раздела финансов');
@@ -216,19 +220,25 @@ export default function FinancePage() {
     [students]
   );
 
+  const subjectMap = useMemo(
+    () => new Map(subjects.map((subject) => [subject.id, subject])),
+    [subjects]
+  );
+
   const relationOptions = useMemo<RelationOption[]>(() => {
     return tutorStudents
       .map((relation) => {
         const student = studentMap.get(relation.student_id);
+        const subject = subjectMap.get(relation.subject_id);
         const total = relation.subscription_lessons ?? 0;
         const used = relation.used_lessons ?? 0;
 
         return {
           id: relation.id,
           studentName: student?.full_name ?? `Ученик #${relation.student_id}`,
-          subjectName: relation.subject_name ?? `Предмет #${relation.subject_id}`,
+          subjectName: relation.subject_name ?? subject?.name ?? `Предмет #${relation.subject_id}`,
           label: `${student?.full_name ?? `Ученик #${relation.student_id}`} • ${
-            relation.subject_name ?? `Предмет #${relation.subject_id}`
+            relation.subject_name ?? subject?.name ?? `Предмет #${relation.subject_id}`
           }`,
           total,
           used,
@@ -238,7 +248,7 @@ export default function FinancePage() {
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label, 'ru-RU'));
-  }, [studentMap, tutorStudents]);
+  }, [studentMap, subjectMap, tutorStudents]);
 
   const activeAbonements = useMemo(
     () => relationOptions.filter((option) => option.total > 0),
@@ -293,11 +303,12 @@ export default function FinancePage() {
     .map((lesson) => {
       const relation = tutorStudents.find((item) => item.id === lesson.tutor_student_id);
       const student = relation ? studentMap.get(relation.student_id) : null;
+      const subject = relation ? subjectMap.get(relation.subject_id) : null;
 
       return {
         id: lesson.id,
         studentName: student?.full_name ?? 'Без ученика',
-        subjectName: relation?.subject_name ?? lesson.subject_name ?? 'Без предмета',
+        subjectName: relation?.subject_name ?? lesson.subject_name ?? subject?.name ?? 'Без предмета',
         lessonDate: lesson.lesson_date,
         cost: lessonCost(lesson),
       };
@@ -1081,3 +1092,4 @@ export default function FinancePage() {
     </div>
   );
 }
+
