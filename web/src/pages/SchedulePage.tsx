@@ -295,7 +295,9 @@ export default function SchedulePage() {
     const occupiedLessons = lessons.filter(
       (lesson) =>
         !isWindow(lesson) &&
-        ['scheduled', 'booking_pending', 'reschedule_pending'].includes(lesson.conduct_status)
+        ['scheduled', 'conducted', 'booking_pending', 'reschedule_pending'].includes(
+          lesson.conduct_status
+        )
     );
 
     return lessons.filter((lesson) => {
