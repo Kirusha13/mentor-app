@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -52,6 +53,10 @@ export default function AssignmentDetailScreen({ route }: Props) {
   const isCompleted = assignment.completion_status === 'completed';
   const isEditable = !isCompleted;
   const files = assignment.student_files ?? [];
+  const tutorFiles = assignment.attachments
+    ? Object.values(assignment.attachments).filter((v): v is string => typeof v === 'string')
+    : [];
+  const completedAt = isCompleted ? new Date(assignment.updated_at) : null;
 
   // Автопереход assigned → in_progress при открытии экрана
   useEffect(() => {
@@ -159,9 +164,14 @@ export default function AssignmentDetailScreen({ route }: Props) {
               <Text style={styles.badgeText}>{STATUS_LABEL[assignment.completion_status]}</Text>
             </View>
             <Text style={[styles.deadline, isOverdue && { color: '#F44336' }]}>
-              до {deadline.toLocaleDateString('ru-RU')}
+              до {deadline.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
+          {completedAt && (
+            <Text style={styles.completedAt}>
+              Выполнено {completedAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          )}
           {assignment.grade != null && (
             <View style={styles.gradeRow}>
               <Text style={styles.gradeLabel}>Оценка:</Text>
@@ -177,6 +187,22 @@ export default function AssignmentDetailScreen({ route }: Props) {
           <Text style={styles.sectionLabel}>Задание</Text>
           <Text style={styles.description}>{assignment.description}</Text>
         </View>
+
+        {/* Вложения репетитора */}
+        {tutorFiles.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Материалы к заданию</Text>
+            {tutorFiles.map((url, i) => {
+              const fullUrl = url.startsWith('/') ? `${API_BASE}${url}` : url;
+              const label = url.split('/').pop() ?? url;
+              return (
+                <TouchableOpacity key={i} onPress={() => Linking.openURL(fullUrl)}>
+                  <Text style={styles.attachmentLink}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {/* Текстовый ответ: при редактировании всегда, при просмотре — только если есть */}
         {(isEditable || !!comment) && (
@@ -288,6 +314,8 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
   badgeText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   deadline: { fontSize: 13, color: '#888' },
+  completedAt: { fontSize: 12, color: '#4CAF50', fontWeight: '600' },
+  attachmentLink: { fontSize: 14, color: '#2AABEE', textDecorationLine: 'underline', paddingVertical: 4 },
   gradeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   gradeLabel: { fontSize: 14, color: '#888' },
   gradeBadge: {

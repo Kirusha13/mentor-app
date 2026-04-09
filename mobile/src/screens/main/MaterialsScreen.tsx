@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { getTopics, TheoryTopic } from '../../api/materials';
-import { getTutors, TutorStudent } from '../../api/student';
+import { getStudentMe, getTutors, TutorStudent } from '../../api/student';
 import { MaterialsStackParamList } from '../../navigation/AppNavigator';
 
 type Props = {
@@ -23,9 +23,20 @@ type ListItem =
   | { type: 'subject'; subjectId: number; subjectName: string }
   | { type: 'topic'; topic: TheoryTopic; allTopics: TheoryTopic[]; depth: number };
 
+function topicMatchesGrade(topic: TheoryTopic, grade: number | null): boolean {
+  const levels = topic.study_level;
+  if (!levels || levels.length === 0) return true;
+  if (grade === null) return true;
+  if (levels.some(l => l.toLowerCase() === `${grade} класс`)) return true;
+  if (grade <= 9 && levels.some(l => l.toLowerCase() === 'огэ')) return true;
+  if (grade >= 10 && levels.some(l => l.toLowerCase() === 'егэ')) return true;
+  return false;
+}
+
 export default function MaterialsScreen({ navigation }: Props) {
   const [topics, setTopics] = useState<TheoryTopic[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
+  const [studentGrade, setStudentGrade] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [expandedTutors, setExpandedTutors] = useState<Set<number>>(new Set());
@@ -34,9 +45,10 @@ export default function MaterialsScreen({ navigation }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const [topicsData, tsData] = await Promise.all([getTopics(), getTutors()]);
+      const [topicsData, tsData, profile] = await Promise.all([getTopics(), getTutors(), getStudentMe()]);
       setTopics(topicsData);
       setTutorStudents(tsData);
+      setStudentGrade(profile.grade);
 
       // Авто-раскрытие если репетитор и предмет один
       const uniqueTutorIds = [...new Set(tsData.map(t => t.tutor_id))];
@@ -85,9 +97,16 @@ export default function MaterialsScreen({ navigation }: Props) {
       listData.push({ type: 'subject', subjectId: sub.subject_id, subjectName: sub.subject_name ?? 'Предмет' });
       if (!expandedSubjects.has(sub.subject_id)) continue;
 
-      const rootTopics = topics.filter(t => t.subject_id === sub.subject_id && t.parent_topic_id === null);
+      const rootTopics = topics.filter(t =>
+        t.subject_id === sub.subject_id &&
+        t.parent_topic_id === null &&
+        topicMatchesGrade(t, studentGrade)
+      );
       for (const topic of rootTopics) {
-        const children = topics.filter(t => t.parent_topic_id === topic.id);
+        const children = topics.filter(t =>
+          t.parent_topic_id === topic.id &&
+          topicMatchesGrade(t, studentGrade)
+        );
         listData.push({ type: 'topic', topic, allTopics: topics, depth: 0 });
         if (expandedTopics.has(topic.id)) {
           for (const child of children) {
@@ -145,7 +164,10 @@ export default function MaterialsScreen({ navigation }: Props) {
 
         // topic at depth 0 or 1
         const { topic, allTopics, depth } = item;
-        const children = allTopics.filter(t => t.parent_topic_id === topic.id);
+        const children = allTopics.filter(t =>
+          t.parent_topic_id === topic.id &&
+          topicMatchesGrade(t, studentGrade)
+        );
         const hasChildren = children.length > 0;
         const isOpen = expandedTopics.has(topic.id);
 

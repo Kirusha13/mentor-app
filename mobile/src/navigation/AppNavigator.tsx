@@ -47,7 +47,7 @@ function MaterialsNavigator() {
       <MaterialsStack.Screen
         name="TopicDetail"
         component={TopicDetailScreen}
-        options={({ route }) => ({ title: (route.params as any).topic.title })}
+        options={({ route }) => ({ title: (route.params as any).topic.title, headerBackTitle: '' })}
       />
     </MaterialsStack.Navigator>
   );
@@ -72,6 +72,7 @@ function AssignmentsNavigator() {
         component={AssignmentDetailScreen}
         options={({ route }) => ({
           title: (route.params as any).assignment.title ?? 'Задание',
+          headerBackTitle: '',
         })}
       />
     </AssignmentsStack.Navigator>

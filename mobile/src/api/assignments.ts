@@ -7,11 +7,12 @@ export interface Assignment {
   deadline: string;
   completion_status: 'assigned' | 'in_progress' | 'completed' | 'overdue';
   grade: number | null;
-  attachments: Record<string, unknown> | null;
+  attachments: Record<string, string> | null;
   student_comment: string | null;
   student_files: string[] | null;
   tutor_student_id: number;
   topic_id: number | null;
+  updated_at: string;
 }
 
 export async function getAssignments(params?: {
