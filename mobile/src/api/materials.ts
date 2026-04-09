@@ -23,6 +23,15 @@ export async function getTopics(params?: { subject_id?: number }): Promise<Theor
   return res.data;
 }
 
+export async function getTopicContext(topicId: number): Promise<{ topic: TheoryTopic; allTopics: TheoryTopic[] }> {
+  // Загружаем тему и все темы того же предмета для навигации
+  const allTopics = await getTopics();
+  const topic = allTopics.find(t => t.id === topicId);
+  if (!topic) throw new Error('Тема не найдена');
+  const subjectTopics = allTopics.filter(t => t.subject_id === topic.subject_id);
+  return { topic, allTopics: subjectTopics };
+}
+
 export async function getMaterials(params?: { topic_id?: number }): Promise<Material[]> {
   const res = await client.get('/student/materials', { params });
   return res.data;

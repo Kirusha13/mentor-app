@@ -4,6 +4,7 @@ import {
   Alert,
   Modal,
   RefreshControl,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +15,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getLessons, reportPayment, Lesson } from '../../api/lessons';
+import { getTopicContext, TheoryTopic } from '../../api/materials';
+import TopicDetailContent from '../../components/TopicDetailContent';
 import RescheduleScreen from './RescheduleScreen';
 import BookingScreen from './BookingScreen';
 
@@ -111,6 +114,23 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
   const bg = STATUS_BG[localLesson.conduct_status];
   const [showReschedule, setShowReschedule] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [topicModalVisible, setTopicModalVisible] = useState(false);
+  const [topicContext, setTopicContext] = useState<{ topic: TheoryTopic; allTopics: TheoryTopic[] } | null>(null);
+  const [topicLoading, setTopicLoading] = useState(false);
+
+  const handleOpenTopic = async () => {
+    if (!localLesson.topic_id) return;
+    setTopicLoading(true);
+    setTopicModalVisible(true);
+    try {
+      const ctx = await getTopicContext(localLesson.topic_id);
+      setTopicContext(ctx);
+    } catch {
+      setTopicModalVisible(false);
+    } finally {
+      setTopicLoading(false);
+    }
+  };
 
   const handleReportPayment = async () => {
     Alert.alert(
@@ -173,6 +193,15 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
           <Row label="Время" value={`${localLesson.start_time.slice(0, 5)} – ${localLesson.end_time.slice(0, 5)}`} />
           {localLesson.tutor_name ? <Row label="Репетитор" value={localLesson.tutor_name} /> : null}
           {localLesson.subject_name ? <Row label="Предмет" value={localLesson.subject_name} /> : null}
+          {localLesson.topic_title ? (
+            <TouchableOpacity style={[modal.row, { borderBottomWidth: 0 }]} onPress={handleOpenTopic} activeOpacity={0.7}>
+              <Text style={modal.rowLabel}>Тема</Text>
+              <View style={modal.topicValueWrap}>
+                <Text style={modal.topicValueText} numberOfLines={1}>{localLesson.topic_title}</Text>
+                <Ionicons name="chevron-forward" size={14} color="#2AABEE" />
+              </View>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <View style={modal.section}>
@@ -213,6 +242,30 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      <Modal
+        visible={topicModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setTopicModalVisible(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
+          <View style={modal.topicHeader}>
+            <TouchableOpacity onPress={() => setTopicModalVisible(false)} style={modal.closeBtn}>
+              <Ionicons name="close" size={22} color="#333" />
+            </TouchableOpacity>
+            <Text style={modal.topicHeaderTitle} numberOfLines={1}>
+              {topicContext?.topic.title ?? localLesson.topic_title ?? 'Тема'}
+            </Text>
+            <View style={modal.closeBtn} />
+          </View>
+          {topicLoading || !topicContext ? (
+            <ActivityIndicator style={{ marginTop: 40 }} />
+          ) : (
+            <TopicDetailContent topic={topicContext.topic} allTopics={topicContext.allTopics} />
+          )}
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 }
@@ -544,4 +597,16 @@ const modal = StyleSheet.create({
   paymentBtnTextDisabled: {
     color: '#9E9E9E',
   },
+  topicValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1, justifyContent: 'flex-end' },
+  topicValueText: { fontSize: 14, color: '#2AABEE', fontWeight: '500', flexShrink: 1 },
+  topicHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#fff',
+  },
+  topicHeaderTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600', color: '#1a1a1a' },
 });

@@ -7,6 +7,7 @@ import {
   Linking,
   Modal,
   Platform,
+  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -18,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Assignment,
@@ -25,6 +27,8 @@ import {
   updateAssignment,
   uploadAssignmentPhoto,
 } from '../../api/assignments';
+import { getTopicContext, TheoryTopic } from '../../api/materials';
+import TopicDetailContent from '../../components/TopicDetailContent';
 import { AssignmentsStackParamList } from '../../navigation/AppNavigator';
 import { API_BASE_URL } from '../../api/client';
 
@@ -60,6 +64,9 @@ export default function AssignmentDetailScreen({ route }: Props) {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deletingUrl, setDeletingUrl] = useState<string | null>(null);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
+  const [topicModalVisible, setTopicModalVisible] = useState(false);
+  const [topicContext, setTopicContext] = useState<{ topic: TheoryTopic; allTopics: TheoryTopic[] } | null>(null);
+  const [topicLoading, setTopicLoading] = useState(false);
 
   const deadline = new Date(assignment.deadline);
   const isOverdue = deadline < new Date() && assignment.completion_status !== 'completed';
@@ -78,6 +85,22 @@ export default function AssignmentDetailScreen({ route }: Props) {
         .catch(() => {});
     }
   }, []);
+
+  // ─── Открыть тему ────────────────────────────────────────────────────────
+
+  const handleOpenTopic = async () => {
+    if (!assignment.topic_id) return;
+    setTopicLoading(true);
+    setTopicModalVisible(true);
+    try {
+      const ctx = await getTopicContext(assignment.topic_id);
+      setTopicContext(ctx);
+    } catch {
+      setTopicModalVisible(false);
+    } finally {
+      setTopicLoading(false);
+    }
+  };
 
   // ─── Отправить ответ ──────────────────────────────────────────────────────
 
@@ -204,6 +227,13 @@ export default function AssignmentDetailScreen({ route }: Props) {
         {/* Описание задания */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Задание</Text>
+          {assignment.topic_title && (
+            <TouchableOpacity style={styles.topicRow} onPress={handleOpenTopic} activeOpacity={0.7}>
+              <Ionicons name="book-outline" size={16} color="#2AABEE" />
+              <Text style={styles.topicRowText} numberOfLines={1}>{assignment.topic_title}</Text>
+              <Ionicons name="chevron-forward" size={16} color="#ccc" />
+            </TouchableOpacity>
+          )}
           <Text style={styles.description}>{assignment.description}</Text>
         </View>
 
@@ -318,6 +348,30 @@ export default function AssignmentDetailScreen({ route }: Props) {
         </View>
       )}
 
+      <Modal
+        visible={topicModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setTopicModalVisible(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
+          <View style={styles.topicModalHeader}>
+            <TouchableOpacity onPress={() => setTopicModalVisible(false)} style={styles.topicModalClose}>
+              <Ionicons name="close" size={22} color="#333" />
+            </TouchableOpacity>
+            <Text style={styles.topicModalTitle} numberOfLines={1}>
+              {topicContext?.topic.title ?? assignment.topic_title ?? 'Тема'}
+            </Text>
+            <View style={styles.topicModalClose} />
+          </View>
+          {topicLoading || !topicContext ? (
+            <ActivityIndicator style={{ marginTop: 40 }} />
+          ) : (
+            <TopicDetailContent topic={topicContext.topic} allTopics={topicContext.allTopics} />
+          )}
+        </SafeAreaView>
+      </Modal>
+
       <Modal visible={!!lightboxUri} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setLightboxUri(null)}>
         <TouchableWithoutFeedback onPress={() => setLightboxUri(null)}>
           <View style={styles.lightboxBackdrop}>
@@ -373,6 +427,27 @@ const styles = StyleSheet.create({
   },
   gradeText: { fontSize: 17, fontWeight: '800' },
 
+  topicRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#EFF9FF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  topicRowText: { flex: 1, fontSize: 14, fontWeight: '500', color: '#1a1a1a' },
+  topicModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#fff',
+  },
+  topicModalClose: { width: 36, alignItems: 'center' },
+  topicModalTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600', color: '#1a1a1a' },
   description: { fontSize: 15, color: '#333', lineHeight: 22 },
 
   commentInput: {
