@@ -37,6 +37,7 @@ function MaterialsNavigator() {
         headerStyle: { backgroundColor: '#fff' },
         headerShadowVisible: false,
         headerTintColor: '#2AABEE',
+        headerBackButtonDisplayMode: 'minimal',
       }}
     >
       <MaterialsStack.Screen
@@ -47,7 +48,7 @@ function MaterialsNavigator() {
       <MaterialsStack.Screen
         name="TopicDetail"
         component={TopicDetailScreen}
-        options={({ route }) => ({ title: (route.params as any).topic.title, headerBackTitle: '' })}
+        options={({ route }) => ({ title: (route.params as any).topic.title })}
       />
     </MaterialsStack.Navigator>
   );
@@ -60,6 +61,7 @@ function AssignmentsNavigator() {
         headerStyle: { backgroundColor: '#fff' },
         headerShadowVisible: false,
         headerTintColor: '#2AABEE',
+        headerBackButtonDisplayMode: 'minimal',
       }}
     >
       <AssignmentsStack.Screen
@@ -72,7 +74,6 @@ function AssignmentsNavigator() {
         component={AssignmentDetailScreen}
         options={({ route }) => ({
           title: (route.params as any).assignment.title ?? 'Задание',
-          headerBackTitle: '',
         })}
       />
     </AssignmentsStack.Navigator>

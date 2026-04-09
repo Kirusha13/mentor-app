@@ -16,6 +16,13 @@ const SECTIONS = [
 type SectionKey = "assigned" | "in_progress" | "done";
 type Props = NativeStackScreenProps<AssignmentsStackParamList, "AssignmentsList">;
 
+function gradeColor(grade: number) {
+  if (grade >= 5) return { bg: '#E8F5E9', border: '#A5D6A7', text: '#2E7D32' };
+  if (grade === 4) return { bg: '#E3F2FD', border: '#90CAF9', text: '#1565C0' };
+  if (grade === 3) return { bg: '#FFF8E1', border: '#FFD54F', text: '#E65100' };
+  return { bg: '#FFEBEE', border: '#EF9A9A', text: '#C62828' };
+}
+
 function AssignmentCard({ item, onPress }: { item: Assignment; onPress: () => void }) {
   const deadline = new Date(item.deadline);
   const isOverdue = deadline < new Date() && item.completion_status !== "completed";
@@ -23,16 +30,20 @@ function AssignmentCard({ item, onPress }: { item: Assignment; onPress: () => vo
     <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={onPress}>
       <View style={styles.cardHeader}>
         <Text style={styles.title} numberOfLines={1}>{item.title ?? "Без названия"}</Text>
-        {item.completion_status === "overdue" && (
+        {item.grade != null ? (
+          <View style={[styles.gradeBadge, { backgroundColor: gradeColor(item.grade).bg, borderColor: gradeColor(item.grade).border }]}>
+            <Text style={[styles.gradeText, { color: gradeColor(item.grade).text }]}>{item.grade}</Text>
+          </View>
+        ) : item.completion_status === "overdue" ? (
           <View style={[styles.badge, { backgroundColor: STATUS_COLOR.overdue }]}>
             <Text style={styles.badgeText}>Просрочено</Text>
           </View>
-        )}
+        ) : null}
       </View>
-      <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
       <View style={styles.cardFooter}>
-        <Text style={[styles.deadline, isOverdue && { color: "#F44336" }]}>до {deadline.toLocaleDateString("ru-RU")}</Text>
-        {item.grade != null && (<View style={styles.gradeBadge}><Text style={styles.gradeText}>{item.grade}</Text></View>)}
+        <Text style={[styles.deadline, isOverdue && { color: "#F44336" }]}>
+          до {deadline.toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -115,15 +126,14 @@ const styles = StyleSheet.create({
   sectionChevron: { fontSize: 18, color: "#bbb" },
   card: { backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5, elevation: 2, gap: 6 },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontSize: 15, fontWeight: "600", flex: 1, marginRight: 8, color: "#1a1a1a" },
+  title: { fontSize: 15, fontWeight: "600", flex: 1, marginRight: 8, color: "#1a1a1a", includeFontPadding: false },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   badgeText: { color: "#fff", fontSize: 11, fontWeight: "600" },
-  description: { fontSize: 14, color: "#666", lineHeight: 20 },
   cardFooter: { flexDirection: "row", alignItems: "center", gap: 10 },
   deadline: { fontSize: 13, color: "#aaa", flex: 1 },
   responseHint: { fontSize: 12, color: "#4CAF50", fontWeight: "500" },
-  gradeBadge: { backgroundColor: "#FFF8E1", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: "#FFD54F" },
-  gradeText: { fontSize: 13, fontWeight: "700", color: "#F57F17" },
+  gradeBadge: { borderRadius: 10, width: 38, height: 38, borderWidth: 1.5, alignItems: "center", justifyContent: "center", alignSelf: "center" },
+  gradeText: { fontSize: 17, fontWeight: "800" },
   emptySection: { fontSize: 13, color: "#bbb", textAlign: "center", paddingVertical: 12 },
   empty: { textAlign: "center", color: "#999", marginTop: 60 },
 });

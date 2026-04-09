@@ -5,12 +5,16 @@ import {
   Image,
   KeyboardAvoidingView,
   Linking,
+  Modal,
   Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -39,23 +43,31 @@ const STATUS_COLOR: Record<Assignment['completion_status'], string> = {
 
 const API_BASE = API_BASE_URL.replace('/api/v1', '');
 
+function gradeColor(grade: number) {
+  if (grade >= 5) return { backgroundColor: '#E8F5E9', borderColor: '#A5D6A7', text: '#2E7D32' };
+  if (grade === 4) return { backgroundColor: '#E3F2FD', borderColor: '#90CAF9', text: '#1565C0' };
+  if (grade === 3) return { backgroundColor: '#FFF8E1', borderColor: '#FFD54F', text: '#E65100' };
+  return { backgroundColor: '#FFEBEE', borderColor: '#EF9A9A', text: '#C62828' };
+}
+
 type Props = NativeStackScreenProps<AssignmentsStackParamList, 'AssignmentDetail'>;
 
 export default function AssignmentDetailScreen({ route }: Props) {
+  const { width, height } = useWindowDimensions();
   const [assignment, setAssignment] = useState<Assignment>(route.params.assignment);
   const [comment, setComment] = useState(assignment.student_comment ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deletingUrl, setDeletingUrl] = useState<string | null>(null);
+  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
 
   const deadline = new Date(assignment.deadline);
   const isOverdue = deadline < new Date() && assignment.completion_status !== 'completed';
   const isCompleted = assignment.completion_status === 'completed';
   const isEditable = !isCompleted;
   const files = assignment.student_files ?? [];
-  const tutorFiles = assignment.attachments
-    ? Object.values(assignment.attachments).filter((v): v is string => typeof v === 'string')
-    : [];
+  const tutorLinks = assignment.attachments?.links ?? [];
+  const tutorFilesB64 = assignment.attachments?.files ?? [];
   const completedAt = isCompleted ? new Date(assignment.updated_at) : null;
 
   // Автопереход assigned → in_progress при открытии экрана
@@ -167,17 +179,24 @@ export default function AssignmentDetailScreen({ route }: Props) {
               до {deadline.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
-          {completedAt && (
-            <Text style={styles.completedAt}>
-              Выполнено {completedAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          )}
-          {assignment.grade != null && (
-            <View style={styles.gradeRow}>
-              <Text style={styles.gradeLabel}>Оценка:</Text>
-              <View style={styles.gradeBadge}>
-                <Text style={styles.gradeText}>{assignment.grade}</Text>
-              </View>
+          {(completedAt || assignment.grade != null) && (
+            <View style={styles.infoGrid}>
+              {completedAt && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Сдано</Text>
+                  <Text style={styles.infoValue}>
+                    {completedAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+              )}
+              {assignment.grade != null && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Оценка</Text>
+                  <View style={[styles.gradeBadge, gradeColor(assignment.grade)]}>
+                    <Text style={[styles.gradeText, { color: gradeColor(assignment.grade).text }]}>{assignment.grade}</Text>
+                  </View>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -189,18 +208,29 @@ export default function AssignmentDetailScreen({ route }: Props) {
         </View>
 
         {/* Вложения репетитора */}
-        {tutorFiles.length > 0 && (
+        {(tutorLinks.length > 0 || tutorFilesB64.length > 0) && (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Материалы к заданию</Text>
-            {tutorFiles.map((url, i) => {
-              const fullUrl = url.startsWith('/') ? `${API_BASE}${url}` : url;
-              const label = url.split('/').pop() ?? url;
-              return (
-                <TouchableOpacity key={i} onPress={() => Linking.openURL(fullUrl)}>
-                  <Text style={styles.attachmentLink}>{label}</Text>
-                </TouchableOpacity>
-              );
-            })}
+            {tutorLinks.map((link, i) => (
+              <TouchableOpacity key={`link-${i}`} onPress={() => Linking.openURL(link.url)}>
+                <Text style={styles.attachmentLink}>{link.label || link.url}</Text>
+              </TouchableOpacity>
+            ))}
+            {tutorFilesB64.length > 0 && (
+              <View style={styles.photosGrid}>
+                {tutorFilesB64.map((file, i) =>
+                  file.type?.startsWith('image/') ? (
+                    <TouchableOpacity key={`file-${i}`} style={styles.photoWrapper} activeOpacity={0.85} onPress={() => setLightboxUri(file.data_url)}>
+                      <Image source={{ uri: file.data_url }} style={styles.photo} resizeMode="cover" />
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity key={`file-${i}`} onPress={() => Linking.openURL(file.data_url)}>
+                      <Text style={styles.attachmentLink}>{file.name}</Text>
+                    </TouchableOpacity>
+                  )
+                )}
+              </View>
+            )}
           </View>
         )}
 
@@ -231,11 +261,12 @@ export default function AssignmentDetailScreen({ route }: Props) {
             {files.length > 0 && (
               <View style={styles.photosGrid}>
                 {files.map((url) => (
-                  <View key={url} style={styles.photoWrapper}>
+                  <TouchableOpacity key={url} style={styles.photoWrapper} activeOpacity={0.85} onPress={() => setLightboxUri(`${API_BASE}${url}`)}>
                     <Image
                       source={{ uri: `${API_BASE}${url}` }}
                       style={styles.photo}
                       resizeMode="cover"
+                      onError={() => {}}
                     />
                     {isEditable && (
                       deletingUrl === url ? (
@@ -251,7 +282,7 @@ export default function AssignmentDetailScreen({ route }: Props) {
                         </TouchableOpacity>
                       )
                     )}
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -286,6 +317,21 @@ export default function AssignmentDetailScreen({ route }: Props) {
           </TouchableOpacity>
         </View>
       )}
+
+      <Modal visible={!!lightboxUri} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setLightboxUri(null)}>
+        <TouchableWithoutFeedback onPress={() => setLightboxUri(null)}>
+          <View style={styles.lightboxBackdrop}>
+            <StatusBar hidden />
+            {lightboxUri && (
+              <Image
+                source={{ uri: lightboxUri }}
+                style={{ width, height }}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -314,19 +360,18 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
   badgeText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   deadline: { fontSize: 13, color: '#888' },
-  completedAt: { fontSize: 12, color: '#4CAF50', fontWeight: '600' },
+  infoGrid: { borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingTop: 10, gap: 8 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  infoLabel: { fontSize: 13, color: '#aaa', fontWeight: '600' },
+  infoValue: { fontSize: 13, color: '#333', fontWeight: '500' },
   attachmentLink: { fontSize: 14, color: '#2AABEE', textDecorationLine: 'underline', paddingVertical: 4 },
-  gradeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  gradeLabel: { fontSize: 14, color: '#888' },
   gradeBadge: {
-    backgroundColor: '#FFF8E1',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: '#FFD54F',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderWidth: 1.5,
   },
-  gradeText: { fontSize: 14, fontWeight: '700', color: '#F57F17' },
+  gradeText: { fontSize: 17, fontWeight: '800' },
 
   description: { fontSize: 15, color: '#333', lineHeight: 22 },
 
@@ -387,4 +432,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

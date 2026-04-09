@@ -1,5 +1,21 @@
 import client from './client';
 
+export interface AssignmentLinkAttachment {
+  label: string;
+  url: string;
+}
+
+export interface AssignmentFileAttachment {
+  name: string;
+  type: string;
+  data_url: string;
+}
+
+export interface AssignmentAttachments {
+  links?: AssignmentLinkAttachment[];
+  files?: AssignmentFileAttachment[];
+}
+
 export interface Assignment {
   id: number;
   title: string | null;
@@ -7,7 +23,7 @@ export interface Assignment {
   deadline: string;
   completion_status: 'assigned' | 'in_progress' | 'completed' | 'overdue';
   grade: number | null;
-  attachments: Record<string, string> | null;
+  attachments: AssignmentAttachments | null;
   student_comment: string | null;
   student_files: string[] | null;
   tutor_student_id: number;
