@@ -1,18 +1,20 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { getTopics, TheoryTopic } from '../../api/materials';
-import { getTutors, TutorStudent } from '../../api/student';
+import { getStudentMe, getTutors, TutorStudent } from '../../api/student';
 import { MaterialsStackParamList } from '../../navigation/AppNavigator';
 
 type Props = {
@@ -24,30 +26,88 @@ type ListItem =
   | { type: 'subject'; subjectId: number; subjectName: string }
   | { type: 'topic'; topic: TheoryTopic; allTopics: TheoryTopic[]; depth: number };
 
+function normalize(v: string): string {
+  return v.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Тема видна если filters пустой, или study_level null, или пересечение непустое
+// Корень дополнительно видна если хотя бы одна дочерняя видна
+function topicVisible(topic: TheoryTopic, allTopics: TheoryTopic[], filters: Set<string>): boolean {
+  if (filters.size === 0) return true;
+  const levels = (topic.study_level ?? []).map(v => normalize(String(v)));
+  if (levels.length === 0) return true;
+  const normalizedFilters = [...filters].map(normalize);
+  if (levels.some(l => normalizedFilters.includes(l))) return true;
+  if (topic.parent_topic_id === null) {
+    return allTopics
+      .filter(t => t.parent_topic_id === topic.id)
+      .some(child => topicVisible(child, allTopics, filters));
+  }
+  return false;
+}
+
+function sortFilterOptions(options: string[]): string[] {
+  const classes = options
+    .filter(o => /^\d+\s*класс$/i.test(o))
+    .sort((a, b) => parseInt(a) - parseInt(b));
+  const oge = options.filter(o => normalize(o) === 'огэ');
+  const ege = options.filter(o => normalize(o) === 'егэ');
+  const rest = options.filter(
+    o => !/^\d+\s*класс$/i.test(o) && normalize(o) !== 'огэ' && normalize(o) !== 'егэ',
+  );
+  return [...classes, ...oge, ...ege, ...rest];
+}
+
 export default function MaterialsScreen({ navigation }: Props) {
   const [topics, setTopics] = useState<TheoryTopic[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+  const [filterReady, setFilterReady] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const filterInitialized = useRef(false);
 
   const [expandedTutors, setExpandedTutors] = useState<Set<number>>(new Set());
   const [expandedSubjects, setExpandedSubjects] = useState<Set<number>>(new Set());
   const [expandedTopics, setExpandedTopics] = useState<Set<number>>(new Set());
 
+  const toggleFilter = useCallback((value: string) => {
+    setActiveFilters(prev => {
+      const next = new Set(prev);
+      next.has(value) ? next.delete(value) : next.add(value);
+      return next;
+    });
+  }, []);
+
   const load = useCallback(async (showSpinner = true) => {
     if (showSpinner) setLoading(true);
     try {
-      const [topicsData, tsData] = await Promise.all([getTopics(), getTutors()]);
+      const isFirstLoad = !filterInitialized.current;
+      const [topicsData, tsData, profile] = await Promise.all([
+        getTopics(),
+        getTutors(),
+        getStudentMe(),
+      ]);
       setTopics(topicsData);
       setTutorStudents(tsData);
 
+      // Устанавливаем фильтр по классу ученика только при первом запуске в сессии
+      if (isFirstLoad) {
+        filterInitialized.current = true;
+        if (profile.grade != null) {
+          setActiveFilters(new Set([`${profile.grade} класс`]));
+        }
+        setFilterReady(true);
+      }
+
       // Авто-раскрытие если репетитор и предмет один
-      const uniqueTutorIds = [...new Set(tsData.map(t => t.tutor_id))];
+      const uniqueTutorIds = [...new Set(tsData.map((t: TutorStudent) => t.tutor_id))];
       if (uniqueTutorIds.length === 1) {
-        setExpandedTutors(new Set([uniqueTutorIds[0]]));
-        const subjects = tsData.filter(t => t.tutor_id === uniqueTutorIds[0]);
+        setExpandedTutors(new Set<number>([uniqueTutorIds[0]]));
+        const subjects = tsData.filter((t: TutorStudent) => t.tutor_id === uniqueTutorIds[0]);
         if (subjects.length === 1) {
-          setExpandedSubjects(new Set([subjects[0].subject_id]));
+          setExpandedSubjects(new Set<number>([subjects[0].subject_id]));
         }
       }
     } finally {
@@ -81,7 +141,12 @@ export default function MaterialsScreen({ navigation }: Props) {
     return next;
   });
 
-  // Build flat list
+  // Динамические опции фильтра из всех тем
+  const filterOptions = sortFilterOptions([
+    ...new Set(topics.flatMap(t => (t.study_level ?? []).map(v => String(v)))),
+  ]);
+
+  // Build flat list с учётом фильтра
   const uniqueTutors = [...new Map(tutorStudents.map(t => [t.tutor_id, t])).values()];
   const listData: ListItem[] = [];
 
@@ -91,113 +156,201 @@ export default function MaterialsScreen({ navigation }: Props) {
 
     const subjects = tutorStudents.filter(ts => ts.tutor_id === tutor.tutor_id);
     for (const sub of subjects) {
+      const subjectTopics = topics.filter(t => t.subject_id === sub.subject_id);
+      const hasVisibleTopics = subjectTopics.some(t => topicVisible(t, subjectTopics, activeFilters));
+      if (!hasVisibleTopics) continue;
       listData.push({ type: 'subject', subjectId: sub.subject_id, subjectName: sub.subject_name ?? 'Предмет' });
       if (!expandedSubjects.has(sub.subject_id)) continue;
 
-      const rootTopics = topics.filter(t => t.subject_id === sub.subject_id && t.parent_topic_id === null);
+      const rootTopics = subjectTopics
+        .filter(t => t.parent_topic_id === null)
+        .filter(t => topicVisible(t, subjectTopics, activeFilters));
+
       for (const topic of rootTopics) {
-        const children = topics.filter(t => t.parent_topic_id === topic.id);
-        listData.push({ type: 'topic', topic, allTopics: topics, depth: 0 });
+        const children = subjectTopics
+          .filter(t => t.parent_topic_id === topic.id)
+          .filter(t => topicVisible(t, subjectTopics, activeFilters));
+
+        listData.push({ type: 'topic', topic, allTopics: subjectTopics, depth: 0 });
         if (expandedTopics.has(topic.id)) {
           for (const child of children) {
-            listData.push({ type: 'topic', topic: child, allTopics: topics, depth: 1 });
+            listData.push({ type: 'topic', topic: child, allTopics: subjectTopics, depth: 1 });
           }
         }
       }
     }
   }
 
-  if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
+  if (loading || !filterReady) return <ActivityIndicator style={{ flex: 1 }} />;
+
+  const isFiltered = activeFilters.size > 0;
 
   return (
-    <FlatList
-      style={{ paddingTop: insets.top, backgroundColor: '#f5f5f5' }}
-      data={listData}
-      keyExtractor={(item, idx) =>
-        item.type === 'tutor' ? `tutor-${item.tutorId}` :
-        item.type === 'subject' ? `subject-${item.subjectId}` :
-        `topic-${item.topic.id}-d${item.depth}`
-      }
-      contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2AABEE" />}
-      ListEmptyComponent={<Text style={styles.emptyText}>Нет репетиторов</Text>}
-      renderItem={({ item }) => {
-        if (item.type === 'tutor') {
-          const isOpen = expandedTutors.has(item.tutorId);
+    <View style={{ flex: 1 }}>
+      <FlatList
+        style={{ paddingTop: insets.top, backgroundColor: '#f5f5f5' }}
+        data={listData}
+        keyExtractor={(item) =>
+          item.type === 'tutor' ? `tutor-${item.tutorId}` :
+          item.type === 'subject' ? `subject-${item.subjectId}` :
+          `topic-${item.topic.id}-d${item.depth}`
+        }
+        contentContainerStyle={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2AABEE" />}
+        ListEmptyComponent={<Text style={styles.emptyText}>Нет репетиторов</Text>}
+        renderItem={({ item }) => {
+          if (item.type === 'tutor') {
+            const isOpen = expandedTutors.has(item.tutorId);
+            return (
+              <TouchableOpacity
+                style={[styles.tutorHeader, isOpen && styles.tutorHeaderOpen]}
+                onPress={() => toggleTutor(item.tutorId)}
+                activeOpacity={0.75}
+              >
+                <View style={styles.tutorAvatar}>
+                  <Text style={styles.tutorAvatarText}>{item.tutorName[0]?.toUpperCase() ?? '?'}</Text>
+                </View>
+                <Text style={styles.tutorName}>{item.tutorName}</Text>
+                <Text style={styles.chevron}>{isOpen ? '˅' : '›'}</Text>
+              </TouchableOpacity>
+            );
+          }
+
+          if (item.type === 'subject') {
+            const isOpen = expandedSubjects.has(item.subjectId);
+            return (
+              <TouchableOpacity
+                style={[styles.subjectHeader, isOpen && styles.subjectHeaderOpen]}
+                onPress={() => toggleSubject(item.subjectId)}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.subjectName}>{item.subjectName}</Text>
+                <Text style={styles.chevronSmall}>{isOpen ? '˅' : '›'}</Text>
+              </TouchableOpacity>
+            );
+          }
+
+          const { topic, allTopics, depth } = item;
+          const children = allTopics
+            .filter(t => t.parent_topic_id === topic.id)
+            .filter(t => topicVisible(t, allTopics, activeFilters));
+          const hasChildren = children.length > 0;
+          const isOpen = expandedTopics.has(topic.id);
+
           return (
             <TouchableOpacity
-              style={[styles.tutorHeader, isOpen && styles.tutorHeaderOpen]}
-              onPress={() => toggleTutor(item.tutorId)}
-              activeOpacity={0.75}
+              style={[styles.topicRow, depth === 1 && styles.topicRowIndented]}
+              activeOpacity={0.8}
+              onPress={() => {
+                if (hasChildren) {
+                  toggleTopic(topic.id);
+                } else {
+                  navigation.navigate('TopicDetail', { topic, allTopics });
+                }
+              }}
             >
-              <View style={styles.tutorAvatar}>
-                <Text style={styles.tutorAvatarText}>{item.tutorName[0]?.toUpperCase() ?? '?'}</Text>
+              {depth === 1 && <View style={styles.subtopicLine} />}
+              <View style={styles.topicContent}>
+                <Text style={styles.topicTitle}>{topic.title}</Text>
+                {topic.description ? (
+                  <Text style={styles.topicDesc} numberOfLines={1}>{topic.description}</Text>
+                ) : null}
               </View>
-              <Text style={styles.tutorName}>{item.tutorName}</Text>
-              <Text style={styles.chevron}>{isOpen ? '˅' : '›'}</Text>
-            </TouchableOpacity>
-          );
-        }
-
-        if (item.type === 'subject') {
-          const isOpen = expandedSubjects.has(item.subjectId);
-          return (
-            <TouchableOpacity
-              style={[styles.subjectHeader, isOpen && styles.subjectHeaderOpen]}
-              onPress={() => toggleSubject(item.subjectId)}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.subjectName}>{item.subjectName}</Text>
-              <Text style={styles.chevronSmall}>{isOpen ? '˅' : '›'}</Text>
-            </TouchableOpacity>
-          );
-        }
-
-        // topic at depth 0 or 1
-        const { topic, allTopics, depth } = item;
-        const children = allTopics.filter(t => t.parent_topic_id === topic.id);
-        const hasChildren = children.length > 0;
-        const isOpen = expandedTopics.has(topic.id);
-
-        return (
-          <TouchableOpacity
-            style={[styles.topicRow, depth === 1 && styles.topicRowIndented]}
-            activeOpacity={0.8}
-            onPress={() => {
-              if (hasChildren) {
-                toggleTopic(topic.id);
-              } else {
-                navigation.navigate('TopicDetail', { topic, allTopics });
-              }
-            }}
-          >
-            {depth === 1 && <View style={styles.subtopicLine} />}
-            <View style={styles.topicContent}>
-              <Text style={styles.topicTitle}>{topic.title}</Text>
-              {topic.description ? (
-                <Text style={styles.topicDesc} numberOfLines={1}>{topic.description}</Text>
-              ) : null}
-            </View>
-            <View style={styles.topicRight}>
               {hasChildren && (
-                <View style={styles.childBadge}>
-                  <Text style={styles.childBadgeText}>{children.length}</Text>
+                <View style={styles.topicRight}>
+                  <View style={styles.childBadge}>
+                    <Text style={styles.childBadgeText}>{children.length}</Text>
+                  </View>
+                  <Text style={styles.topicChevron}>{isOpen ? '˅' : '›'}</Text>
                 </View>
               )}
-              <Text style={styles.topicChevron}>
-                {hasChildren ? (isOpen ? '˅' : '›') : '›'}
-              </Text>
-            </View>
+            </TouchableOpacity>
+          );
+        }}
+      />
+
+      {/* Кнопка фильтра — FAB внизу справа */}
+      <TouchableOpacity
+        style={[styles.filterFab, isFiltered && styles.filterFabActive]}
+        onPress={() => setFilterModalVisible(true)}
+        activeOpacity={0.75}
+      >
+        <Ionicons name="options-outline" size={24} color={isFiltered ? '#2AABEE' : '#888'} />
+      </TouchableOpacity>
+
+      {/* Модальное окно фильтра */}
+      <Modal
+        visible={filterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setFilterModalVisible(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.filterPanel}>
+            <Text style={styles.filterPanelTitle}>Уровень</Text>
+
+            {filterOptions.length === 0 ? (
+              <Text style={styles.filterEmpty}>У репетитора пока не указаны уровни для тем</Text>
+            ) : (
+              <View style={styles.chipsRow}>
+                {/* Чип "Все" — сбросить фильтры */}
+                <TouchableOpacity
+                  style={[styles.chip, !isFiltered && styles.chipActive]}
+                  onPress={() => setActiveFilters(new Set())}
+                >
+                  <Text style={[styles.chipText, !isFiltered && styles.chipTextActive]}>Все</Text>
+                </TouchableOpacity>
+
+                {filterOptions.map(opt => {
+                  const isActive = activeFilters.has(opt);
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[styles.chip, isActive && styles.chipActive]}
+                      onPress={() => toggleFilter(opt)}
+                    >
+                      <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{opt}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </TouchableOpacity>
-        );
-      }}
-    />
+        </TouchableOpacity>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   list: { padding: 16, paddingTop: 8, gap: 0 },
   emptyText: { textAlign: 'center', color: '#999', marginTop: 60 },
+
+  // Кнопка фильтра
+  filterFab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  filterFabActive: {
+    backgroundColor: '#EFF9FF',
+    shadowColor: '#2AABEE',
+    shadowOpacity: 0.2,
+  },
 
   // Репетитор
   tutorHeader: {
@@ -289,4 +442,49 @@ const styles = StyleSheet.create({
   },
   childBadgeText: { fontSize: 11, fontWeight: '700', color: '#1976D2' },
   topicChevron: { fontSize: 20, color: '#ccc' },
+
+  // Модальный фильтр
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    paddingBottom: 90,
+    paddingRight: 20,
+  },
+  filterPanel: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    minWidth: 200,
+    maxWidth: 290,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
+    gap: 10,
+  },
+  filterPanelTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#aaa',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#f4f4f4',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  chipActive: {
+    backgroundColor: '#EFF9FF',
+    borderColor: '#2AABEE',
+  },
+  chipText: { fontSize: 14, fontWeight: '500', color: '#555' },
+  chipTextActive: { color: '#2AABEE', fontWeight: '700' },
+  filterEmpty: { fontSize: 13, color: '#bbb', fontStyle: 'italic' },
 });
