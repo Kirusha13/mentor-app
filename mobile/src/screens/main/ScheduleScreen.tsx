@@ -156,10 +156,11 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
   return (
     <View style={modal.container}>
       <View style={modal.header}>
-        <Text style={modal.headerTitle}>Занятие</Text>
         <TouchableOpacity onPress={onClose} style={modal.closeBtn}>
           <Text style={modal.closeBtnText}>✕</Text>
         </TouchableOpacity>
+        <Text style={modal.headerTitle}>Занятие</Text>
+        <View style={modal.closeBtn} />
       </View>
 
       <ScrollView contentContainerStyle={modal.body}>
@@ -239,7 +240,7 @@ export default function ScheduleScreen() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Lesson | null>(null);
   const [showBooking, setShowBooking] = useState(false);
-  const [unpaidInfo, setUnpaidInfo] = useState<{ count: number; total: number } | null>(null);
+  const [unpaidInfo, setUnpaidInfo] = useState<{ count: number; total: number; nearestDate: string } | null>(null);
   const weekEnd = addDays(weekStart, 6);
 
   const [refreshing, setRefreshing] = useState(false);
@@ -263,8 +264,9 @@ export default function ScheduleScreen() {
     if (unpaid.length === 0) {
       setUnpaidInfo(null);
     } else {
-      const total = unpaid.reduce((sum, l) => sum + (l.cost ?? 0), 0);
-      setUnpaidInfo({ count: unpaid.length, total });
+      unpaid.sort((a, b) => String(a.lesson_date).localeCompare(String(b.lesson_date)));
+      const total = unpaid.reduce((sum, l) => sum + Number(l.cost ?? 0), 0);
+      setUnpaidInfo({ count: unpaid.length, total, nearestDate: String(unpaid[0].lesson_date) });
     }
   }, []);
 
@@ -373,12 +375,22 @@ export default function ScheduleScreen() {
       </Modal>
 
       {unpaidInfo && (
-        <View style={styles.unpaidBanner}>
+        <TouchableOpacity
+          style={styles.unpaidBanner}
+          activeOpacity={0.8}
+          onPress={() => {
+            const date = new Date(unpaidInfo.nearestDate + 'T00:00:00');
+            setWeekStart(getWeekStart(date));
+            const day = date.getDay();
+            setSelectedDay(day === 0 ? 6 : day - 1);
+          }}
+        >
           <Ionicons name="wallet-outline" size={16} color="#E65100" />
           <Text style={styles.unpaidBannerText}>
-            Не оплачено: {unpaidInfo.total.toLocaleString('ru-RU')} ₽ ({unpaidInfo.count} {pluralLesson(unpaidInfo.count)})
+            Не оплачено: {Math.round(unpaidInfo.total).toLocaleString('ru-RU')} ₽ ({unpaidInfo.count} {pluralLesson(unpaidInfo.count)})
           </Text>
-        </View>
+          <Ionicons name="chevron-forward" size={14} color="#E65100" />
+        </TouchableOpacity>
       )}
 
       {/* FAB */}
@@ -488,8 +500,8 @@ const modal = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  headerTitle: { fontSize: 17, fontWeight: '600' },
-  closeBtn: { padding: 4 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   closeBtnText: { fontSize: 18, color: '#999' },
   body: { padding: 16, gap: 12 },
   statusBadge: { borderLeftWidth: 4, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10 },

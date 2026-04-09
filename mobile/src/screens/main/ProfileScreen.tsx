@@ -225,23 +225,38 @@ export default function ProfileScreen() {
       {tutors.length > 0 && (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Мои репетиторы</Text>
-          {tutors.map((ts, i) => {
-            const remaining = ts.subscription_lessons != null
-              ? ts.subscription_lessons - (ts.used_lessons ?? 0)
-              : null;
+          {[...new Map(tutors.map(t => [t.tutor_id, t])).values()].map((tutor, ti) => {
+            const subjects = tutors.filter(t => t.tutor_id === tutor.tutor_id);
             return (
-              <View key={ts.id} style={[styles.tutorRow, i > 0 && styles.tutorRowBorder]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.tutorName}>{ts.tutor_name ?? '—'}</Text>
-                  <Text style={styles.tutorSubject}>{ts.subject_name ?? '—'}</Text>
-                </View>
-                {remaining != null && remaining > 0 && (
-                  <View style={styles.subscriptionBadge}>
-                    <Text style={styles.subscriptionBadgeText}>
-                      {`${remaining} из ${ts.subscription_lessons} зан.`}
-                    </Text>
+              <View key={tutor.tutor_id} style={ti > 0 ? styles.tutorGroupBorder : undefined}>
+                {/* Имя репетитора */}
+                <View style={styles.tutorGroupHeader}>
+                  <View style={styles.tutorAvatarSmall}>
+                    <Text style={styles.tutorAvatarText}>{tutor.tutor_name?.[0]?.toUpperCase() ?? '?'}</Text>
                   </View>
-                )}
+                  <Text style={styles.tutorName}>{tutor.tutor_name ?? '—'}</Text>
+                </View>
+                {/* Предметы */}
+                {subjects.map((ts) => {
+                  const remaining = ts.subscription_lessons != null
+                    ? ts.subscription_lessons - (ts.used_lessons ?? 0)
+                    : null;
+                  return (
+                    <View key={ts.id} style={styles.subjectRow}>
+                      <Text style={styles.subjectName}>{ts.subject_name ?? '—'}</Text>
+                      <View style={styles.subjectRight}>
+                        {remaining != null && remaining > 0 && (
+                          <View style={styles.subscriptionBadge}>
+                            <Text style={styles.subscriptionBadgeText}>
+                              {remaining} из {ts.subscription_lessons} зан.
+                            </Text>
+                          </View>
+                        )}
+                        <Text style={styles.hourlyRate}>{ts.hourly_rate} ₽/ч</Text>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             );
           })}
@@ -365,12 +380,21 @@ const styles = StyleSheet.create({
   saveBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
 
   sectionTitle: { fontSize: 12, fontWeight: '600', color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  tutorRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 8 },
-  tutorRowBorder: { borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  tutorGroupBorder: { borderTopWidth: 1, borderTopColor: '#f0f0f0', marginTop: 10, paddingTop: 10 },
+  tutorGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  tutorAvatarSmall: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: '#2AABEE',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  tutorAvatarText: { fontSize: 13, fontWeight: '700', color: '#fff' },
   tutorName: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
-  tutorSubject: { fontSize: 13, color: '#888', marginTop: 2 },
-  subscriptionBadge: { backgroundColor: '#EFF9FF', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  subscriptionBadgeText: { fontSize: 12, fontWeight: '600', color: '#2AABEE' },
+  subjectRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, paddingLeft: 40 },
+  subjectName: { fontSize: 14, color: '#444', flex: 1 },
+  subjectRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  hourlyRate: { fontSize: 13, fontWeight: '600', color: '#555' },
+  subscriptionBadge: { backgroundColor: '#EFF9FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  subscriptionBadgeText: { fontSize: 11, fontWeight: '600', color: '#2AABEE' },
 
   settingsCard: {
     backgroundColor: '#fff',

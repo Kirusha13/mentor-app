@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { AvailableSlot, bookLesson, getAvailableWindows } from '../../api/lessons';
 import { getTutors, TutorStudent } from '../../api/student';
 
@@ -329,7 +330,9 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
             <Section label="Дата">
               {availableDates.length === 0 ? (
                 <View style={s.emptySlots}>
-                  <Text style={s.emptySlotsIcon}>📅</Text>
+                  <View style={s.emptySlotsIconWrap}>
+                    <Ionicons name="calendar-outline" size={32} color="#2AABEE" />
+                  </View>
                   <Text style={s.emptySlotsTitle}>Нет свободных окон</Text>
                   <Text style={s.emptySlotsHint}>Репетитор ещё не добавил доступное время</Text>
                 </View>
@@ -601,7 +604,12 @@ const s = StyleSheet.create({
 
   // Нет слотов
   emptySlots: { alignItems: 'center', paddingVertical: 24, gap: 6 },
-  emptySlotsIcon: { fontSize: 36 },
+  emptySlotsIconWrap: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: '#EFF9FF',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 4,
+  },
   emptySlotsTitle: { fontSize: 15, fontWeight: '600', color: '#333' },
   emptySlotsHint: { fontSize: 13, color: '#aaa', textAlign: 'center' },
 
