@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -155,10 +156,11 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
   return (
     <View style={modal.container}>
       <View style={modal.header}>
-        <Text style={modal.headerTitle}>Занятие</Text>
         <TouchableOpacity onPress={onClose} style={modal.closeBtn}>
           <Text style={modal.closeBtnText}>✕</Text>
         </TouchableOpacity>
+        <Text style={modal.headerTitle}>Занятие</Text>
+        <View style={modal.closeBtn} />
       </View>
 
       <ScrollView contentContainerStyle={modal.body}>
@@ -238,11 +240,13 @@ export default function ScheduleScreen() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Lesson | null>(null);
   const [showBooking, setShowBooking] = useState(false);
-  const [unpaidInfo, setUnpaidInfo] = useState<{ count: number; total: number } | null>(null);
+  const [unpaidInfo, setUnpaidInfo] = useState<{ count: number; total: number; nearestDate: string } | null>(null);
   const weekEnd = addDays(weekStart, 6);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
       const data = await getLessons({
         date_from: toISODate(weekStart),
@@ -250,7 +254,7 @@ export default function ScheduleScreen() {
       });
       setLessons(data);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, [weekStart]);
 
@@ -260,10 +264,17 @@ export default function ScheduleScreen() {
     if (unpaid.length === 0) {
       setUnpaidInfo(null);
     } else {
-      const total = unpaid.reduce((sum, l) => sum + (l.cost ?? 0), 0);
-      setUnpaidInfo({ count: unpaid.length, total });
+      unpaid.sort((a, b) => String(a.lesson_date).localeCompare(String(b.lesson_date)));
+      const total = unpaid.reduce((sum, l) => sum + Number(l.cost ?? 0), 0);
+      setUnpaidInfo({ count: unpaid.length, total, nearestDate: String(unpaid[0].lesson_date) });
     }
   }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([load(false), loadUnpaid()]);
+    setRefreshing(false);
+  }, [load, loadUnpaid]);
 
   useFocusEffect(useCallback(() => { load(); loadUnpaid(); }, [load, loadUnpaid]));
 
@@ -310,13 +321,14 @@ export default function ScheduleScreen() {
       {/* Контент */}
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color="#2AABEE" />
-      ) : dayLessons.length === 0 ? (
-        <View style={styles.emptyDay}>
-          <Text style={styles.emptyDayText}>Занятий нет</Text>
-        </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
-          {dayLessons.map((lesson) => {
+        <ScrollView
+          contentContainerStyle={dayLessons.length === 0 ? styles.emptyDay : styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2AABEE" colors={['#2AABEE']} />}
+        >
+          {dayLessons.length === 0 ? (
+            <Text style={styles.emptyDayText}>Занятий нет</Text>
+          ) : dayLessons.map((lesson) => {
             const color = STATUS_COLOR[lesson.conduct_status];
             const bg = STATUS_BG[lesson.conduct_status];
             return (
@@ -363,12 +375,22 @@ export default function ScheduleScreen() {
       </Modal>
 
       {unpaidInfo && (
-        <View style={styles.unpaidBanner}>
+        <TouchableOpacity
+          style={styles.unpaidBanner}
+          activeOpacity={0.8}
+          onPress={() => {
+            const date = new Date(unpaidInfo.nearestDate + 'T00:00:00');
+            setWeekStart(getWeekStart(date));
+            const day = date.getDay();
+            setSelectedDay(day === 0 ? 6 : day - 1);
+          }}
+        >
           <Ionicons name="wallet-outline" size={16} color="#E65100" />
           <Text style={styles.unpaidBannerText}>
-            Не оплачено: {unpaidInfo.total.toLocaleString('ru-RU')} ₽ ({unpaidInfo.count} {pluralLesson(unpaidInfo.count)})
+            Не оплачено: {Math.round(unpaidInfo.total).toLocaleString('ru-RU')} ₽ ({unpaidInfo.count} {pluralLesson(unpaidInfo.count)})
           </Text>
-        </View>
+          <Ionicons name="chevron-forward" size={14} color="#E65100" />
+        </TouchableOpacity>
       )}
 
       {/* FAB */}
@@ -478,8 +500,8 @@ const modal = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  headerTitle: { fontSize: 17, fontWeight: '600' },
-  closeBtn: { padding: 4 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   closeBtnText: { fontSize: 18, color: '#999' },
   body: { padding: 16, gap: 12 },
   statusBadge: { borderLeftWidth: 4, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10 },

@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { getStudentMe, StudentProfile, updateStudentMe, uploadStudentAvatar } from '../../api/student';
+import { getStudentMe, getTutors, StudentProfile, TutorStudent, updateStudentMe, uploadStudentAvatar } from '../../api/student';
 import { API_BASE_URL } from '../../api/client';
 import JoinScreen from './JoinScreen';
 
@@ -68,6 +68,7 @@ function Avatar({ hasAvatar, avatarUrl, name, token, onPress }: {
 export default function ProfileScreen() {
   const { signOut, token } = useAuth();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [tutors, setTutors] = useState<TutorStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [joinVisible, setJoinVisible] = useState(false);
 
@@ -79,10 +80,11 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      getStudentMe().then(p => {
+      Promise.all([getStudentMe(), getTutors()]).then(([p, ts]) => {
         setProfile(p);
         setEditName(p.full_name);
         setEditPhone(p.phone_number ?? '');
+        setTutors(ts);
       }).finally(() => setLoading(false));
     }, []),
   );
@@ -219,6 +221,48 @@ export default function ProfileScreen() {
         )}
       </View>
 
+      {/* Репетиторы */}
+      {tutors.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Мои репетиторы</Text>
+          {[...new Map(tutors.map(t => [t.tutor_id, t])).values()].map((tutor, ti) => {
+            const subjects = tutors.filter(t => t.tutor_id === tutor.tutor_id);
+            return (
+              <View key={tutor.tutor_id} style={ti > 0 ? styles.tutorGroupBorder : undefined}>
+                {/* Имя репетитора */}
+                <View style={styles.tutorGroupHeader}>
+                  <View style={styles.tutorAvatarSmall}>
+                    <Text style={styles.tutorAvatarText}>{tutor.tutor_name?.[0]?.toUpperCase() ?? '?'}</Text>
+                  </View>
+                  <Text style={styles.tutorName}>{tutor.tutor_name ?? '—'}</Text>
+                </View>
+                {/* Предметы */}
+                {subjects.map((ts) => {
+                  const remaining = ts.subscription_lessons != null
+                    ? ts.subscription_lessons - (ts.used_lessons ?? 0)
+                    : null;
+                  return (
+                    <View key={ts.id} style={styles.subjectRow}>
+                      <Text style={styles.subjectName}>{ts.subject_name ?? '—'}</Text>
+                      <View style={styles.subjectRight}>
+                        {remaining != null && remaining > 0 && (
+                          <View style={styles.subscriptionBadge}>
+                            <Text style={styles.subscriptionBadgeText}>
+                              {remaining} из {ts.subscription_lessons} зан.
+                            </Text>
+                          </View>
+                        )}
+                        <Text style={styles.hourlyRate}>{ts.hourly_rate} ₽/ч</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
       {/* Действия */}
       <View style={styles.settingsCard}>
         <TouchableOpacity style={styles.settingsItem} onPress={() => setJoinVisible(true)}>
@@ -334,6 +378,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+
+  sectionTitle: { fontSize: 12, fontWeight: '600', color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  tutorGroupBorder: { borderTopWidth: 1, borderTopColor: '#f0f0f0', marginTop: 10, paddingTop: 10 },
+  tutorGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  tutorAvatarSmall: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: '#2AABEE',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  tutorAvatarText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  tutorName: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
+  subjectRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, paddingLeft: 40 },
+  subjectName: { fontSize: 14, color: '#444', flex: 1 },
+  subjectRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  hourlyRate: { fontSize: 13, fontWeight: '600', color: '#555' },
+  subscriptionBadge: { backgroundColor: '#EFF9FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  subscriptionBadgeText: { fontSize: 11, fontWeight: '600', color: '#2AABEE' },
 
   settingsCard: {
     backgroundColor: '#fff',

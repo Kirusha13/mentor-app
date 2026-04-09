@@ -5,6 +5,7 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -27,12 +28,14 @@ export default function MaterialsScreen({ navigation }: Props) {
   const [topics, setTopics] = useState<TheoryTopic[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [expandedTutors, setExpandedTutors] = useState<Set<number>>(new Set());
   const [expandedSubjects, setExpandedSubjects] = useState<Set<number>>(new Set());
   const [expandedTopics, setExpandedTopics] = useState<Set<number>>(new Set());
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
       const [topicsData, tsData] = await Promise.all([getTopics(), getTutors()]);
       setTopics(topicsData);
@@ -53,6 +56,12 @@ export default function MaterialsScreen({ navigation }: Props) {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load(false);
+    setRefreshing(false);
+  }, [load]);
 
   const insets = useSafeAreaInsets();
 
@@ -110,6 +119,7 @@ export default function MaterialsScreen({ navigation }: Props) {
         `topic-${item.topic.id}-d${item.depth}`
       }
       contentContainerStyle={styles.list}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2AABEE" />}
       ListEmptyComponent={<Text style={styles.emptyText}>Нет репетиторов</Text>}
       renderItem={({ item }) => {
         if (item.type === 'tutor') {

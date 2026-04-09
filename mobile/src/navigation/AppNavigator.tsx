@@ -37,6 +37,7 @@ function MaterialsNavigator() {
         headerStyle: { backgroundColor: '#fff' },
         headerShadowVisible: false,
         headerTintColor: '#2AABEE',
+        headerBackButtonDisplayMode: 'minimal',
       }}
     >
       <MaterialsStack.Screen
@@ -60,6 +61,7 @@ function AssignmentsNavigator() {
         headerStyle: { backgroundColor: '#fff' },
         headerShadowVisible: false,
         headerTintColor: '#2AABEE',
+        headerBackButtonDisplayMode: 'minimal',
       }}
     >
       <AssignmentsStack.Screen

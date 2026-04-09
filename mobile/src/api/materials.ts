@@ -4,6 +4,7 @@ export interface TheoryTopic {
   id: number;
   title: string;
   description: string | null;
+  study_level: string[] | null;
   subject_id: number;
   parent_topic_id: number | null;
 }

@@ -1,6 +1,7 @@
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   Linking,
@@ -18,13 +19,22 @@ type Props = {
   route: RouteProp<MaterialsStackParamList, 'TopicDetail'>;
 };
 
-const FORMAT_ICON: Record<Material['format'], string> = {
-  text: '📄',
-  pdf: '📕',
-  video: '🎬',
-  presentation: '📊',
-  image: '🖼️',
-  link: '🔗',
+const FORMAT_ICON: Record<Material['format'], keyof typeof Ionicons.glyphMap> = {
+  text: 'document-text-outline',
+  pdf: 'document-outline',
+  video: 'play-circle-outline',
+  presentation: 'easel-outline',
+  image: 'image-outline',
+  link: 'link-outline',
+};
+
+const FORMAT_ICON_COLOR: Record<Material['format'], string> = {
+  text: '#607D8B',
+  pdf: '#D32F2F',
+  video: '#1565C0',
+  presentation: '#2E7D32',
+  image: '#6A1B9A',
+  link: '#2AABEE',
 };
 
 const FORMAT_LABEL: Record<Material['format'], string> = {
@@ -34,11 +44,6 @@ const FORMAT_LABEL: Record<Material['format'], string> = {
   presentation: 'Презентация',
   image: 'Изображение',
   link: 'Ссылка',
-};
-
-const LEVEL_LABEL: Record<Material['level'], string> = {
-  basic: 'Базовый',
-  advanced: 'Углублённый',
 };
 
 export default function TopicDetailScreen({ navigation, route }: Props) {
@@ -67,11 +72,13 @@ export default function TopicDetailScreen({ navigation, route }: Props) {
             {materials.map((m) => (
               <View key={m.id} style={styles.materialCard}>
                 <View style={styles.materialHeader}>
-                  <Text style={styles.materialIcon}>{FORMAT_ICON[m.format]}</Text>
+                  <Ionicons name={FORMAT_ICON[m.format]} size={20} color={FORMAT_ICON_COLOR[m.format]} />
                   <Text style={styles.materialFormat}>{FORMAT_LABEL[m.format]}</Text>
-                  <View style={[styles.levelBadge, m.level === 'advanced' && styles.levelAdvanced]}>
-                    <Text style={styles.levelText}>{LEVEL_LABEL[m.level]}</Text>
-                  </View>
+                  <Ionicons
+                    name={m.level === 'advanced' ? 'rocket' : 'school-outline'}
+                    size={16}
+                    color={m.level === 'advanced' ? '#FF9800' : '#2AABEE'}
+                  />
                 </View>
                 {m.content_text ? (
                   <Text style={styles.materialText}>{m.content_text}</Text>
@@ -147,18 +154,9 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 10,
   },
-  materialIcon: { fontSize: 20 },
   materialFormat: { fontSize: 12, color: '#999', fontWeight: '700', flex: 1 },
   materialText: { fontSize: 15, color: '#333', lineHeight: 24 },
   materialLink: { fontSize: 14, color: '#2AABEE', textDecorationLine: 'underline', lineHeight: 22 },
-  levelBadge: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  levelAdvanced: { backgroundColor: '#FFF3E0' },
-  levelText: { fontSize: 11, fontWeight: '600', color: '#555' },
   topicCard: {
     flexDirection: 'row',
     alignItems: 'center',
