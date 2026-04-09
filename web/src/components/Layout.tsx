@@ -1,32 +1,72 @@
-﻿import { useEffect, useState, type ReactNode } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getPendingCount } from '../api/lessons';
-import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { getTutorProfile } from '../api/tutor';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Главная', exact: true },
-  { to: '/students', label: 'Ученики' },
-  { to: '/contacts', label: 'Контакты' },
-  { to: '/schedule', label: 'Расписание' },
-  { to: '/requests', label: 'Запросы' },
-  { to: '/assignments', label: 'Задания' },
-  { to: '/subjects', label: 'Предметы' },
-  { to: '/materials', label: 'Материалы' },
-  { to: '/finance', label: 'Финансы' },
-  { to: '/portfolio', label: 'Портфолио' },
-];
+const NAV_GROUPS = [
+  {
+    title: 'Главное',
+    items: [
+      { to: '/', label: 'Главная', exact: true },
+      { to: '/schedule', label: 'Расписание' },
+    ],
+  },
+  {
+    title: 'Учебный процесс',
+    items: [
+      { to: '/students', label: 'Ученики' },
+      { to: '/assignments', label: 'Задания' },
+      { to: '/materials', label: 'Материалы' },
+      { to: '/portfolio', label: 'Портфолио' },
+    ],
+  },
+  {
+    title: 'Структура',
+    items: [
+      { to: '/subjects', label: 'Предметы' },
+      { to: '/contacts', label: 'Контакты' },
+    ],
+  },
+  {
+    title: 'Финансы',
+    items: [{ to: '/finance', label: 'Финансы' }],
+  },
+] as const;
+
+function getInitials(label: string) {
+  return label
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+}
+
+const sidebarButtonBase = {
+  borderRadius: '50%',
+  color: '#fff',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'transform 160ms ease, box-shadow 160ms ease, background 160ms ease',
+} as const;
 
 export default function Layout({ children }: LayoutProps) {
-  const { logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 820px)');
   const [pendingCount, setPendingCount] = useState(0);
+  const [tutorLabel, setTutorLabel] = useState('Репетитор');
+  const [tutorSubtitle, setTutorSubtitle] = useState('Личный кабинет');
+  const initials = useMemo(() => getInitials(tutorLabel), [tutorLabel]);
+  const isRequestsActive = location.pathname.startsWith('/requests');
+  const isProfileActive = location.pathname.startsWith('/profile');
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +84,7 @@ export default function Layout({ children }: LayoutProps) {
       }
     };
 
-    loadPendingCount();
+    void loadPendingCount();
     const intervalId = window.setInterval(loadPendingCount, 60_000);
 
     return () => {
@@ -53,10 +93,30 @@ export default function Layout({ children }: LayoutProps) {
     };
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTutorProfile = async () => {
+      try {
+        const profile = await getTutorProfile();
+        if (!cancelled) {
+          setTutorLabel(profile.full_name || 'Репетитор');
+          setTutorSubtitle('Личный кабинет');
+        }
+      } catch {
+        if (!cancelled) {
+          setTutorLabel('Репетитор');
+          setTutorSubtitle('Личный кабинет');
+        }
+      }
+    };
+
+    void loadTutorProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div
@@ -66,8 +126,8 @@ export default function Layout({ children }: LayoutProps) {
         gridTemplateColumns: isMobile
           ? '1fr'
           : isTablet
-            ? '220px minmax(0, 1fr)'
-            : '248px minmax(0, 1fr)',
+            ? '240px minmax(0, 1fr)'
+            : '272px minmax(0, 1fr)',
       }}
     >
       <aside
@@ -75,7 +135,7 @@ export default function Layout({ children }: LayoutProps) {
           background:
             'linear-gradient(180deg, rgba(23,32,51,0.98) 0%, rgba(26,38,59,0.97) 100%)',
           color: '#f8fafc',
-          padding: isMobile ? '14px 14px 12px' : '20px 14px 16px',
+          padding: isMobile ? '14px 14px 12px' : '18px 14px 16px',
           borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.06)',
           borderBottom: isMobile ? '1px solid rgba(255,255,255,0.06)' : 'none',
           boxShadow: isMobile
@@ -86,12 +146,12 @@ export default function Layout({ children }: LayoutProps) {
           height: isMobile ? 'auto' : '100vh',
           display: 'flex',
           flexDirection: 'column',
-          gap: 14,
+          gap: 16,
         }}
       >
         <div
           style={{
-            padding: '6px 8px 16px',
+            padding: '2px 8px 14px',
             borderBottom: '1px solid rgba(255,255,255,0.08)',
           }}
         >
@@ -101,66 +161,76 @@ export default function Layout({ children }: LayoutProps) {
               letterSpacing: '0.16em',
               textTransform: 'uppercase',
               color: 'rgba(255,255,255,0.52)',
-              marginBottom: 10,
+              marginBottom: 12,
             }}
           >
             Mentor App
           </div>
-          <div style={{ fontSize: isMobile ? 24 : 28, fontWeight: 800, lineHeight: 1.05 }}>
-            Кабинет
-          </div>
-          {!isMobile && (
-            <div style={{ marginTop: 8, color: 'rgba(255,255,255,0.68)', fontSize: 14 }}>
-              Панель репетитора для работы с учениками, занятиями, заданиями, финансами и
-              контактными лицами.
-            </div>
-          )}
-        </div>
 
-        <nav
-          style={{
-            display: 'grid',
-            gap: 6,
-            gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(132px, 1fr))' : '1fr',
-          }}
-        >
-          {NAV_ITEMS.map(({ to, label, exact }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={exact}
-              style={({ isActive }) => ({
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                minHeight: 40,
-                padding: '0 12px',
-                borderRadius: 12,
-                color: isActive ? '#fff' : 'rgba(255,255,255,0.72)',
-                background: isActive ? 'rgba(217,111,50,0.92)' : 'rgba(255,255,255,0.04)',
-                border: isActive
-                  ? '1px solid rgba(255,255,255,0.12)'
-                  : '1px solid transparent',
-                boxShadow: isActive ? '0 10px 24px rgba(217,111,50,0.24)' : 'none',
-                fontSize: 14,
-                fontWeight: 700,
-                gap: 10,
-              })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <button
+              type="button"
+              onClick={() => navigate('/profile')}
+              title="Личный кабинет"
+              style={{
+                ...sidebarButtonBase,
+                width: 52,
+                height: 52,
+                border: isProfileActive
+                  ? '1px solid rgba(255,255,255,0.18)'
+                  : '1px solid rgba(255,255,255,0.1)',
+                background: isProfileActive
+                  ? 'linear-gradient(180deg, rgba(217,111,50,0.96) 0%, rgba(199,93,36,0.96) 100%)'
+                  : 'linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+                fontSize: 18,
+                fontWeight: 800,
+                boxShadow: isProfileActive
+                  ? '0 10px 24px rgba(217,111,50,0.24)'
+                  : '0 8px 18px rgba(7, 11, 20, 0.18)',
+              }}
             >
-              <span>{label}</span>
-              {to === '/requests' && pendingCount > 0 ? (
+              {initials || 'Р'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/requests')}
+              title="Запросы и уведомления"
+              style={{
+                ...sidebarButtonBase,
+                position: 'relative',
+                width: 44,
+                height: 44,
+                border: isRequestsActive
+                  ? '1px solid rgba(255,255,255,0.18)'
+                  : '1px solid rgba(255,255,255,0.1)',
+                background: isRequestsActive
+                  ? 'linear-gradient(180deg, rgba(217,111,50,0.96) 0%, rgba(199,93,36,0.96) 100%)'
+                  : 'linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+                fontSize: 18,
+                fontWeight: 800,
+                boxShadow: isRequestsActive
+                  ? '0 10px 24px rgba(217,111,50,0.24)'
+                  : '0 8px 18px rgba(7, 11, 20, 0.18)',
+              }}
+            >
+              <span aria-hidden="true">!</span>
+              {pendingCount > 0 ? (
                 <span
                   style={{
-                    minWidth: 22,
-                    height: 22,
-                    padding: '0 6px',
+                    position: 'absolute',
+                    top: -4,
+                    right: -2,
+                    minWidth: 20,
+                    height: 20,
+                    padding: '0 5px',
                     borderRadius: 999,
                     background: '#d94b4b',
                     color: '#fff',
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: 800,
                     boxShadow: '0 8px 18px rgba(217,75,75,0.28)',
                   }}
@@ -168,38 +238,82 @@ export default function Layout({ children }: LayoutProps) {
                   {pendingCount > 99 ? '99+' : pendingCount}
                 </span>
               ) : null}
-            </NavLink>
+            </button>
+
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.05 }}>{tutorLabel}</div>
+              <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13 }}>{tutorSubtitle}</div>
+            </div>
+          </div>
+
+        </div>
+
+        <nav style={{ display: 'grid', gap: 14, overflowY: 'auto', paddingRight: 2 }}>
+          {NAV_GROUPS.map((group) => (
+            <div
+              key={group.title}
+              style={{
+                display: 'grid',
+                gap: 8,
+                padding: '10px 8px',
+                borderRadius: 18,
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.04)',
+              }}
+            >
+              <div
+                style={{
+                  padding: '0 10px',
+                  fontSize: 11,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,0.42)',
+                  fontWeight: 700,
+                }}
+              >
+                {group.title}
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gap: 6,
+                  gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(132px, 1fr))' : '1fr',
+                }}
+              >
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={'exact' in item ? item.exact : false}
+                    style={({ isActive }) => ({
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      minHeight: 42,
+                      padding: '0 13px',
+                      borderRadius: 14,
+                      color: isActive ? '#fff' : 'rgba(255,255,255,0.72)',
+                      background: isActive
+                        ? 'linear-gradient(180deg, rgba(217,111,50,0.96) 0%, rgba(199,93,36,0.96) 100%)'
+                        : 'rgba(255,255,255,0.02)',
+                      border: isActive
+                        ? '1px solid rgba(255,255,255,0.12)'
+                        : '1px solid rgba(255,255,255,0.04)',
+                      boxShadow: isActive
+                        ? '0 10px 24px rgba(217,111,50,0.24)'
+                        : 'inset 0 1px 0 rgba(255,255,255,0.02)',
+                      fontSize: 14,
+                      fontWeight: 700,
+                    })}
+                  >
+                    <span>{item.label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
-
-        <div
-          style={{
-            marginTop: isMobile ? 0 : 'auto',
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 16,
-            padding: 14,
-          }}
-        >
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Рабочая сессия</div>
-          {!isMobile && (
-            <div style={{ color: 'rgba(255,255,255,0.68)', fontSize: 13, marginBottom: 14 }}>
-              Все основные разделы доступны из бокового меню.
-            </div>
-          )}
-          <button
-            onClick={handleLogout}
-            style={{
-              width: isMobile ? 'auto' : '100%',
-              background: 'transparent',
-              border: '1px solid rgba(255,255,255,0.16)',
-              color: '#fff',
-              boxShadow: 'none',
-            }}
-          >
-            Выйти
-          </button>
-        </div>
       </aside>
 
       <main

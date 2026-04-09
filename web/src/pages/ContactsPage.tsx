@@ -294,54 +294,36 @@ export default function ContactsPage() {
           }}
         >
           <div>
-            <div
+            <h1
               style={{
-                display: 'inline-flex',
-                padding: '6px 10px',
-                borderRadius: 999,
-                background: 'rgba(217,111,50,0.12)',
-                color: '#b9551f',
-                fontWeight: 700,
-                fontSize: 13,
+                fontSize: 'clamp(2rem, 4vw, 3rem)',
+                lineHeight: 0.98,
+                letterSpacing: '-0.04em',
                 marginBottom: 10,
               }}
             >
-              Контактная книжка
-            </div>
-            <h1
-              style={{
-                fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
-                lineHeight: 0.98,
-                letterSpacing: '-0.04em',
-                marginBottom: 12,
-              }}
-            >
-              Контактные лица
-              <br />
-              и связи с учениками
+              Контактные лица и связи с учениками
             </h1>
             <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 14, marginBottom: 0 }}>
-              Здесь собрана вся работа с родителями, опекунами и другими контактными лицами:
-              поиск, создание, просмотр, редактирование и отвязка.
+              Поиск, создание, редактирование и привязка контактных лиц.
             </p>
           </div>
-
           <div
             style={{
-              minWidth: 220,
-              borderRadius: 18,
-              padding: 14,
+              minWidth: 176,
+              borderRadius: 16,
+              padding: '12px 14px',
               background: '#172033',
               color: '#fff',
             }}
           >
-            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>
+            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 12, marginBottom: 6 }}>
               Всего контактов
             </div>
-            <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, marginBottom: 8 }}>
+            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, marginBottom: 6 }}>
               {filteredRecords.length}
             </div>
-            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>
+            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 12 }}>
               Найдено по текущему фильтру
             </div>
           </div>
@@ -679,3 +661,4 @@ export default function ContactsPage() {
     </div>
   );
 }
+

@@ -21,21 +21,6 @@ export default function DashboardPage() {
             'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
         }}
       >
-        <div
-          style={{
-            display: 'inline-flex',
-            padding: '8px 12px',
-            borderRadius: 999,
-            background: 'rgba(217,111,50,0.12)',
-            color: '#b9551f',
-            fontWeight: 700,
-            fontSize: 13,
-            marginBottom: 14,
-          }}
-        >
-          Главная
-        </div>
-
         <h1
           style={{
             fontSize: 'clamp(2rem, 4vw, 3rem)',
@@ -45,13 +30,10 @@ export default function DashboardPage() {
           }}
         >
           Главная страница
-          <br />
-          пока без сводки
         </h1>
 
         <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 16, marginBottom: 0 }}>
-          Этот раздел пока оставлен как аккуратная заглушка. По мере разработки сюда можно
-          будет добавить реальные метрики и сводную информацию из готовых модулей.
+          Здесь будут ключевые показатели и короткая сводка по занятиям, заданиям, финансам и запросам.
         </p>
       </section>
     </div>

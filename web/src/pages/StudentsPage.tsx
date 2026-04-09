@@ -125,6 +125,10 @@ export default function StudentsPage() {
 
   const activeCards = useMemo(() => filteredCards.filter(({ tutorStudent }) => tutorStudent.status === 'active'), [filteredCards]);
   const inactiveCards = useMemo(() => filteredCards.filter(({ tutorStudent }) => tutorStudent.status !== 'active'), [filteredCards]);
+  const totalInactiveCards = useMemo(
+    () => studentCards.filter(({ tutorStudent }) => tutorStudent.status !== 'active'),
+    [studentCards]
+  );
   const selectedCard = useMemo(() => studentCards.find((card) => card.tutorStudent.id === selectedTutorStudentId) ?? null, [selectedTutorStudentId, studentCards]);
 
   useEffect(() => {
@@ -202,14 +206,22 @@ export default function StudentsPage() {
       <section style={{ ...panelStyle, padding: '20px', marginBottom: '16px', background: 'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ display: 'inline-flex', padding: '6px 10px', borderRadius: 999, background: 'rgba(217,111,50,0.12)', color: '#b9551f', fontWeight: 700, fontSize: 13, marginBottom: 10 }}>{'\u042d\u0442\u0430\u043f 1'}</div>
-            <h1 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', lineHeight: 0.98, letterSpacing: '-0.04em', marginBottom: 12 }}>{t.title}</h1>
+            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', lineHeight: 0.98, letterSpacing: '-0.04em', marginBottom: 10 }}>{t.title}</h1>
             <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 14, marginBottom: 0 }}>{t.subtitle}</p>
           </div>
-          <div style={{ minWidth: 220, borderRadius: 18, padding: 14, background: '#172033', color: '#fff' }}>
-            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>{t.found}</div>
-            <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, marginBottom: 8 }}>{filteredCards.length}</div>
-            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>{`${t.active}: ${activeCards.length} \u2022 \u041d\u0435\u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0445: ${inactiveCards.length}`}</div>
+          <div style={{ minWidth: 176, borderRadius: 16, padding: '12px 14px', background: '#172033', color: '#fff' }}>
+            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 12, marginBottom: 6 }}>{t.found}</div>
+            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, marginBottom: 6 }}>{filteredCards.length}</div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', color: 'rgba(255,255,255,0.78)', fontSize: 12 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80' }} />
+                {activeCards.length}
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f87171' }} />
+                {inactiveCards.length}
+              </span>
+            </div>
           </div>
         </div>
       </section>
@@ -236,7 +248,7 @@ export default function StudentsPage() {
       </section>
 
       <section style={panelStyle}>
-        {loading ? <p style={{ ...mutedTextStyle, marginBottom: 0 }}>{t.loading}</p> : filteredCards.length === 0 ? <p style={{ ...mutedTextStyle, marginBottom: 0 }}>{t.notFound}</p> : <div style={{ display: 'grid', gap: 16 }}>{activeCards.length > 0 ? renderGrid(activeCards) : <div style={{ padding: 16, borderRadius: 16, background: 'rgba(23,32,51,0.03)', color: '#687486' }}>{t.noActive}</div>}{inactiveCards.length > 0 && <div style={{ display: 'grid', gap: 12, paddingTop: 4, borderTop: '1px solid rgba(24,33,47,0.08)' }}><button type="button" onClick={() => setShowInactiveStudents((prev) => !prev)} style={{ justifySelf: 'start', background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>{showInactiveStudents ? `${t.hideInactive} (${inactiveCards.length})` : `${t.showInactive} (${inactiveCards.length})`}</button>{showInactiveStudents && renderGrid(inactiveCards)}</div>}</div>}
+        {loading ? <p style={{ ...mutedTextStyle, marginBottom: 0 }}>{t.loading}</p> : filteredCards.length === 0 ? <p style={{ ...mutedTextStyle, marginBottom: 0 }}>{t.notFound}</p> : <div style={{ display: 'grid', gap: 16 }}>{activeCards.length > 0 ? renderGrid(activeCards) : <div style={{ padding: 16, borderRadius: 16, background: 'rgba(23,32,51,0.03)', color: '#687486' }}>{t.noActive}</div>}{totalInactiveCards.length > 0 && <div style={{ display: 'grid', gap: 12, paddingTop: 4, borderTop: '1px solid rgba(24,33,47,0.08)' }}><button type="button" onClick={() => setShowInactiveStudents((prev) => !prev)} style={{ justifySelf: 'start', background: 'transparent', color: '#324055', border: '1px solid rgba(24,33,47,0.12)', boxShadow: 'none', padding: '8px 12px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f87171' }} />{showInactiveStudents ? `${t.hideInactive} (${inactiveCards.length})` : `${t.showInactive} (${inactiveCards.length})`}</button>{showInactiveStudents && (inactiveCards.length > 0 ? renderGrid(inactiveCards) : <div style={{ padding: 14, borderRadius: 14, background: 'rgba(23,32,51,0.03)', color: '#687486', fontSize: 14 }}>По текущим фильтрам неактивные ученики не найдены.</div>)}</div>}</div>}
       </section>
 
       {createModalOpen && <div onClick={() => setCreateModalOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.48)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 40 }}><div onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 100%)', background: '#fff', borderRadius: 24, border: '1px solid rgba(24,33,47,0.08)', boxShadow: '0 30px 80px rgba(15,23,42,0.18)', padding: 24, display: 'grid', gap: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}><div><h3 style={{ fontSize: 22, marginBottom: 6 }}>{'\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0443\u0447\u0435\u043d\u0438\u043a\u0430'}</h3><div style={mutedTextStyle}>{'\u041d\u043e\u0432\u044b\u0439 \u0443\u0447\u0435\u043d\u0438\u043a \u0441\u0440\u0430\u0437\u0443 \u0441\u043e\u0437\u0434\u0430\u0451\u0442\u0441\u044f \u0438 \u043f\u0440\u0438\u0432\u044f\u0437\u044b\u0432\u0430\u0435\u0442\u0441\u044f \u043a \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u043c\u0443 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0443.'}</div></div><button type="button" onClick={() => setCreateModalOpen(false)} style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none', padding: '10px 14px' }}>{t.close}</button></div>{subjects.length === 0 ? <div style={{ padding: 16, borderRadius: 16, background: 'rgba(217,111,50,0.1)', color: '#b9551f' }}>{'\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0441\u043e\u0437\u0434\u0430\u0439 \u043f\u0440\u0435\u0434\u043c\u0435\u0442 \u043d\u0430 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435 \u00ab\u041f\u0440\u0435\u0434\u043c\u0435\u0442\u044b\u00bb.'}</div> : <><input value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} placeholder={'\u0424\u0418\u041e \u0443\u0447\u0435\u043d\u0438\u043a\u0430'} /><input value={newStudentTelegramId} onChange={(e) => setNewStudentTelegramId(e.target.value)} placeholder={'Telegram ID'} type="number" /><input value={newStudentGrade} onChange={(e) => setNewStudentGrade(e.target.value)} placeholder={t.grade} type="number" /><input value={newStudentPhone} onChange={(e) => setNewStudentPhone(e.target.value)} placeholder={t.phone} /><select value={newStudentSubjectId} onChange={(e) => { const nextSubjectId = e.target.value; const nextSubject = subjects.find((subject) => String(subject.id) === nextSubjectId); setNewStudentSubjectId(nextSubjectId); setNewStudentRate(nextSubject?.default_rate ? String(nextSubject.default_rate) : ''); }}>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select><input value={newStudentRate} onChange={(e) => setNewStudentRate(e.target.value)} placeholder={t.rate} type="number" /><input value={newStudentStartedAt} onChange={(e) => setNewStudentStartedAt(e.target.value)} type="date" /><div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}><button type="button" onClick={handleCreateStudent} disabled={creatingStudent}>{creatingStudent ? '\u0421\u043e\u0437\u0434\u0430\u0451\u043c...' : t.create}</button><button type="button" onClick={() => setCreateModalOpen(false)} style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>{t.cancel}</button></div></>}</div></div>}

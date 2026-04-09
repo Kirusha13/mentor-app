@@ -418,36 +418,17 @@ export default function MaterialsPage() {
           }}
         >
           <div>
-            <div
-              style={{
-                display: 'inline-flex',
-                padding: '8px 12px',
-                borderRadius: 999,
-                background: 'rgba(217,111,50,0.12)',
-                color: '#b9551f',
-                fontWeight: 700,
-                fontSize: 13,
-                marginBottom: 14,
-              }}
-            >
-              Теория
-            </div>
             <h1
+
               style={{
-                fontSize: 'clamp(2rem, 4vw, 3.2rem)',
+                fontSize: 'clamp(2rem, 4vw, 3rem)',
                 lineHeight: 0.98,
                 letterSpacing: '-0.04em',
-                marginBottom: 12,
+                marginBottom: 10,
               }}
             >
-              Материалы и
-              <br />
-              темы
+              Материалы и темы
             </h1>
-            <p style={{ ...mutedTextStyle, maxWidth: 760, fontSize: 16, marginBottom: 0 }}>
-              Здесь можно собирать теоретическую базу по предметам: темы, подтемы и материалы,
-              которые потом пригодятся для занятий, заданий и прогресса.
-            </p>
           </div>
 
           <div
