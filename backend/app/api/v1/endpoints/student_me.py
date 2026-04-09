@@ -196,6 +196,9 @@ async def my_lessons(
         d = LessonOut.model_validate(row.Lesson).model_dump()
         d["tutor_name"] = row.tutor_name
         d["subject_name"] = row.subject_name
+        if row.Lesson.topic_id:
+            topic = await db.get(TheoryTopic, row.Lesson.topic_id)
+            d["topic_title"] = topic.title if topic else None
         lessons.append(d)
     return lessons
 
@@ -276,6 +279,9 @@ async def book_lesson(
     d = LessonOut.model_validate(lesson).model_dump()
     d["tutor_name"] = (await db.execute(select(Tutor.full_name).where(Tutor.id == ts.tutor_id))).scalar_one_or_none()
     d["subject_name"] = (await db.execute(select(Subject.name).where(Subject.id == ts.subject_id))).scalar_one_or_none()
+    if lesson.topic_id:
+        topic = await db.get(TheoryTopic, lesson.topic_id)
+        d["topic_title"] = topic.title if topic else None
     return d
 
 @router.get("/assignments", response_model=list[AssignmentOut], summary="Мои задания")
@@ -292,7 +298,15 @@ async def my_assignments(
     if completion_status:
         q = q.where(Assignment.completion_status == completion_status)
     result = await db.execute(q.order_by(Assignment.deadline))
-    return list(result.scalars().all())
+    assignments = list(result.scalars().all())
+    out = []
+    for a in assignments:
+        d = AssignmentOut.model_validate(a).model_dump()
+        if a.topic_id:
+            topic = await db.get(TheoryTopic, a.topic_id)
+            d["topic_title"] = topic.title if topic else None
+        out.append(d)
+    return out
 
 
 @router.patch("/assignments/{assignment_id}", response_model=AssignmentOut, summary="Обновить задание ученика")
@@ -613,4 +627,7 @@ async def report_payment(
     if row:
         d["tutor_name"] = row.tutor_name
         d["subject_name"] = row.subject_name
+    if lesson.topic_id:
+        topic = await db.get(TheoryTopic, lesson.topic_id)
+        d["topic_title"] = topic.title if topic else None
     return d

@@ -14,6 +14,7 @@ export interface Lesson {
   original_lesson_id: number | null;
   tutor_name: string | null;
   subject_name: string | null;
+  topic_title: string | null;
 }
 
 export interface AvailableSlot {

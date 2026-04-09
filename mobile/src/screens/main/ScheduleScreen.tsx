@@ -173,6 +173,7 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
           <Row label="Время" value={`${localLesson.start_time.slice(0, 5)} – ${localLesson.end_time.slice(0, 5)}`} />
           {localLesson.tutor_name ? <Row label="Репетитор" value={localLesson.tutor_name} /> : null}
           {localLesson.subject_name ? <Row label="Предмет" value={localLesson.subject_name} /> : null}
+          {localLesson.topic_title ? <Row label="Тема" value={localLesson.topic_title} last /> : null}
         </View>
 
         <View style={modal.section}>

@@ -204,6 +204,11 @@ export default function AssignmentDetailScreen({ route }: Props) {
         {/* Описание задания */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Задание</Text>
+          {assignment.topic_title && (
+            <View style={styles.topicBadge}>
+              <Text style={styles.topicBadgeText}>{assignment.topic_title}</Text>
+            </View>
+          )}
           <Text style={styles.description}>{assignment.description}</Text>
         </View>
 
@@ -373,6 +378,14 @@ const styles = StyleSheet.create({
   },
   gradeText: { fontSize: 17, fontWeight: '800' },
 
+  topicBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EFF9FF',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  topicBadgeText: { fontSize: 12, fontWeight: '600', color: '#2AABEE' },
   description: { fontSize: 15, color: '#333', lineHeight: 22 },
 
   commentInput: {

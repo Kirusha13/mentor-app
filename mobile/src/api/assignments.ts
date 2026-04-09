@@ -28,6 +28,7 @@ export interface Assignment {
   student_files: string[] | null;
   tutor_student_id: number;
   topic_id: number | null;
+  topic_title: string | null;
   updated_at: string;
 }
 

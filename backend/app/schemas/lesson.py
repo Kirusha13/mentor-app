@@ -22,6 +22,7 @@ class LessonOut(BaseModel):
     created_at: datetime
     tutor_name: str | None = None
     subject_name: str | None = None
+    topic_title: str | None = None
 
     model_config = {"from_attributes": True}
 
