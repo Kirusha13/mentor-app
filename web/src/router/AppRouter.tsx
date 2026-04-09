@@ -14,6 +14,7 @@ import RequestsPage from '../pages/RequestsPage';
 import SchedulePage from '../pages/SchedulePage';
 import StudentsPage from '../pages/StudentsPage';
 import SubjectsPage from '../pages/SubjectsPage';
+import TutorProfilePage from '../pages/TutorProfilePage';
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -40,6 +41,7 @@ export default function AppRouter() {
         <Route path="/materials" element={<ProtectedLayout><MaterialsPage /></ProtectedLayout>} />
         <Route path="/finance" element={<ProtectedLayout><FinancePage /></ProtectedLayout>} />
         <Route path="/portfolio" element={<ProtectedLayout><PortfolioPage /></ProtectedLayout>} />
+        <Route path="/profile" element={<ProtectedLayout><TutorProfilePage /></ProtectedLayout>} />
 
         <Route path="*" element={<NotFoundPage />} />
         <Route path="" element={<Navigate to="/" replace />} />

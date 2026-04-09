@@ -64,27 +64,6 @@ function relationLabel(
   }`;
 }
 
-function normalizeLevelValue(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-function topicMatchesStudentLevel(topic: TheoryTopic, grade: number | null | undefined) {
-  const levels = (topic.study_level ?? []).map((item) => normalizeLevelValue(String(item))).filter(Boolean);
-  if (!levels.length) return false;
-
-  if (grade) {
-    const gradeLabel = normalizeLevelValue(`${grade} класс`);
-    if (levels.includes(gradeLabel) || levels.includes(String(grade))) {
-      return true;
-    }
-
-    if (grade <= 9 && levels.includes('огэ')) return true;
-    if (grade >= 10 && levels.includes('егэ')) return true;
-  }
-
-  return false;
-}
-
 function infoBadge(text: string) {
   return (
     <span
@@ -301,10 +280,9 @@ export default function PortfolioPage() {
     const subjectIds = new Set(filteredRelations.map((relation) => relation.subject_id));
     return topics.filter((topic) => {
       if (!subjectIds.has(topic.subject_id)) return false;
-      if (activeTopicIds.has(topic.id)) return true;
-      return topicMatchesStudentLevel(topic, selectedStudent?.grade);
+      return activeTopicIds.has(topic.id);
     });
-  }, [activeTopicIds, filteredRelations, selectedStudent?.grade, topics]);
+  }, [activeTopicIds, filteredRelations, topics]);
 
   const topicProgressRows = useMemo<TopicProgress[]>(() => {
     return studentTopics
@@ -407,14 +385,85 @@ export default function PortfolioPage() {
     return items;
   }, [averageAssignmentGrade, averageLessonGrade, overdueAssignments.length, selectedStudent, topicProgressRows]);
 
+  void recommendations;
+
+  const strengths = useMemo(() => {
+    const items: string[] = [];
+
+    const strongTopics = topicProgressRows
+      .filter((row) => row.progressPercent >= 70)
+      .slice(0, 3)
+      .map((row) => row.topic.title);
+
+    if (strongTopics.length > 0) {
+      items.push(`Уверенно идут темы: ${strongTopics.join(', ')}.`);
+    }
+
+    if (averageLessonGrade !== null && averageLessonGrade >= 4.5) {
+      items.push('Высокая средняя оценка за занятия: ученик стабильно справляется на уроках.');
+    }
+
+    if (averageAssignmentGrade !== null && averageAssignmentGrade >= 4.5) {
+      items.push('Домашние задания выполняются качественно: средняя оценка за ДЗ держится на высоком уровне.');
+    }
+
+    if (studentAssignments.length > 0 && completedAssignments.length / studentAssignments.length >= 0.8) {
+      items.push('Хорошая учебная дисциплина: большая часть домашних заданий выполняется вовремя.');
+    }
+
+    if (items.length === 0) {
+      items.push('Сильные стороны ещё только формируются: нужно накопить больше занятий и выполненных заданий.');
+    }
+
+    return items;
+  }, [
+    averageAssignmentGrade,
+    averageLessonGrade,
+    completedAssignments.length,
+    studentAssignments.length,
+    topicProgressRows,
+  ]);
+
+  const weaknesses = useMemo(() => {
+    const items: string[] = [];
+
+    const weakTopics = topicProgressRows
+      .filter((row) => row.progressPercent < 55)
+      .slice(0, 3)
+      .map((row) => row.topic.title);
+
+    if (weakTopics.length > 0) {
+      items.push(`Требуют дополнительной проработки темы: ${weakTopics.join(', ')}.`);
+    }
+
+    if (overdueAssignments.length > 0) {
+      items.push(`Есть просроченные задания: ${overdueAssignments.length}. Стоит усилить контроль дедлайнов.`);
+    }
+
+    if (averageLessonGrade !== null && averageLessonGrade < 4) {
+      items.push('Средняя оценка за занятия ниже 4: полезно повторить базовые темы и добавить больше практики.');
+    }
+
+    if (averageAssignmentGrade !== null && averageAssignmentGrade < 4) {
+      items.push('Средняя оценка за домашние задания ниже 4: нужен дополнительный разбор ошибок.');
+    }
+
+    if (items.length === 0) {
+      items.push('Явных слабых сторон по текущим данным не видно.');
+    }
+
+    return items;
+  }, [averageAssignmentGrade, averageLessonGrade, overdueAssignments.length, topicProgressRows]);
+
   const studentSummary = useMemo(
     () => [
       ['Класс', selectedStudent?.grade ? `${selectedStudent.grade} класс` : 'Не указан'],
-      ['Телефон', selectedStudent?.phone_number || 'Не указан'],
-      ['Telegram ID', selectedStudent?.telegram_id ? String(selectedStudent.telegram_id) : 'Не указан'],
       ['Активных предметов', String(studentRelations.length)],
+      ['Проведено занятий', String(conductedLessons.length)],
+      ['Выполнено ДЗ', String(completedAssignments.length)],
+      ['Тем в работе', String(topicProgressRows.length)],
     ],
-    [selectedStudent, filteredRelations.length]
+    [completedAssignments.length, conductedLessons.length, selectedStudent, studentRelations.length, topicProgressRows.length]
   );
 
   if (loading) {
@@ -455,10 +504,10 @@ export default function PortfolioPage() {
           <div>
             <h1
               style={{
-                fontSize: 'clamp(2rem, 4vw, 3.2rem)',
+                fontSize: 'clamp(2rem, 4vw, 3rem)',
                 lineHeight: 0.98,
                 letterSpacing: '-0.04em',
-                marginBottom: 8,
+                marginBottom: 10,
               }}
             >
               Портфолио и аналитика
@@ -701,20 +750,57 @@ export default function PortfolioPage() {
 
           <div>
             <h3 style={{ fontSize: 18, marginBottom: 10 }}>Индивидуальный план развития</h3>
-            <div style={{ display: 'grid', gap: 10 }}>
-              {recommendations.map((item) => (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                gap: 12,
+              }}
+            >
+              {[
+                { title: 'Сильные стороны', accent: '#2f7d63', items: strengths },
+                { title: 'Слабые стороны', accent: '#a63f3b', items: weaknesses },
+              ].map((section) => (
                 <div
-                  key={item}
+                  key={section.title}
                   style={{
                     padding: 14,
-                    borderRadius: 16,
+                    borderRadius: 18,
                     background: 'rgba(23,32,51,0.03)',
                     border: '1px solid rgba(24,33,47,0.08)',
-                    color: '#243041',
-                    lineHeight: 1.5,
                   }}
                 >
-                  {item}
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      padding: '6px 10px',
+                      borderRadius: 999,
+                      background: `${section.accent}12`,
+                      color: section.accent,
+                      fontWeight: 700,
+                      fontSize: 13,
+                      marginBottom: 12,
+                    }}
+                  >
+                    {section.title}
+                  </div>
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {section.items.map((item) => (
+                      <div
+                        key={item}
+                        style={{
+                          padding: 12,
+                          borderRadius: 14,
+                          background: '#fff',
+                          border: '1px solid rgba(24,33,47,0.06)',
+                          color: '#243041',
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {item}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

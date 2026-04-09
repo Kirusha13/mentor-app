@@ -6,7 +6,7 @@ from pydantic import BaseModel
 class TutorOut(BaseModel):
     id: int
     full_name: str
-    phone_number: str
+    phone_number: str | None
     telegram_id: int
     registered_at: datetime
     last_visited_at: datetime | None

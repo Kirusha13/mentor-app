@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   approveBooking,
   confirmPayment,
@@ -14,8 +14,10 @@ import {
 } from '../api/lessons';
 import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
+import { getTopics, type TheoryTopic } from '../api/topics';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { getApiErrorCode, getApiErrorMessage } from '../utils/apiError';
+import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
 
 type CalendarMode = 'day' | 'week' | 'month';
 type SlotDayDraft = {
@@ -238,6 +240,7 @@ export default function SchedulePage() {
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [topics, setTopics] = useState<TheoryTopic[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedTutorStudentId, setSelectedTutorStudentId] = useState('');
@@ -245,6 +248,7 @@ export default function SchedulePage() {
   const [startTime, setStartTime] = useState('10:00');
   const [endTime, setEndTime] = useState('11:00');
   const [cost, setCost] = useState('');
+  const [newTopicId, setNewTopicId] = useState('');
   const [isSlotPlannerOpen, setIsSlotPlannerOpen] = useState(false);
   const [slotWeekOffset, setSlotWeekOffset] = useState<0 | 1>(0);
   const [slotDurationMinutes, setSlotDurationMinutes] = useState('60');
@@ -255,6 +259,7 @@ export default function SchedulePage() {
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
   const [editCost, setEditCost] = useState('');
+  const [editTopicId, setEditTopicId] = useState('');
   const [isReschedulingLesson, setIsReschedulingLesson] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleStartTime, setRescheduleStartTime] = useState('');
@@ -283,6 +288,32 @@ export default function SchedulePage() {
     () => lessons.find((lesson) => lesson.id === selectedLessonId) ?? null,
     [lessons, selectedLessonId]
   );
+
+  const availableCreateTopics = useMemo(() => {
+    const relation = tutorStudents.find((item) => String(item.id) === selectedTutorStudentId);
+    const student = students.find((item) => item.id === relation?.student_id);
+
+    if (!relation) return [];
+
+    return topics.filter(
+      (topic) =>
+        topic.subject_id === relation.subject_id &&
+        topicMatchesStudentLevel(topic, student?.grade)
+    );
+  }, [selectedTutorStudentId, students, topics, tutorStudents]);
+
+  const availableEditTopics = useMemo(() => {
+    const relation = tutorStudents.find((item) => item.id === selectedLesson?.tutor_student_id);
+    const student = students.find((item) => item.id === relation?.student_id);
+
+    if (!relation) return [];
+
+    return topics.filter(
+      (topic) =>
+        topic.subject_id === relation.subject_id &&
+        topicMatchesStudentLevel(topic, student?.grade)
+    );
+  }, [selectedLesson?.tutor_student_id, students, topics, tutorStudents]);
 
   const visibleLessons = useMemo(() => {
     const hiddenRequestStatuses: ConductStatus[] = [
@@ -369,6 +400,7 @@ export default function SchedulePage() {
       setEditStartTime('');
       setEditEndTime('');
       setEditCost('');
+      setEditTopicId('');
       setRescheduleDate('');
       setRescheduleStartTime('');
       setRescheduleEndTime('');
@@ -381,6 +413,7 @@ export default function SchedulePage() {
     setEditStartTime(toTime(selectedLesson.start_time));
     setEditEndTime(toTime(selectedLesson.end_time));
     setEditCost(selectedLesson.cost ? String(selectedLesson.cost) : '');
+    setEditTopicId(selectedLesson.topic_id ? String(selectedLesson.topic_id) : '');
     setRescheduleDate(selectedLesson.lesson_date);
     setRescheduleStartTime(toTime(selectedLesson.start_time));
     setRescheduleEndTime(toTime(selectedLesson.end_time));
@@ -409,6 +442,22 @@ export default function SchedulePage() {
   }, [selectedTutorStudentId, tutorStudentOptions]);
 
   useEffect(() => {
+    setNewTopicId((current) =>
+      current && availableCreateTopics.some((topic) => String(topic.id) === current) ? current : ''
+    );
+  }, [availableCreateTopics]);
+
+  useEffect(() => {
+    setEditTopicId((current) =>
+      current && availableEditTopics.some((topic) => String(topic.id) === current)
+        ? current
+        : selectedLesson?.topic_id
+          ? String(selectedLesson.topic_id)
+          : ''
+    );
+  }, [availableEditTopics, selectedLesson?.topic_id]);
+
+  useEffect(() => {
     if (!isSlotPlannerOpen) return;
     setSlotDrafts(createDefaultSlotDrafts());
     setSlotDurationMinutes('60');
@@ -418,16 +467,18 @@ export default function SchedulePage() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [lessonData, tutorStudentData, studentData, subjectData] = await Promise.all([
+        const [lessonData, tutorStudentData, studentData, subjectData, topicData] = await Promise.all([
           getLessons({ date_from: formatDate(range.from), date_to: formatDate(range.to) }),
           getTutorStudents(),
           getStudents(),
           getSubjects(),
+          getTopics(),
         ]);
         setLessons(lessonData);
         setTutorStudents(tutorStudentData);
         setStudents(studentData);
         setSubjects(subjectData);
+        setTopics(topicData);
       } catch (error) {
         console.error('Ошибка загрузки расписания:', error);
         alert('Не удалось загрузить расписание');
@@ -460,6 +511,7 @@ export default function SchedulePage() {
         start_time: `${startTime}:00`,
         end_time: `${endTime}:00`,
         cost: Number(cost),
+        topic_id: newTopicId ? Number(newTopicId) : undefined,
       });
       setLessons((prev) =>
         [...prev, created].sort((a, b) => `${a.lesson_date} ${a.start_time}`.localeCompare(`${b.lesson_date} ${b.start_time}`))
@@ -666,6 +718,7 @@ export default function SchedulePage() {
         lesson_date: editLessonDate,
         start_time: `${editStartTime}:00`,
         end_time: `${editEndTime}:00`,
+        topic_id: isWindow(selectedLesson) ? null : editTopicId ? Number(editTopicId) : null,
         ...(isWindow(selectedLesson) ? {} : { cost: Number(editCost) }),
       });
       upsertLesson(updated);
@@ -730,6 +783,7 @@ export default function SchedulePage() {
     const relation = tutorStudents.find((item) => item.id === lesson.tutor_student_id);
     const student = students.find((item) => item.id === relation?.student_id);
     const subject = subjects.find((item) => item.id === relation?.subject_id);
+    const topic = topics.find((item) => item.id === lesson.topic_id);
     const windowCard = isWindow(lesson);
     const accent = windowCard ? '#2a6fdb' : subject?.color || '#d96f32';
     const state = statusColor(lesson.conduct_status);
@@ -762,6 +816,20 @@ export default function SchedulePage() {
         <div style={{ fontSize: 13, opacity: 0.92, marginBottom: compact ? 0 : 6 }}>
           {windowCard ? 'Окно для записи учеников' : `${subject?.name ?? 'Без предмета'} • ${lesson.cost ?? '—'} ₽`}
         </div>
+        {!windowCard && topic && !compact && (
+          <div
+            style={{
+              fontSize: 12,
+              opacity: 0.86,
+              marginBottom: 6,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Тема: {topic.title}
+          </div>
+        )}
         {!compact && (
           <div style={{ fontSize: 12, opacity: 0.9, overflow: 'hidden' }}>
             {windowCard ? 'Нажми для управления слотом' : lesson.grade ? `Оценка: ${lesson.grade}` : 'Нажми для деталей'}
@@ -907,24 +975,16 @@ export default function SchedulePage() {
           background: 'linear-gradient(140deg, rgba(240,247,255,0.98) 0%, rgba(255,255,255,0.9) 100%)',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ display: 'inline-flex', padding: '8px 12px', borderRadius: 999, background: 'rgba(42,111,219,0.1)', color: '#2a6fdb', fontWeight: 700, fontSize: 13, marginBottom: 14 }}>
-              Этап 2
-            </div>
-            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3.2rem)', lineHeight: 0.98, letterSpacing: '-0.04em', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 0', textAlign: 'center' }}>
+            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', lineHeight: 0.98, letterSpacing: '-0.04em', marginBottom: 10 }}>
               Расписание
-              <br />
-              по дню, неделе и месяцу
             </h1>
-            <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 16, marginBottom: 0 }}>
-              Переключай режим отображения и открывай карточку занятия по клику на запись.
-            </p>
           </div>
-          <div style={{ minWidth: 260, borderRadius: 22, padding: 18, background: '#172033', color: '#fff' }}>
-            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>Текущий диапазон</div>
-            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.1, marginBottom: 8 }}>{rangeLabel}</div>
-            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>Записей в диапазоне: {visibleLessons.length}</div>
+          <div style={{ minWidth: 212, borderRadius: 16, padding: '12px 14px', background: '#172033', color: '#fff' }}>
+            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 12, marginBottom: 6 }}>Текущий диапазон</div>
+            <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.15, marginBottom: 6 }}>{rangeLabel}</div>
+            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 12 }}>Записей: {visibleLessons.length}</div>
           </div>
         </div>
       </section>
@@ -966,6 +1026,14 @@ export default function SchedulePage() {
               <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
             </div>
             <input type="number" value={cost} onChange={(event) => setCost(event.target.value)} placeholder="Стоимость" />
+            <select value={newTopicId} onChange={(event) => setNewTopicId(event.target.value)}>
+              <option value="">Без темы</option>
+              {availableCreateTopics.map((topic) => (
+                <option key={topic.id} value={topic.id}>
+                  {topic.title} • {formatTopicLevels(topic.study_level)}
+                </option>
+              ))}
+            </select>
             <button onClick={handleCreateLesson} disabled={saving || !tutorStudentOptions.length}>
               {saving ? 'Сохраняем...' : 'Создать занятие'}
             </button>
@@ -976,7 +1044,6 @@ export default function SchedulePage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 18 }}>
             <div>
               <h3 style={{ fontSize: 22, marginBottom: 6 }}>Календарь</h3>
-              <div style={{ color: '#6b7788' }}>Переключайся между режимами и просматривай записи в удобном масштабе.</div>
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {[
@@ -1163,6 +1230,7 @@ export default function SchedulePage() {
         const relation = tutorStudents.find((item) => item.id === selectedLesson.tutor_student_id);
         const student = students.find((item) => item.id === relation?.student_id);
         const subject = subjects.find((item) => item.id === relation?.subject_id);
+        const topic = topics.find((item) => item.id === selectedLesson.topic_id);
         const selectedWindow = isWindow(selectedLesson);
         const currentStatusColor = selectedWindow ? '#2a6fdb' : statusColor(selectedLesson.conduct_status);
         const canMarkConducted = !selectedWindow && selectedLesson.conduct_status === 'scheduled';
@@ -1215,6 +1283,7 @@ export default function SchedulePage() {
                     : [
                         ['Дата', selectedLesson.lesson_date],
                         ['Время', `${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`],
+                        ['Тема занятия', topic?.title ?? 'Без темы'],
                         ['Стоимость', `${selectedLesson.cost ?? '—'} ₽`],
                         ['Оплата', paymentLabel(selectedLesson.payment_status)],
                         ['Оценка', selectedLesson.grade ? String(selectedLesson.grade) : 'Не выставлена'],
@@ -1320,6 +1389,20 @@ export default function SchedulePage() {
                       <input type="time" value={editStartTime} onChange={(event) => setEditStartTime(event.target.value)} />
                       <input type="time" value={editEndTime} onChange={(event) => setEditEndTime(event.target.value)} />
                     </div>
+                    {!selectedWindow && (
+                      <select
+                        value={editTopicId}
+                        onChange={(event) => setEditTopicId(event.target.value)}
+                        style={{ marginBottom: 12 }}
+                      >
+                        <option value="">Без темы</option>
+                        {availableEditTopics.map((topic) => (
+                          <option key={topic.id} value={topic.id}>
+                            {topic.title} • {formatTopicLevels(topic.study_level)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <button onClick={handleLessonDetailsSave}>Сохранить изменения</button>
                       <button
@@ -1328,6 +1411,7 @@ export default function SchedulePage() {
                           setEditStartTime(toTime(selectedLesson.start_time));
                           setEditEndTime(toTime(selectedLesson.end_time));
                           setEditCost(selectedLesson.cost ? String(selectedLesson.cost) : '');
+                          setEditTopicId(selectedLesson.topic_id ? String(selectedLesson.topic_id) : '');
                           setIsEditingLesson(false);
                         }}
                         style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}

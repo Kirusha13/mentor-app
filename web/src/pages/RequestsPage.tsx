@@ -123,19 +123,13 @@ export default function RequestsPage() {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ display: 'inline-flex', padding: '8px 12px', borderRadius: 999, background: 'rgba(217,111,50,0.12)', color: '#d96f32', fontWeight: 700, fontSize: 13, marginBottom: 14 }}>
-              Новый раздел
-            </div>
-            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', lineHeight: 0.98, letterSpacing: '-0.04em', marginBottom: 12 }}>
+            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', lineHeight: 0.98, letterSpacing: '-0.04em', marginBottom: 10 }}>
               Запросы
             </h1>
-            <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 16, marginBottom: 0 }}>
-              Здесь собраны все запросы на запись, перенос и подтверждение оплаты. В расписании остаются только утверждённые занятия и доступные слоты.
-            </p>
           </div>
-          <div style={{ minWidth: 220, borderRadius: 22, padding: 18, background: '#172033', color: '#fff' }}>
-            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>Всего запросов</div>
-            <div style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>{withMeta.length}</div>
+          <div style={{ minWidth: 160, borderRadius: 16, padding: '12px 14px', background: '#172033', color: '#fff' }}>
+            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 12, marginBottom: 6 }}>Всего запросов</div>
+            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1 }}>{withMeta.length}</div>
           </div>
         </div>
       </section>

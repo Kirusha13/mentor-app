@@ -470,36 +470,16 @@ export default function FinancePage() {
           }}
         >
           <div>
-            <div
-              style={{
-                display: 'inline-flex',
-                padding: '8px 12px',
-                borderRadius: 999,
-                background: 'rgba(217,111,50,0.12)',
-                color: '#b9551f',
-                fontWeight: 700,
-                fontSize: 13,
-                marginBottom: 14,
-              }}
-            >
-              Этап 5
-            </div>
             <h1
               style={{
-                fontSize: 'clamp(2rem, 4vw, 3.2rem)',
+                fontSize: 'clamp(2rem, 4vw, 3rem)',
                 lineHeight: 0.98,
                 letterSpacing: '-0.04em',
-                marginBottom: 12,
+                marginBottom: 10,
               }}
             >
-              Финансы и
-              <br />
-              абонементы
+              Финансы и абонементы
             </h1>
-            <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 16, marginBottom: 0 }}>
-              Здесь считаются оплаченные занятия, долги, динамика по урокам и текущие данные
-              по абонементам в разрезе связок ученик-предмет.
-            </p>
           </div>
 
           <div
@@ -511,7 +491,7 @@ export default function FinancePage() {
               color: '#fff',
             }}
           >
-            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>
+            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 12, marginBottom: 6 }}>
               Текущий период
             </div>
             <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.1, marginBottom: 8 }}>

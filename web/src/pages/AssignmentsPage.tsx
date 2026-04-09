@@ -13,6 +13,7 @@ import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTopics, type TheoryTopic } from '../api/topics';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
+import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -138,10 +139,17 @@ export default function AssignmentsPage() {
     const selectedRelation = relationOptions.find(
       (item) => String(item.id) === newTutorStudentId
     );
-    return selectedRelation
-      ? topics.filter((topic) => topic.subject_id === selectedRelation.subjectId)
-      : topics;
-  }, [newTutorStudentId, relationOptions, topics]);
+    if (!selectedRelation) return topics;
+
+    const relation = tutorStudents.find((item) => item.id === selectedRelation.id);
+    const student = students.find((item) => item.id === relation?.student_id);
+
+    return topics.filter(
+      (topic) =>
+        topic.subject_id === selectedRelation.subjectId &&
+        topicMatchesStudentLevel(topic, student?.grade)
+    );
+  }, [newTutorStudentId, relationOptions, students, topics, tutorStudents]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -301,14 +309,13 @@ export default function AssignmentsPage() {
       <section style={{ ...panelStyle, padding: 20, marginBottom: 16, background: 'linear-gradient(140deg, rgba(255,245,238,0.98) 0%, rgba(255,255,255,0.9) 100%)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ display: 'inline-flex', padding: '8px 12px', borderRadius: 999, background: 'rgba(217,111,50,0.12)', color: '#b9551f', fontWeight: 700, fontSize: 13, marginBottom: 14 }}>Этап 3</div>
-            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3.2rem)', lineHeight: 0.98, letterSpacing: '-0.04em', marginBottom: 12 }}>Домашние задания</h1>
-            <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 16, marginBottom: 0 }}>Список по всем ученикам, фильтры, создание задания и карточка с ответом ученика.</p>
+            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', lineHeight: 0.98, letterSpacing: '-0.04em', marginBottom: 10 }}>Домашние задания</h1>
+            <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 16, marginBottom: 0 }}>Работа с заданиями, ответами и дедлайнами.</p>
           </div>
-          <div style={{ minWidth: 200, borderRadius: 18, padding: 14, background: '#172033', color: '#fff' }}>
-            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>Всего заданий</div>
-            <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, marginBottom: 8 }}>{assignments.length}</div>
-            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>После фильтров показывается {filteredAssignments.length}</div>
+          <div style={{ minWidth: 176, borderRadius: 16, padding: '12px 14px', background: '#172033', color: '#fff' }}>
+            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 12, marginBottom: 6 }}>Всего заданий</div>
+            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, marginBottom: 6 }}>{assignments.length}</div>
+            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 12 }}>После фильтров: {filteredAssignments.length}</div>
           </div>
         </div>
       </section>
@@ -342,7 +349,7 @@ export default function AssignmentsPage() {
                 <option value="">Без темы</option>
                 {availableTopics.map((topic) => (
                   <option key={topic.id} value={topic.id}>
-                    {topic.title}
+                    {topic.title} • {formatTopicLevels(topic.study_level)}
                   </option>
                 ))}
               </select>

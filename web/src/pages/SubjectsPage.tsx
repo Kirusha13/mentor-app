@@ -166,31 +166,15 @@ export default function SubjectsPage() {
           }}
         >
           <div>
-            <div
-              style={{
-                display: 'inline-flex',
-                padding: '8px 12px',
-                borderRadius: 999,
-                background: 'rgba(42,111,219,0.1)',
-                color: '#2a6fdb',
-                fontWeight: 700,
-                fontSize: 13,
-                marginBottom: 14,
-              }}
-            >
-              Этап 4
-            </div>
             <h1
               style={{
-                fontSize: 'clamp(2rem, 4vw, 3.2rem)',
-                lineHeight: 0.98,
-                letterSpacing: '-0.04em',
-                marginBottom: 12,
+              fontSize: 'clamp(2rem, 4vw, 3rem)',
+              lineHeight: 0.98,
+              letterSpacing: '-0.04em',
+              marginBottom: 10,
               }}
             >
-              Предметы и токены
-              <br />
-              приглашения
+              Предметы и токены приглашения
             </h1>
             <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 16, marginBottom: 0 }}>
               Управляй списком предметов, ставками, цветами и invitation token в одном месте.
@@ -199,20 +183,20 @@ export default function SubjectsPage() {
 
           <div
             style={{
-              minWidth: isMobile ? '100%' : 220,
-              borderRadius: 22,
-              padding: 18,
+              minWidth: isMobile ? '100%' : 176,
+              borderRadius: 16,
+              padding: '12px 14px',
               background: '#172033',
               color: '#fff',
             }}
           >
-            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>
+            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 12, marginBottom: 6 }}>
               Всего предметов
             </div>
-            <div style={{ fontSize: 38, fontWeight: 800, lineHeight: 1, marginBottom: 10 }}>
+            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, marginBottom: 6 }}>
               {subjects.length}
             </div>
-            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>
+            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 12 }}>
               Доступно для приглашения и привязки учеников
             </div>
           </div>
