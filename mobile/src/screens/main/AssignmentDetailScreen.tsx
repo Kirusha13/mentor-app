@@ -201,7 +201,7 @@ export default function AssignmentDetailScreen({ route }: Props) {
               до {deadline.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
-          {(completedAt || assignment.grade != null) && (
+          {(completedAt || assignment.topic_title || assignment.grade != null) && (
             <View style={styles.infoGrid}>
               {completedAt && (
                 <View style={styles.infoRow}>
@@ -210,6 +210,15 @@ export default function AssignmentDetailScreen({ route }: Props) {
                     {completedAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
+              )}
+              {assignment.topic_title && (
+                <TouchableOpacity style={styles.infoRow} onPress={handleOpenTopic} activeOpacity={0.7}>
+                  <Text style={styles.infoLabel}>Тема</Text>
+                  <View style={styles.topicValueWrap}>
+                    <Text style={styles.topicValueText} numberOfLines={1}>{assignment.topic_title}</Text>
+                    <Ionicons name="chevron-forward" size={14} color="#2AABEE" />
+                  </View>
+                </TouchableOpacity>
               )}
               {assignment.grade != null && (
                 <View style={styles.infoRow}>
@@ -226,13 +235,6 @@ export default function AssignmentDetailScreen({ route }: Props) {
         {/* Описание задания */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Задание</Text>
-          {assignment.topic_title && (
-            <TouchableOpacity style={styles.topicRow} onPress={handleOpenTopic} activeOpacity={0.7}>
-              <Ionicons name="book-outline" size={16} color="#2AABEE" />
-              <Text style={styles.topicRowText} numberOfLines={1}>{assignment.topic_title}</Text>
-              <Ionicons name="chevron-forward" size={16} color="#ccc" />
-            </TouchableOpacity>
-          )}
           <Text style={styles.description}>{assignment.description}</Text>
         </View>
 
@@ -410,16 +412,8 @@ const styles = StyleSheet.create({
   },
   gradeText: { fontSize: 17, fontWeight: '800' },
 
-  topicRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#EFF9FF',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  topicRowText: { flex: 1, fontSize: 14, fontWeight: '500', color: '#1a1a1a' },
+  topicValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1, justifyContent: 'flex-end' },
+  topicValueText: { fontSize: 13, color: '#2AABEE', fontWeight: '500', flexShrink: 1, textAlign: 'right' },
   description: { fontSize: 15, color: '#333', lineHeight: 22 },
 
   commentInput: {
