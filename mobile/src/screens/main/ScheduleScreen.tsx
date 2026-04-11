@@ -4,7 +4,6 @@ import {
   Alert,
   Modal,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getLessons, reportPayment, Lesson } from '../../api/lessons';
 import { getTopicContext, TheoryTopic } from '../../api/materials';
-import TopicDetailContent from '../../components/TopicDetailContent';
+import TopicModal from '../../components/TopicModal';
 import RescheduleScreen from './RescheduleScreen';
 import BookingScreen from './BookingScreen';
 
@@ -243,29 +242,13 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
         )}
       </ScrollView>
 
-      <Modal
+      <TopicModal
         visible={topicModalVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setTopicModalVisible(false)}
-      >
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-          <View style={modal.topicHeader}>
-            <TouchableOpacity onPress={() => setTopicModalVisible(false)} style={modal.closeBtn}>
-              <Ionicons name="close" size={22} color="#333" />
-            </TouchableOpacity>
-            <Text style={modal.topicHeaderTitle} numberOfLines={1}>
-              {topicContext?.topic.title ?? localLesson.topic_title ?? 'Тема'}
-            </Text>
-            <View style={modal.closeBtn} />
-          </View>
-          {topicLoading || !topicContext ? (
-            <ActivityIndicator style={{ marginTop: 40 }} />
-          ) : (
-            <TopicDetailContent topic={topicContext.topic} allTopics={topicContext.allTopics} />
-          )}
-        </SafeAreaView>
-      </Modal>
+        topic={topicContext?.topic ?? null}
+        allTopics={topicContext?.allTopics ?? []}
+        loading={topicLoading}
+        onClose={() => setTopicModalVisible(false)}
+      />
     </View>
   );
 }
@@ -599,14 +582,4 @@ const modal = StyleSheet.create({
   },
   topicValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1, justifyContent: 'flex-end' },
   topicValueText: { fontSize: 14, color: '#2AABEE', fontWeight: '500', flexShrink: 1 },
-  topicHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#fff',
-  },
-  topicHeaderTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600', color: '#1a1a1a' },
 });

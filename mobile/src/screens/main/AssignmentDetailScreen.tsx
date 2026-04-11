@@ -7,7 +7,6 @@ import {
   Linking,
   Modal,
   Platform,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -28,7 +27,7 @@ import {
   uploadAssignmentPhoto,
 } from '../../api/assignments';
 import { getTopicContext, TheoryTopic } from '../../api/materials';
-import TopicDetailContent from '../../components/TopicDetailContent';
+import TopicModal from '../../components/TopicModal';
 import { AssignmentsStackParamList } from '../../navigation/AppNavigator';
 import { API_BASE_URL } from '../../api/client';
 
@@ -348,29 +347,13 @@ export default function AssignmentDetailScreen({ route }: Props) {
         </View>
       )}
 
-      <Modal
+      <TopicModal
         visible={topicModalVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setTopicModalVisible(false)}
-      >
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-          <View style={styles.topicModalHeader}>
-            <TouchableOpacity onPress={() => setTopicModalVisible(false)} style={styles.topicModalClose}>
-              <Ionicons name="close" size={22} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.topicModalTitle} numberOfLines={1}>
-              {topicContext?.topic.title ?? assignment.topic_title ?? 'Тема'}
-            </Text>
-            <View style={styles.topicModalClose} />
-          </View>
-          {topicLoading || !topicContext ? (
-            <ActivityIndicator style={{ marginTop: 40 }} />
-          ) : (
-            <TopicDetailContent topic={topicContext.topic} allTopics={topicContext.allTopics} />
-          )}
-        </SafeAreaView>
-      </Modal>
+        topic={topicContext?.topic ?? null}
+        allTopics={topicContext?.allTopics ?? []}
+        loading={topicLoading}
+        onClose={() => setTopicModalVisible(false)}
+      />
 
       <Modal visible={!!lightboxUri} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setLightboxUri(null)}>
         <TouchableWithoutFeedback onPress={() => setLightboxUri(null)}>
@@ -437,17 +420,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   topicRowText: { flex: 1, fontSize: 14, fontWeight: '500', color: '#1a1a1a' },
-  topicModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#fff',
-  },
-  topicModalClose: { width: 36, alignItems: 'center' },
-  topicModalTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600', color: '#1a1a1a' },
   description: { fontSize: 15, color: '#333', lineHeight: 22 },
 
   commentInput: {
