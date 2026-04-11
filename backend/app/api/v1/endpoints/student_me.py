@@ -1,4 +1,4 @@
-"""
+﻿"""
 Эндпоинты для ученика: только свои данные.
 """
 from datetime import date, datetime, time
@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from pydantic import BaseModel
 from fastapi.responses import Response
 from telegram import Bot
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_student
@@ -25,13 +25,14 @@ from app.models.student import Student
 from app.models.subject import Subject
 from app.models.theory_topic import TheoryTopic
 from app.models.tutor import Tutor
-from app.models.tutor_student import TutorStudent
+from app.models.tutor_student import TutorStudent, TutorStudentStatus
 from app.schemas.assignment import AssignmentOut, AssignmentUpdate, StudentAssignmentUpdate
 from app.schemas.lesson import AvailableSlot, LessonOut, RescheduleRequest, StudentLessonCreate
 from app.schemas.material import MaterialOut
 from app.schemas.student import StudentOut, StudentUpdate
 from app.schemas.theory_topic import TheoryTopicOut
 from app.schemas.tutor_student import TutorStudentOut
+from app.services.telegram_service import send_to_user
 
 router = APIRouter()
 
@@ -195,6 +196,9 @@ async def my_lessons(
         d = LessonOut.model_validate(row.Lesson).model_dump()
         d["tutor_name"] = row.tutor_name
         d["subject_name"] = row.subject_name
+        if row.Lesson.topic_id:
+            topic = await db.get(TheoryTopic, row.Lesson.topic_id)
+            d["topic_title"] = topic.title if topic else None
         lessons.append(d)
     return lessons
 
@@ -205,7 +209,6 @@ async def book_lesson(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
-    # Проверяем что tutor_student_id принадлежит этому ученику
     ts_result = await db.execute(
         select(TutorStudent).where(
             TutorStudent.id == data.tutor_student_id,
@@ -215,15 +218,32 @@ async def book_lesson(
     ts = ts_result.scalar_one_or_none()
     if ts is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связка не найдена")
+    if ts.status != TutorStudentStatus.active:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Записаться можно только по активной связи")
 
-    # Проверяем отсутствие конфликта — нет другого scheduled занятия в это время у этого репетитора
+    requested_at = datetime.combine(data.lesson_date, data.start_time)
+    if requested_at <= datetime.now():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Нельзя записаться на время в прошлом")
+
+    window_result = await db.execute(
+        select(Lesson).where(
+            Lesson.tutor_id == ts.tutor_id,
+            Lesson.tutor_student_id.is_(None),
+            Lesson.lesson_date == data.lesson_date,
+            Lesson.start_time <= data.start_time,
+            Lesson.end_time >= data.end_time,
+        )
+    )
+    if window_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Выбранный слот не существует или уже недоступен")
+
     conflict_result = await db.execute(
         select(Lesson)
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .where(
             TutorStudent.tutor_id == ts.tutor_id,
             Lesson.lesson_date == data.lesson_date,
-            Lesson.conduct_status == "scheduled",
+            Lesson.conduct_status.in_(("scheduled", "booking_pending", "reschedule_pending")),
             Lesson.start_time < data.end_time,
             Lesson.end_time > data.start_time,
         )
@@ -231,10 +251,9 @@ async def book_lesson(
     if conflict_result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Этот слот уже занят")
 
-    # Рассчитываем стоимость: hourly_rate * длительность в часах
     duration_hours = (
-        (data.end_time.hour * 60 + data.end_time.minute) -
-        (data.start_time.hour * 60 + data.start_time.minute)
+        (data.end_time.hour * 60 + data.end_time.minute)
+        - (data.start_time.hour * 60 + data.start_time.minute)
     ) / 60
     cost = float(ts.hourly_rate) * duration_hours
 
@@ -246,17 +265,24 @@ async def book_lesson(
         conduct_status="booking_pending",
         payment_status="unpaid",
         cost=cost,
+        reminder_sent=False,
     )
     db.add(lesson)
     await db.commit()
     await db.refresh(lesson)
+    tutor = await db.get(Tutor, ts.tutor_id)
+    await send_to_user(
+        tutor.telegram_id if tutor else None,
+        f"Ученик {student.full_name} запрашивает запись на {lesson.lesson_date.strftime('%d.%m.%Y')} в {lesson.start_time.strftime('%H:%M')}",
+    )
 
-    # Добавляем имена для ответа
     d = LessonOut.model_validate(lesson).model_dump()
     d["tutor_name"] = (await db.execute(select(Tutor.full_name).where(Tutor.id == ts.tutor_id))).scalar_one_or_none()
     d["subject_name"] = (await db.execute(select(Subject.name).where(Subject.id == ts.subject_id))).scalar_one_or_none()
+    if lesson.topic_id:
+        topic = await db.get(TheoryTopic, lesson.topic_id)
+        d["topic_title"] = topic.title if topic else None
     return d
-
 
 @router.get("/assignments", response_model=list[AssignmentOut], summary="Мои задания")
 async def my_assignments(
@@ -272,7 +298,15 @@ async def my_assignments(
     if completion_status:
         q = q.where(Assignment.completion_status == completion_status)
     result = await db.execute(q.order_by(Assignment.deadline))
-    return list(result.scalars().all())
+    assignments = list(result.scalars().all())
+    out = []
+    for a in assignments:
+        d = AssignmentOut.model_validate(a).model_dump()
+        if a.topic_id:
+            topic = await db.get(TheoryTopic, a.topic_id)
+            d["topic_title"] = topic.title if topic else None
+        out.append(d)
+    return out
 
 
 @router.patch("/assignments/{assignment_id}", response_model=AssignmentOut, summary="Обновить задание ученика")
@@ -416,7 +450,6 @@ async def _get_available_windows(student, db):
     tutors_map = {t.id: t.full_name for t in tutors_result.scalars().all()}
 
     # Получаем окна (tutor_student_id IS NULL)
-    from sqlalchemy import text
     windows_result = await db.execute(
         text("""
             SELECT id, lesson_date, start_time, end_time, tutor_id
@@ -436,7 +469,8 @@ async def _get_available_windows(student, db):
             SELECT l.lesson_date, l.start_time, l.end_time, l.tutor_student_id
             FROM lessons l
             JOIN tutor_student ts ON ts.id = l.tutor_student_id
-            WHERE ts.tutor_id = ANY(:tutor_ids) AND l.conduct_status = 'scheduled'
+            WHERE ts.tutor_id = ANY(:tutor_ids)
+              AND l.conduct_status IN ('scheduled', 'booking_pending', 'reschedule_pending')
         """),
         {"tutor_ids": tutor_ids},
     )
@@ -518,10 +552,17 @@ async def request_reschedule(
         tutor_student_id=lesson.tutor_student_id,
         topic_id=lesson.topic_id,
         original_lesson_id=lesson_id,
+        reminder_sent=False,
     )
     db.add(new_lesson)
     await db.commit()
     await db.refresh(new_lesson)
+    ts = await db.get(TutorStudent, lesson.tutor_student_id)
+    tutor = await db.get(Tutor, ts.tutor_id) if ts else None
+    await send_to_user(
+        tutor.telegram_id if tutor else None,
+        f"Ученик {student.full_name} запрашивает перенос занятия {lesson.lesson_date.strftime('%d.%m.%Y')} на {new_lesson.lesson_date.strftime('%d.%m.%Y')} в {new_lesson.start_time.strftime('%H:%M')}",
+    )
     return new_lesson
 
 
@@ -568,6 +609,12 @@ async def report_payment(
     lesson.payment_status = "payment_pending"
     await db.commit()
     await db.refresh(lesson)
+    ts = await db.get(TutorStudent, lesson.tutor_student_id)
+    tutor = await db.get(Tutor, ts.tutor_id) if ts else None
+    await send_to_user(
+        tutor.telegram_id if tutor else None,
+        f"Ученик {student.full_name} сообщил об оплате занятия {lesson.lesson_date.strftime('%d.%m.%Y')}",
+    )
 
     d = LessonOut.model_validate(lesson).model_dump()
     ts_result = await db.execute(
@@ -580,4 +627,7 @@ async def report_payment(
     if row:
         d["tutor_name"] = row.tutor_name
         d["subject_name"] = row.subject_name
+    if lesson.topic_id:
+        topic = await db.get(TheoryTopic, lesson.topic_id)
+        d["topic_title"] = topic.title if topic else None
     return d

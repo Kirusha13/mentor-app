@@ -17,7 +17,9 @@ class AssignmentOut(BaseModel):
     student_files: list | None
     tutor_student_id: int
     topic_id: int | None
+    topic_title: str | None = None
     created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 

@@ -18,6 +18,13 @@ export interface CreateStudentPayload {
   phone_number?: string;
 }
 
+export interface UpdateStudentPayload {
+  full_name?: string;
+  grade?: number;
+  phone_number?: string;
+  avatar_url?: string;
+}
+
 export const getStudents = async (): Promise<Student[]> => {
   const response = await apiClient.get('/students');
   return response.data;
@@ -27,5 +34,13 @@ export const createStudent = async (
   payload: CreateStudentPayload
 ): Promise<Student> => {
   const response = await apiClient.post('/students', payload);
+  return response.data;
+};
+
+export const updateStudent = async (
+  id: number,
+  payload: UpdateStudentPayload
+): Promise<Student> => {
+  const response = await apiClient.patch(`/students/${id}`, payload);
   return response.data;
 };

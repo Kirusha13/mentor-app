@@ -48,6 +48,7 @@ class Lesson(TimestampMixin, Base):
     )
     cost: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     grade: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    reminder_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     tutor_student_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("tutor_student.id", ondelete="RESTRICT"), nullable=True
     )
