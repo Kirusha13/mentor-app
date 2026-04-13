@@ -39,9 +39,9 @@ function clampPercent(value: number) {
   return Math.max(0, Math.min(100, value));
 }
 
-function scoreToPercent(score: number | null, maxScore = 5) {
-  if (score === null) return 0;
-  return clampPercent((score / maxScore) * 100);
+function scoreToPercent(score: number | null) {
+  if (score === null) return null;
+  return clampPercent((score / 5) * 100);
 }
 
 function formatPercent(value: number) {
@@ -52,45 +52,132 @@ function formatAverage(value: number | null) {
   return value === null ? '—' : value.toFixed(1);
 }
 
-function relationLabel(
-  relation: TutorStudent,
-  studentMap: Map<number, Student>,
-  subjectMap: Map<number, Subject>
-) {
-  const student = studentMap.get(relation.student_id);
-  const subject = subjectMap.get(relation.subject_id);
-  return `${student?.full_name ?? `Ученик #${relation.student_id}`} • ${
-    relation.subject_name ?? subject?.name ?? `Предмет #${relation.subject_id}`
-  }`;
+function formatMonthInput(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function infoBadge(text: string) {
+function monthRange(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  return {
+    start: new Date(year, monthNumber - 1, 1),
+    end: new Date(year, monthNumber, 0, 23, 59, 59, 999),
+  };
+}
+
+function previousMonth(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  return formatMonthInput(new Date(year, monthNumber - 2, 1));
+}
+
+function formatMonthLabel(month: string) {
+  return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(
+    monthRange(month).start
+  );
+}
+
+function inMonth(date: string, month: string) {
+  const { start, end } = monthRange(month);
+  const value = new Date(`${date}T00:00:00`);
+  return value >= start && value <= end;
+}
+
+function buildStats(lessons: Lesson[], assignments: Assignment[], topicPercent: number) {
+  const conductedLessons = lessons.filter((lesson) => lesson.conduct_status === 'conducted');
+  const cancelledLessons = lessons.filter((lesson) => lesson.conduct_status === 'cancelled');
+  const completedAssignments = assignments.filter((assignment) => assignment.completion_status === 'completed');
+  const overdueAssignments = assignments.filter((assignment) => assignment.completion_status === 'overdue');
+  const lessonGrades = conductedLessons
+    .map((lesson) => lesson.grade)
+    .filter((grade): grade is number => grade !== null);
+  const assignmentGrades = assignments
+    .map((assignment) => assignment.grade)
+    .filter((grade): grade is number => grade !== null);
+  const averageLessonGrade = average(lessonGrades);
+  const averageAssignmentGrade = average(assignmentGrades);
+  const attendanceBase = conductedLessons.length + cancelledLessons.length;
+  const attendancePercent = attendanceBase > 0 ? (conductedLessons.length / attendanceBase) * 100 : 0;
+  const homeworkPercent = assignments.length > 0 ? (completedAssignments.length / assignments.length) * 100 : 0;
+  const parts = [
+    { value: attendancePercent, weight: attendanceBase > 0 ? 20 : 0 },
+    { value: homeworkPercent, weight: assignments.length > 0 ? 25 : 0 },
+    { value: scoreToPercent(averageLessonGrade), weight: averageLessonGrade !== null ? 25 : 0 },
+    { value: scoreToPercent(averageAssignmentGrade), weight: averageAssignmentGrade !== null ? 15 : 0 },
+    { value: topicPercent, weight: topicPercent > 0 ? 15 : 0 },
+  ];
+  const weightSum = parts.reduce((sum, part) => sum + part.weight, 0);
+  const overallProgress =
+    weightSum > 0 ? parts.reduce((sum, part) => sum + (part.value ?? 0) * part.weight, 0) / weightSum : 0;
+
+  return {
+    lessons,
+    assignments,
+    conductedLessons,
+    completedAssignments,
+    overdueAssignments,
+    averageLessonGrade,
+    averageAssignmentGrade,
+    attendancePercent: clampPercent(attendancePercent),
+    homeworkPercent: clampPercent(homeworkPercent),
+    topicPercent,
+    overallProgress: clampPercent(overallProgress),
+  };
+}
+
+function deltaText(current: number | null, previous: number | null, suffix = '') {
+  if (current === null || previous === null) return 'Недостаточно данных';
+  const diff = current - previous;
+  if (Math.abs(diff) < 0.05) return 'Без изменений';
+  return `${diff > 0 ? '+' : ''}${diff.toFixed(1)}${suffix}`;
+}
+
+function RadarChart({ values }: { values: Array<{ label: string; value: number }> }) {
+  const size = 220;
+  const center = size / 2;
+  const radius = 76;
+  const points = values.map((item, index) => {
+    const angle = (Math.PI * 2 * index) / values.length - Math.PI / 2;
+    const distance = radius * (item.value / 100);
+    return {
+      ...item,
+      x: center + Math.cos(angle) * distance,
+      y: center + Math.sin(angle) * distance,
+      labelX: center + Math.cos(angle) * (radius + 25),
+      labelY: center + Math.sin(angle) * (radius + 25),
+    };
+  });
+
   return (
-    <span
-      title={text}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 18,
-        height: 18,
-        borderRadius: 999,
-        background: 'rgba(23,32,51,0.08)',
-        color: '#556173',
-        fontSize: 12,
-        fontWeight: 800,
-        cursor: 'help',
-      }}
-    >
-      ?
-    </span>
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: '100%', maxWidth: 260 }}>
+      {[0.33, 0.66, 1].map((scale) => (
+        <circle key={scale} cx={center} cy={center} r={radius * scale} fill="none" stroke="rgba(23,32,51,0.12)" />
+      ))}
+      {points.map((point) => (
+        <line key={point.label} x1={center} y1={center} x2={point.labelX} y2={point.labelY} stroke="rgba(23,32,51,0.1)" />
+      ))}
+      <polygon points={points.map((point) => `${point.x},${point.y}`).join(' ')} fill="rgba(42,111,219,0.2)" stroke="#2a6fdb" strokeWidth="3" />
+      {points.map((point) => (
+        <g key={point.label}>
+          <circle cx={point.x} cy={point.y} r="4" fill="#2a6fdb" />
+          <text
+            x={point.labelX}
+            y={point.labelY}
+            textAnchor={point.labelX < center ? 'end' : point.labelX > center ? 'start' : 'middle'}
+            dominantBaseline="middle"
+            fontSize="11"
+            fontWeight="700"
+            fill="#435066"
+          >
+            {point.label}
+          </text>
+        </g>
+      ))}
+    </svg>
   );
 }
 
 export default function PortfolioPage() {
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 720px)');
-
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
@@ -99,6 +186,10 @@ export default function PortfolioPage() {
   const [topics, setTopics] = useState<TheoryTopic[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState(() => formatMonthInput(new Date()));
+  const [goalType, setGoalType] = useState('Общее обучение');
+  const [reportComment, setReportComment] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -106,15 +197,7 @@ export default function PortfolioPage() {
       try {
         setLoading(true);
         const [studentData, subjectData, relationData, lessonData, assignmentData, topicData] =
-          await Promise.all([
-            getStudents(),
-            getSubjects(),
-            getTutorStudents(),
-            getLessons(),
-            getAssignments(),
-            getTopics(),
-          ]);
-
+          await Promise.all([getStudents(), getSubjects(), getTutorStudents(), getLessons(), getAssignments(), getTopics()]);
         setStudents(studentData);
         setSubjects(subjectData);
         setTutorStudents(relationData);
@@ -129,29 +212,13 @@ export default function PortfolioPage() {
       }
     };
 
-    loadData();
+    void loadData();
   }, []);
 
-  const studentMap = useMemo(
-    () => new Map(students.map((student) => [student.id, student])),
-    [students]
-  );
-
-  const subjectMap = useMemo(
-    () => new Map(subjects.map((subject) => [subject.id, subject])),
-    [subjects]
-  );
-
+  const subjectMap = useMemo(() => new Map(subjects.map((subject) => [subject.id, subject])), [subjects]);
   const activeStudents = useMemo(() => {
-    const studentIds = new Set(
-      tutorStudents
-        .filter((relation) => relation.status !== 'completed')
-        .map((relation) => relation.student_id)
-    );
-
-    return students
-      .filter((student) => studentIds.has(student.id))
-      .sort((a, b) => a.full_name.localeCompare(b.full_name, 'ru-RU'));
+    const ids = new Set(tutorStudents.filter((relation) => relation.status !== 'completed').map((relation) => relation.student_id));
+    return students.filter((student) => ids.has(student.id)).sort((a, b) => a.full_name.localeCompare(b.full_name, 'ru-RU'));
   }, [students, tutorStudents]);
 
   useEffect(() => {
@@ -159,11 +226,8 @@ export default function PortfolioPage() {
       setSelectedStudentId('');
       return;
     }
-
     setSelectedStudentId((current) =>
-      current && activeStudents.some((student) => String(student.id) === current)
-        ? current
-        : String(activeStudents[0].id)
+      current && activeStudents.some((student) => String(student.id) === current) ? current : String(activeStudents[0].id)
     );
   }, [activeStudents]);
 
@@ -171,20 +235,14 @@ export default function PortfolioPage() {
     () => activeStudents.find((student) => String(student.id) === selectedStudentId) ?? null,
     [activeStudents, selectedStudentId]
   );
-
   const studentRelations = useMemo(
-    () =>
-      selectedStudent
-        ? tutorStudents.filter((relation) => relation.student_id === selectedStudent.id)
-        : [],
+    () => (selectedStudent ? tutorStudents.filter((relation) => relation.student_id === selectedStudent.id) : []),
     [selectedStudent, tutorStudents]
   );
 
   useEffect(() => {
-    const availableSubjectIds = new Set(studentRelations.map((relation) => String(relation.subject_id)));
-    setSelectedSubjectFilter((current) =>
-      current === 'all' || availableSubjectIds.has(current) ? current : 'all'
-    );
+    const subjectIds = new Set(studentRelations.map((relation) => String(relation.subject_id)));
+    setSelectedSubjectFilter((current) => (current === 'all' || subjectIds.has(current) ? current : 'all'));
   }, [studentRelations]);
 
   const filteredRelations = useMemo(
@@ -194,117 +252,58 @@ export default function PortfolioPage() {
         : studentRelations.filter((relation) => String(relation.subject_id) === selectedSubjectFilter),
     [selectedSubjectFilter, studentRelations]
   );
-
-  const relationIds = useMemo(
-    () => new Set(filteredRelations.map((relation) => relation.id)),
-    [filteredRelations]
-  );
-
+  const relationIds = useMemo(() => new Set(filteredRelations.map((relation) => relation.id)), [filteredRelations]);
   const studentLessons = useMemo(
-    () =>
-      lessons.filter(
-        (lesson) =>
-          lesson.tutor_student_id !== null && relationIds.has(lesson.tutor_student_id)
-      ),
+    () => lessons.filter((lesson) => lesson.tutor_student_id !== null && relationIds.has(lesson.tutor_student_id)),
     [lessons, relationIds]
   );
-
   const studentAssignments = useMemo(
     () => assignments.filter((assignment) => relationIds.has(assignment.tutor_student_id)),
     [assignments, relationIds]
   );
-
-  const conductedLessons = useMemo(
-    () => studentLessons.filter((lesson) => lesson.conduct_status === 'conducted'),
-    [studentLessons]
+  const previousMonthValue = previousMonth(selectedMonth);
+  const monthLessons = useMemo(
+    () => studentLessons.filter((lesson) => inMonth(lesson.lesson_date, selectedMonth)),
+    [selectedMonth, studentLessons]
   );
-
-  const completedAssignments = useMemo(
-    () => studentAssignments.filter((assignment) => assignment.completion_status === 'completed'),
-    [studentAssignments]
+  const previousMonthLessons = useMemo(
+    () => studentLessons.filter((lesson) => inMonth(lesson.lesson_date, previousMonthValue)),
+    [previousMonthValue, studentLessons]
   );
-
-  const overdueAssignments = useMemo(
-    () => studentAssignments.filter((assignment) => assignment.completion_status === 'overdue'),
-    [studentAssignments]
+  const monthAssignments = useMemo(
+    () => studentAssignments.filter((assignment) => inMonth(assignment.deadline, selectedMonth)),
+    [selectedMonth, studentAssignments]
   );
-
-  const lessonGrades = useMemo(
-    () => conductedLessons.map((lesson) => lesson.grade).filter((grade): grade is number => grade !== null),
-    [conductedLessons]
-  );
-
-  const assignmentGrades = useMemo(
-    () =>
-      studentAssignments
-        .map((assignment) => assignment.grade)
-        .filter((grade): grade is number => grade !== null),
-    [studentAssignments]
-  );
-
-  const averageLessonGrade = average(lessonGrades);
-  const averageAssignmentGrade = average(assignmentGrades);
-
-  const lessonsProgress = clampPercent(
-    conductedLessons.length === 0
-      ? 0
-      : scoreToPercent(averageLessonGrade) * 0.6 +
-          Math.min(conductedLessons.length / 12, 1) * 100 * 0.4
-  );
-
-  const assignmentsProgress = clampPercent(
-    studentAssignments.length === 0
-      ? 0
-      : ((completedAssignments.length / studentAssignments.length) * 100) * 0.6 +
-          scoreToPercent(averageAssignmentGrade) * 0.4
-  );
-
-  const overallProgress = clampPercent(
-    lessonsProgress * 0.45 + assignmentsProgress * 0.45 + (overdueAssignments.length ? 0 : 10)
+  const previousMonthAssignments = useMemo(
+    () => studentAssignments.filter((assignment) => inMonth(assignment.deadline, previousMonthValue)),
+    [previousMonthValue, studentAssignments]
   );
 
   const activeTopicIds = useMemo(
     () =>
-      new Set(
-        [
-          ...studentLessons.map((lesson) => lesson.topic_id).filter((topicId): topicId is number => topicId !== null),
-          ...studentAssignments
-            .map((assignment) => assignment.topic_id)
-            .filter((topicId): topicId is number => topicId !== null),
-        ]
-      ),
-    [studentAssignments, studentLessons]
+      new Set([
+        ...monthLessons.map((lesson) => lesson.topic_id).filter((topicId): topicId is number => topicId !== null),
+        ...monthAssignments.map((assignment) => assignment.topic_id).filter((topicId): topicId is number => topicId !== null),
+      ]),
+    [monthAssignments, monthLessons]
   );
 
-  const studentTopics = useMemo(() => {
-    const subjectIds = new Set(filteredRelations.map((relation) => relation.subject_id));
-    return topics.filter((topic) => {
-      if (!subjectIds.has(topic.subject_id)) return false;
-      return activeTopicIds.has(topic.id);
-    });
-  }, [activeTopicIds, filteredRelations, topics]);
-
   const topicProgressRows = useMemo<TopicProgress[]>(() => {
-    return studentTopics
+    const subjectIds = new Set(filteredRelations.map((relation) => relation.subject_id));
+    return topics
+      .filter((topic) => subjectIds.has(topic.subject_id) && activeTopicIds.has(topic.id))
       .map((topic) => {
-        const topicLessons = conductedLessons.filter((lesson) => lesson.topic_id === topic.id);
-        const topicAssignments = studentAssignments.filter((assignment) => assignment.topic_id === topic.id);
-        const topicCompletedAssignments = topicAssignments.filter(
-          (assignment) => assignment.completion_status === 'completed'
-        );
+        const topicLessons = monthLessons.filter((lesson) => lesson.topic_id === topic.id && lesson.conduct_status === 'conducted');
+        const topicAssignments = monthAssignments.filter((assignment) => assignment.topic_id === topic.id);
+        const topicCompletedAssignments = topicAssignments.filter((assignment) => assignment.completion_status === 'completed');
         const topicGrades = [
           ...topicLessons.map((lesson) => lesson.grade).filter((grade): grade is number => grade !== null),
-          ...topicAssignments
-            .map((assignment) => assignment.grade)
-            .filter((grade): grade is number => grade !== null),
+          ...topicAssignments.map((assignment) => assignment.grade).filter((grade): grade is number => grade !== null),
         ];
-
         const avg = average(topicGrades);
         const activityScore = Math.min(topicLessons.length + topicAssignments.length, 4) / 4;
-        const completionScore =
-          topicAssignments.length > 0 ? topicCompletedAssignments.length / topicAssignments.length : 0;
+        const completionScore = topicAssignments.length > 0 ? topicCompletedAssignments.length / topicAssignments.length : 0;
         const gradeScore = avg === null ? 0 : avg / 5;
-
         return {
           topic,
           lessonCount: topicLessons.length,
@@ -315,160 +314,58 @@ export default function PortfolioPage() {
         };
       })
       .sort((a, b) => b.progressPercent - a.progressPercent);
-  }, [conductedLessons, studentAssignments, studentTopics]);
+  }, [activeTopicIds, filteredRelations, monthAssignments, monthLessons, topics]);
 
-  const relationBreakdown = useMemo(() => {
-    const onlyOneRelation = studentRelations.length === 1;
-
-    return studentRelations.map((relation) => {
-      const relationLessons = conductedLessons.filter((lesson) => lesson.tutor_student_id === relation.id);
-      const relationAssignments = studentAssignments.filter(
-        (assignment) => assignment.tutor_student_id === relation.id
-      );
-      const relationAssignmentDone = relationAssignments.filter(
-        (assignment) => assignment.completion_status === 'completed'
-      ).length;
-      const relationAverageGrade = average([
-        ...relationLessons.map((lesson) => lesson.grade).filter((grade): grade is number => grade !== null),
-        ...relationAssignments
-          .map((assignment) => assignment.grade)
-          .filter((grade): grade is number => grade !== null),
-      ]);
-
-      return {
-        relation,
-        conductedCount: relationLessons.length,
-        assignmentCount: relationAssignments.length,
-        completedAssignmentCount: relationAssignmentDone,
-        averageGrade: relationAverageGrade,
-        progressPercent: onlyOneRelation
-          ? overallProgress
-          : clampPercent(
-              scoreToPercent(relationAverageGrade) * 0.55 +
-                (relationAssignments.length > 0
-                  ? (relationAssignmentDone / relationAssignments.length) * 100
-                  : 0) *
-                  0.45
-            ),
-      };
-    });
-  }, [conductedLessons, overallProgress, studentAssignments, studentRelations]);
-
-  const recommendations = useMemo(() => {
-    const items: string[] = [];
-
-    if (overdueAssignments.length > 0) {
-      items.push(`Есть ${overdueAssignments.length} просроченных задания — стоит усилить контроль дедлайнов.`);
-    }
-
-    if (averageAssignmentGrade !== null && averageAssignmentGrade < 4) {
-      items.push('По домашним заданиям средняя оценка ниже 4. Нужен дополнительный разбор ошибок.');
-    }
-
-    if (averageLessonGrade !== null && averageLessonGrade < 4) {
-      items.push('Оценки за занятия просели. Полезно повторить базовые темы и закрепить практикой.');
-    }
-
-    const weakTopics = topicProgressRows
-      .filter((row) => row.progressPercent < 55)
-      .slice(0, 3)
-      .map((row) => row.topic.title);
-
-    if (weakTopics.length > 0) {
-      items.push(`Слабые темы на текущий момент: ${weakTopics.join(', ')}.`);
-    }
-
-    if (items.length === 0 && selectedStudent) {
-      items.push('Динамика ровная: можно усиливать сложные задачи и постепенно повышать уровень нагрузки.');
-    }
-
-    return items;
-  }, [averageAssignmentGrade, averageLessonGrade, overdueAssignments.length, selectedStudent, topicProgressRows]);
-
-  void recommendations;
+  const topicAverage = topicProgressRows.length
+    ? topicProgressRows.reduce((sum, row) => sum + row.progressPercent, 0) / topicProgressRows.length
+    : 0;
+  const currentStats = buildStats(monthLessons, monthAssignments, topicAverage);
+  const previousStats = buildStats(previousMonthLessons, previousMonthAssignments, 0);
+  const gradeRows = currentStats.conductedLessons
+    .filter((lesson) => lesson.grade !== null)
+    .sort((a, b) => a.lesson_date.localeCompare(b.lesson_date))
+    .map((lesson) => ({
+      label: new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(`${lesson.lesson_date}T00:00:00`)),
+      value: lesson.grade ?? 0,
+    }));
+  const competencyRows = [
+    { label: 'ДЗ', value: clampPercent(currentStats.homeworkPercent * 0.6 + (scoreToPercent(currentStats.averageAssignmentGrade) ?? 0) * 0.4) },
+    { label: 'Самостоятельность', value: clampPercent(currentStats.homeworkPercent * 0.7 + (currentStats.overdueAssignments.length ? 0 : 30)) },
+    { label: 'Скорость', value: clampPercent(currentStats.homeworkPercent * 0.55 + currentStats.attendancePercent * 0.45) },
+    { label: 'Теория', value: clampPercent(topicAverage * 0.7 + (scoreToPercent(currentStats.averageLessonGrade) ?? 0) * 0.3) },
+  ];
 
   const strengths = useMemo(() => {
     const items: string[] = [];
-
-    const strongTopics = topicProgressRows
-      .filter((row) => row.progressPercent >= 70)
-      .slice(0, 3)
-      .map((row) => row.topic.title);
-
-    if (strongTopics.length > 0) {
-      items.push(`Уверенно идут темы: ${strongTopics.join(', ')}.`);
-    }
-
-    if (averageLessonGrade !== null && averageLessonGrade >= 4.5) {
-      items.push('Высокая средняя оценка за занятия: ученик стабильно справляется на уроках.');
-    }
-
-    if (averageAssignmentGrade !== null && averageAssignmentGrade >= 4.5) {
-      items.push('Домашние задания выполняются качественно: средняя оценка за ДЗ держится на высоком уровне.');
-    }
-
-    if (studentAssignments.length > 0 && completedAssignments.length / studentAssignments.length >= 0.8) {
-      items.push('Хорошая учебная дисциплина: большая часть домашних заданий выполняется вовремя.');
-    }
-
-    if (items.length === 0) {
-      items.push('Сильные стороны ещё только формируются: нужно накопить больше занятий и выполненных заданий.');
-    }
-
-    return items;
-  }, [
-    averageAssignmentGrade,
-    averageLessonGrade,
-    completedAssignments.length,
-    studentAssignments.length,
-    topicProgressRows,
-  ]);
+    const strongTopics = topicProgressRows.filter((row) => row.progressPercent >= 70).slice(0, 3).map((row) => row.topic.title);
+    if (strongTopics.length > 0) items.push(`Уверенно идут темы: ${strongTopics.join(', ')}.`);
+    if (currentStats.averageLessonGrade !== null && currentStats.averageLessonGrade >= 4.5) items.push('Высокая средняя оценка за занятия.');
+    if (currentStats.averageAssignmentGrade !== null && currentStats.averageAssignmentGrade >= 4.5) items.push('Домашние задания выполняются качественно.');
+    if (currentStats.homeworkPercent >= 80) items.push('Хорошая дисциплина по домашним заданиям.');
+    return items.length ? items : ['Сильные стороны проявятся после накопления большего количества данных.'];
+  }, [currentStats.averageAssignmentGrade, currentStats.averageLessonGrade, currentStats.homeworkPercent, topicProgressRows]);
 
   const weaknesses = useMemo(() => {
     const items: string[] = [];
+    const weakTopics = topicProgressRows.filter((row) => row.progressPercent < 55).slice(0, 3).map((row) => row.topic.title);
+    if (weakTopics.length > 0) items.push(`Требуют проработки темы: ${weakTopics.join(', ')}.`);
+    if (currentStats.overdueAssignments.length > 0) items.push(`Есть просроченные задания: ${currentStats.overdueAssignments.length}.`);
+    if (currentStats.averageLessonGrade !== null && currentStats.averageLessonGrade < 4) items.push('Средняя оценка за занятия ниже 4.');
+    if (currentStats.averageAssignmentGrade !== null && currentStats.averageAssignmentGrade < 4) items.push('Средняя оценка за ДЗ ниже 4.');
+    return items.length ? items : ['Явных слабых сторон по текущим данным не видно.'];
+  }, [currentStats.averageAssignmentGrade, currentStats.averageLessonGrade, currentStats.overdueAssignments.length, topicProgressRows]);
 
-    const weakTopics = topicProgressRows
-      .filter((row) => row.progressPercent < 55)
-      .slice(0, 3)
-      .map((row) => row.topic.title);
+  const nextSteps = [
+    currentStats.overdueAssignments.length > 0
+      ? 'Разобрать просроченные домашние задания и закрыть хвосты.'
+      : 'Поддерживать текущий темп выполнения домашних заданий.',
+    topicProgressRows.some((row) => row.progressPercent < 55)
+      ? 'Вернуться к самым слабым темам и дать короткую закрепляющую практику.'
+      : 'Добавить задачи повышенной сложности по уже освоенным темам.',
+    'В конце месяца обновить комментарий репетитора и сформировать отчёт для опекуна.',
+  ];
 
-    if (weakTopics.length > 0) {
-      items.push(`Требуют дополнительной проработки темы: ${weakTopics.join(', ')}.`);
-    }
-
-    if (overdueAssignments.length > 0) {
-      items.push(`Есть просроченные задания: ${overdueAssignments.length}. Стоит усилить контроль дедлайнов.`);
-    }
-
-    if (averageLessonGrade !== null && averageLessonGrade < 4) {
-      items.push('Средняя оценка за занятия ниже 4: полезно повторить базовые темы и добавить больше практики.');
-    }
-
-    if (averageAssignmentGrade !== null && averageAssignmentGrade < 4) {
-      items.push('Средняя оценка за домашние задания ниже 4: нужен дополнительный разбор ошибок.');
-    }
-
-    if (items.length === 0) {
-      items.push('Явных слабых сторон по текущим данным не видно.');
-    }
-
-    return items;
-  }, [averageAssignmentGrade, averageLessonGrade, overdueAssignments.length, topicProgressRows]);
-
-  const studentSummary = useMemo(
-    () => [
-      ['Класс', selectedStudent?.grade ? `${selectedStudent.grade} класс` : 'Не указан'],
-      ['Активных предметов', String(studentRelations.length)],
-      ['Проведено занятий', String(conductedLessons.length)],
-      ['Выполнено ДЗ', String(completedAssignments.length)],
-      ['Тем в работе', String(topicProgressRows.length)],
-    ],
-    [completedAssignments.length, conductedLessons.length, selectedStudent, studentRelations.length, topicProgressRows.length]
-  );
-
-  if (loading) {
-    return <div style={panelStyle}>Загружаем портфолио...</div>;
-  }
+  if (loading) return <div style={panelStyle}>Загружаем портфолио...</div>;
 
   if (!selectedStudent) {
     return (
@@ -481,6 +378,33 @@ export default function PortfolioPage() {
     );
   }
 
+  const comparisonRows = [
+    {
+      label: 'Общий прогресс',
+      before: formatPercent(previousStats.overallProgress),
+      after: formatPercent(currentStats.overallProgress),
+      delta: deltaText(currentStats.overallProgress, previousStats.overallProgress, '%'),
+    },
+    {
+      label: 'Оценка за занятия',
+      before: formatAverage(previousStats.averageLessonGrade),
+      after: formatAverage(currentStats.averageLessonGrade),
+      delta: deltaText(currentStats.averageLessonGrade, previousStats.averageLessonGrade),
+    },
+    {
+      label: 'Оценка за ДЗ',
+      before: formatAverage(previousStats.averageAssignmentGrade),
+      after: formatAverage(currentStats.averageAssignmentGrade),
+      delta: deltaText(currentStats.averageAssignmentGrade, previousStats.averageAssignmentGrade),
+    },
+    {
+      label: 'Выполнение ДЗ',
+      before: formatPercent(previousStats.homeworkPercent),
+      after: formatPercent(currentStats.homeworkPercent),
+      delta: deltaText(currentStats.homeworkPercent, previousStats.homeworkPercent, '%'),
+    },
+  ];
+
   return (
     <div>
       <section
@@ -488,322 +412,153 @@ export default function PortfolioPage() {
           ...panelStyle,
           padding: isMobile ? 18 : 24,
           marginBottom: 16,
-          background:
-            'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
+          background: 'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 16,
-            alignItems: 'flex-start',
-            flexWrap: 'wrap',
-          }}
-        >
+        <div style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : 'minmax(0, 1fr) repeat(4, minmax(170px, 1fr))', gap: 14, alignItems: 'end' }}>
           <div>
-            <h1
-              style={{
-                fontSize: 'clamp(2rem, 4vw, 3rem)',
-                lineHeight: 0.98,
-                letterSpacing: '-0.04em',
-                marginBottom: 10,
-              }}
-            >
-              Портфолио и аналитика
+            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', lineHeight: 0.98, letterSpacing: '-0.04em', marginBottom: 10 }}>
+              Портфолио
             </h1>
-            <div style={{ ...mutedTextStyle, maxWidth: 760 }}>
-              Реальная динамика ученика по занятиям, заданиям и темам.
+            <div style={{ ...mutedTextStyle, maxWidth: 720 }}>
+              Учебный отчёт по прогрессу, темам, домашним заданиям и посещаемости.
             </div>
           </div>
 
-          <label style={{ display: 'grid', gap: 6, minWidth: isMobile ? '100%' : 320 }}>
+          <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ ...mutedTextStyle, fontSize: 14 }}>Ученик</span>
-            <select
-              value={selectedStudentId}
-              onChange={(event) => setSelectedStudentId(event.target.value)}
-            >
+            <select value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
               {activeStudents.map((student) => (
-                <option key={student.id} value={String(student.id)}>
-                  {student.full_name}
-                </option>
+                <option key={student.id} value={String(student.id)}>{student.full_name}</option>
               ))}
             </select>
           </label>
-          <label style={{ display: 'grid', gap: 6, minWidth: isMobile ? '100%' : 260 }}>
+
+          <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ ...mutedTextStyle, fontSize: 14 }}>Предмет</span>
-            <select
-              value={selectedSubjectFilter}
-              onChange={(event) => setSelectedSubjectFilter(event.target.value)}
-            >
+            <select value={selectedSubjectFilter} onChange={(event) => setSelectedSubjectFilter(event.target.value)}>
               <option value="all">Все предметы</option>
               {studentRelations.map((relation) => {
                 const subject = subjectMap.get(relation.subject_id);
-                return (
-                  <option key={relation.id} value={String(relation.subject_id)}>
-                    {relation.subject_name ?? subject?.name ?? `Предмет #${relation.subject_id}`}
-                  </option>
-                );
+                return <option key={relation.id} value={String(relation.subject_id)}>{relation.subject_name ?? subject?.name ?? `Предмет #${relation.subject_id}`}</option>;
               })}
             </select>
+          </label>
+
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ ...mutedTextStyle, fontSize: 14 }}>Цель</span>
+            <select value={goalType} onChange={(event) => setGoalType(event.target.value)}>
+              <option value="Общее обучение">Общее обучение</option>
+              <option value="ОГЭ">ОГЭ</option>
+              <option value="ЕГЭ">ЕГЭ</option>
+              <option value="Повышение успеваемости">Повышение успеваемости</option>
+            </select>
+          </label>
+
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ ...mutedTextStyle, fontSize: 14 }}>Месяц</span>
+            <input type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
           </label>
         </div>
       </section>
 
-      <section
-        style={{
-          display: 'grid',
-          gridTemplateColumns: isTablet ? '1fr' : 'repeat(4, minmax(0, 1fr))',
-          gap: 16,
-          marginBottom: 16,
-        }}
-      >
+      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : 'repeat(5, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
         {[
-          {
-            title: 'Общий прогресс',
-            value: formatPercent(overallProgress),
-            note: 'Сводная оценка по занятиям, ДЗ и темам',
-          },
-          {
-            title: 'Средняя оценка за занятия',
-            value: formatAverage(averageLessonGrade),
-            note: `${conductedLessons.length} проведённых занятий`,
-          },
-          {
-            title: 'Средняя оценка за ДЗ',
-            value: formatAverage(averageAssignmentGrade),
-            note: `${studentAssignments.length} заданий в работе`,
-          },
-          {
-            title: 'Просроченные задания',
-            value: String(overdueAssignments.length),
-            note: overdueAssignments.length > 0 ? 'Нужно внимание репетитора' : 'Сейчас просрочек нет',
-          },
-        ].map((card) => (
-          <article key={card.title} style={panelStyle}>
-            <div
-              style={{
-                color: '#6a7586',
-                fontSize: 14,
-                marginBottom: 10,
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: 8,
-                alignItems: 'center',
-              }}
-            >
-              <span>{card.title}</span>
-              {card.title === 'Общий прогресс' ? infoBadge(card.note) : null}
-            </div>
-            <div
-              style={{
-                fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
-                fontWeight: 800,
-                color: '#1f2a3b',
-                marginBottom: 0,
-              }}
-            >
-              {card.value}
-            </div>
+          ['Общий прогресс', formatPercent(currentStats.overallProgress)],
+          ['Оценка занятий', formatAverage(currentStats.averageLessonGrade)],
+          ['Оценка ДЗ', formatAverage(currentStats.averageAssignmentGrade)],
+          ['Выполнено ДЗ', `${currentStats.completedAssignments.length}/${currentStats.assignments.length}`],
+          ['Посещаемость', formatPercent(currentStats.attendancePercent)],
+        ].map(([label, value]) => (
+          <article key={label} style={{ ...panelStyle, padding: 16 }}>
+            <div style={{ ...mutedTextStyle, marginBottom: 8 }}>{label}</div>
+            <div style={{ color: '#1f2a3b', fontSize: 28, fontWeight: 900 }}>{value}</div>
           </article>
         ))}
       </section>
 
-      <section
-        style={{
-          display: 'grid',
-          gridTemplateColumns: isTablet ? '1fr' : '1.05fr 0.95fr',
-          gap: 16,
-          marginBottom: 16,
-        }}
-      >
+      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '1fr 0.9fr', gap: 16, marginBottom: 16 }}>
         <article style={panelStyle}>
-          <div style={{ marginBottom: 14 }}>
-            <h3 style={{ fontSize: 20, marginBottom: 6 }}>Прогресс по предметам</h3>
-            <div style={mutedTextStyle}>
-              Сводка по каждой активной связке ученик-предмет.
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+            <div>
+              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Было / стало</h3>
+              <div style={mutedTextStyle}>
+                Сравнение {formatMonthLabel(previousMonthValue)} и {formatMonthLabel(selectedMonth)}.
+              </div>
             </div>
+            <button type="button" onClick={() => setReportOpen(true)} style={{ background: '#d96f32', boxShadow: 'none' }}>
+              Сформировать отчёт
+            </button>
           </div>
-
           <div style={{ display: 'grid', gap: 10 }}>
-            {relationBreakdown.map((item) => (
-              <div
-                key={item.relation.id}
-                style={{
-                  padding: 14,
-                  borderRadius: 18,
-                  border: '1px solid rgba(24,33,47,0.08)',
-                  background: 'rgba(23,32,51,0.03)',
-                  display: 'grid',
-                  gap: 10,
-                }}
-              >
-                <div style={{ fontWeight: 700, color: '#1f2a3b' }}>
-                  {relationLabel(item.relation, studentMap, subjectMap)}
-                </div>
-
-                <div
-                  style={{
-                    height: 10,
-                    borderRadius: 999,
-                    background: 'rgba(23,32,51,0.08)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${item.progressPercent}%`,
-                      height: '100%',
-                      borderRadius: 999,
-                      background: 'linear-gradient(90deg, #2a6fdb 0%, #5d93ea 100%)',
-                    }}
-                  />
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, minmax(0, 1fr))',
-                    gap: 8,
-                    color: '#435066',
-                    fontSize: 13,
-                  }}
-                >
-                  <span>Прогресс: {formatPercent(item.progressPercent)}</span>
-                  <span>Занятий: {item.conductedCount}</span>
-                  <span>ДЗ: {item.completedAssignmentCount}/{item.assignmentCount}</span>
-                  <span>Средняя: {formatAverage(item.averageGrade)}</span>
-                </div>
+            {comparisonRows.map((row) => (
+              <div key={row.label} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 100px 100px 130px', gap: 10, alignItems: 'center', padding: 12, borderRadius: 16, background: 'rgba(23,32,51,0.03)', border: '1px solid rgba(24,33,47,0.06)' }}>
+                <strong style={{ color: '#1f2a3b' }}>{row.label}</strong>
+                <span style={mutedTextStyle}>{row.before}</span>
+                <span style={{ color: '#1f2a3b', fontWeight: 800 }}>{row.after}</span>
+                <span style={{ color: row.delta.startsWith('+') ? '#2f7d63' : '#687486', fontWeight: 800 }}>{row.delta}</span>
               </div>
             ))}
           </div>
         </article>
 
-        <article style={{ ...panelStyle, display: 'grid', gap: 16 }}>
-          <div style={{ marginBottom: 14 }}>
-            <h3 style={{ fontSize: 20, marginBottom: 6 }}>Сводка по ученику</h3>
-            <div style={mutedTextStyle}>
-              Ключевая информация и рекомендации по дальнейшей работе.
+        <article style={{ ...panelStyle, display: 'grid', placeItems: 'center' }}>
+          <div style={{ width: '100%', display: 'grid', justifyItems: 'center', gap: 8 }}>
+            <h3 style={{ fontSize: 20, marginBottom: 0, justifySelf: 'start' }}>Роза компетенций</h3>
+            <RadarChart values={competencyRows} />
+            <div style={{ ...mutedTextStyle, textAlign: 'center' }}>
+              ДЗ, самостоятельность, скорость и теория считаются по текущим учебным данным.
             </div>
           </div>
+        </article>
+      </section>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-              gap: 10,
-            }}
-          >
-            {studentSummary.map(([label, value]) => (
-              <div
-                key={label}
-                style={{
-                  padding: 14,
-                  borderRadius: 16,
-                  background: 'rgba(23,32,51,0.03)',
-                  border: '1px solid rgba(24,33,47,0.08)',
-                }}
-              >
-                <div style={{ ...mutedTextStyle, fontSize: 13, marginBottom: 6 }}>{label}</div>
-                <div style={{ color: '#1f2a3b', fontWeight: 700 }}>{value}</div>
-              </div>
-            ))}
-          </div>
-
-          <div
-            style={{
-              padding: 14,
-              borderRadius: 18,
-              border: '1px solid rgba(24,33,47,0.08)',
-              background: 'rgba(23,32,51,0.03)',
-              display: 'grid',
-              gap: 10,
-            }}
-          >
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
-                gap: 10,
-              }}
-            >
-              <div>
-                <div style={{ ...mutedTextStyle, fontSize: 13, marginBottom: 4 }}>Проведено занятий</div>
-                <div style={{ fontWeight: 800, fontSize: 20, color: '#1f2a3b' }}>
-                  {conductedLessons.length}
-                </div>
-              </div>
-              <div>
-                <div style={{ ...mutedTextStyle, fontSize: 13, marginBottom: 4 }}>Выполнено ДЗ</div>
-                <div style={{ fontWeight: 800, fontSize: 20, color: '#1f2a3b' }}>
-                  {completedAssignments.length}
-                </div>
-              </div>
-              <div>
-                <div style={{ ...mutedTextStyle, fontSize: 13, marginBottom: 4 }}>Тем в работе</div>
-                <div style={{ fontWeight: 800, fontSize: 20, color: '#1f2a3b' }}>
-                  {topicProgressRows.length}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h3 style={{ fontSize: 18, marginBottom: 10 }}>Индивидуальный план развития</h3>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-                gap: 12,
-              }}
-            >
-              {[
-                { title: 'Сильные стороны', accent: '#2f7d63', items: strengths },
-                { title: 'Слабые стороны', accent: '#a63f3b', items: weaknesses },
-              ].map((section) => (
-                <div
-                  key={section.title}
-                  style={{
-                    padding: 14,
-                    borderRadius: 18,
-                    background: 'rgba(23,32,51,0.03)',
-                    border: '1px solid rgba(24,33,47,0.08)',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'inline-flex',
-                      padding: '6px 10px',
-                      borderRadius: 999,
-                      background: `${section.accent}12`,
-                      color: section.accent,
-                      fontWeight: 700,
-                      fontSize: 13,
-                      marginBottom: 12,
-                    }}
-                  >
-                    {section.title}
-                  </div>
-                  <div style={{ display: 'grid', gap: 10 }}>
-                    {section.items.map((item) => (
-                      <div
-                        key={item}
-                        style={{
-                          padding: 12,
-                          borderRadius: 14,
-                          background: '#fff',
-                          border: '1px solid rgba(24,33,47,0.06)',
-                          color: '#243041',
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        {item}
-                      </div>
-                    ))}
-                  </div>
+      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '0.95fr 1.05fr', gap: 16, marginBottom: 16 }}>
+        <article style={panelStyle}>
+          <h3 style={{ fontSize: 20, marginBottom: 12 }}>Динамика оценок</h3>
+          {gradeRows.length === 0 ? (
+            <p style={{ ...mutedTextStyle, marginBottom: 0 }}>За выбранный месяц пока нет оценок за занятия.</p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gradeRows.length}, minmax(22px, 1fr))`, gap: 8, alignItems: 'end', minHeight: 140 }}>
+              {gradeRows.map((row, index) => (
+                <div key={`${row.label}-${index}`} title={`${row.label}: ${row.value}`} style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ height: `${Math.max(10, (row.value / 5) * 112)}px`, borderRadius: '12px 12px 6px 6px', background: 'linear-gradient(180deg, #2a6fdb 0%, #74a9ff 100%)' }} />
+                  <div style={{ color: '#687486', fontSize: 11, textAlign: 'center' }}>{row.label}</div>
                 </div>
               ))}
             </div>
+          )}
+        </article>
+
+        <article style={panelStyle}>
+          <h3 style={{ fontSize: 20, marginBottom: 12 }}>Посещаемость</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+            {[
+              ['Проведено', currentStats.conductedLessons.length, '#2f7d63'],
+              ['Запланировано', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'scheduled').length, '#2a6fdb'],
+              ['Отменено', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'cancelled').length, '#a63f3b'],
+            ].map(([label, value, color]) => (
+              <div key={label} style={{ padding: 12, borderRadius: 16, background: `${color}12` }}>
+                <div style={{ color: String(color), fontWeight: 900, fontSize: 22 }}>{String(value)}</div>
+                <div style={{ ...mutedTextStyle, fontSize: 13 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+            {Array.from({ length: monthRange(selectedMonth).end.getDate() }, (_, index) => {
+              const date = `${selectedMonth}-${String(index + 1).padStart(2, '0')}`;
+              const dayLessons = monthLessons.filter((lesson) => lesson.lesson_date === date);
+              const conducted = dayLessons.some((lesson) => lesson.conduct_status === 'conducted');
+              const cancelled = dayLessons.some((lesson) => lesson.conduct_status === 'cancelled');
+              const scheduled = dayLessons.some((lesson) => lesson.conduct_status === 'scheduled');
+              const color = conducted ? '#2f7d63' : cancelled ? '#a63f3b' : scheduled ? '#2a6fdb' : 'rgba(23,32,51,0.08)';
+
+              return (
+                <span key={date} title={`${index + 1}: ${dayLessons.length} зан.`} style={{ height: 28, borderRadius: 9, background: color, color: conducted || cancelled || scheduled ? '#fff' : '#687486', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800 }}>
+                  {index + 1}
+                </span>
+              );
+            })}
           </div>
         </article>
       </section>
@@ -812,95 +567,93 @@ export default function PortfolioPage() {
         <div style={{ marginBottom: 14 }}>
           <h3 style={{ fontSize: 20, marginBottom: 6 }}>Освоение тем</h3>
           <div style={mutedTextStyle}>
-            Сколько ученик успел пройти по каждой теме, насколько стабильно выполняет задания и
-            как выглядит средняя оценка.
+            Показываются только темы, которые реально использовались в занятиях или ДЗ за выбранный месяц.
           </div>
         </div>
 
         {topicProgressRows.length === 0 ? (
-          <p style={{ ...mutedTextStyle, marginBottom: 0 }}>
-            Для этого ученика пока нет тем с данными по занятиям или заданиям.
-          </p>
+          <p style={{ ...mutedTextStyle, marginBottom: 0 }}>За выбранный месяц пока нет тем с данными.</p>
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
             {topicProgressRows.map((row) => (
-              <div
-                key={row.topic.id}
-                style={{
-                  padding: 14,
-                  borderRadius: 18,
-                  border: '1px solid rgba(24,33,47,0.08)',
-                  background: 'rgba(23,32,51,0.03)',
-                  display: 'grid',
-                  gap: 10,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    gap: 10,
-                    alignItems: 'flex-start',
-                    flexWrap: 'wrap',
-                  }}
-                >
+              <div key={row.topic.id} style={{ padding: 14, borderRadius: 18, border: '1px solid rgba(24,33,47,0.08)', background: 'rgba(23,32,51,0.03)', display: 'grid', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                   <div>
-                    <div style={{ fontWeight: 700, color: '#1f2a3b' }}>{row.topic.title}</div>
-                    <div style={{ ...mutedTextStyle, marginTop: 4 }}>
-                      {row.topic.description || 'Описание темы не заполнено'}
-                    </div>
+                    <div style={{ fontWeight: 800, color: '#1f2a3b' }}>{row.topic.title}</div>
+                    <div style={{ ...mutedTextStyle, marginTop: 4 }}>{row.topic.description || 'Описание темы не заполнено'}</div>
                   </div>
-                  <div
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: 999,
-                      background: 'rgba(42,111,219,0.1)',
-                      color: '#2a6fdb',
-                      fontWeight: 700,
-                      fontSize: 13,
-                    }}
-                  >
-                    {formatPercent(row.progressPercent)}
-                  </div>
+                  <strong style={{ color: '#2a6fdb' }}>{formatPercent(row.progressPercent)}</strong>
                 </div>
-
-                <div
-                  style={{
-                    height: 10,
-                    borderRadius: 999,
-                    background: 'rgba(23,32,51,0.08)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${row.progressPercent}%`,
-                      height: '100%',
-                      borderRadius: 999,
-                      background: 'linear-gradient(90deg, #2f7d63 0%, #58a889 100%)',
-                    }}
-                  />
+                <div style={{ height: 10, borderRadius: 999, background: 'rgba(23,32,51,0.08)', overflow: 'hidden' }}>
+                  <div style={{ width: `${row.progressPercent}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #2f7d63 0%, #58a889 100%)' }} />
                 </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, minmax(0, 1fr))',
-                    gap: 8,
-                    color: '#435066',
-                    fontSize: 13,
-                  }}
-                >
-                  <span>Занятий: {row.lessonCount}</span>
-                  <span>ДЗ: {row.completedAssignments}/{row.assignmentCount}</span>
-                  <span>Средняя: {formatAverage(row.averageGrade)}</span>
-                  <span>Уровни: {row.topic.study_level?.join(', ') || 'не указаны'}</span>
+                <div style={{ color: '#435066', fontSize: 13 }}>
+                  Занятий: {row.lessonCount} • ДЗ: {row.completedAssignments}/{row.assignmentCount} • Средняя: {formatAverage(row.averageGrade)}
                 </div>
               </div>
             ))}
           </div>
         )}
       </section>
+
+      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '1fr 1fr 1fr', gap: 16 }}>
+        {[
+          { title: 'Сильные стороны', items: strengths, accent: '#2f7d63' },
+          { title: 'Зоны роста', items: weaknesses, accent: '#a63f3b' },
+          { title: 'Следующие шаги', items: nextSteps, accent: '#d96f32' },
+        ].map((section) => (
+          <article key={section.title} style={panelStyle}>
+            <h3 style={{ color: section.accent, fontSize: 20, marginBottom: 12 }}>{section.title}</h3>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {section.items.map((item) => (
+                <div key={item} style={{ color: '#435066', lineHeight: 1.45 }}>{item}</div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </section>
+
+      {reportOpen && (
+        <div onClick={() => setReportOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.46)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 50 }}>
+          <div onClick={(event) => event.stopPropagation()} style={{ width: 'min(860px, 100%)', maxHeight: '90vh', overflow: 'auto', background: '#fff', borderRadius: 28, padding: isMobile ? 18 : 26, boxShadow: '0 30px 80px rgba(15,23,42,0.22)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, marginBottom: 18 }}>
+              <div>
+                <h2 style={{ fontSize: 30, marginBottom: 6 }}>Отчёт для опекуна</h2>
+                <div style={mutedTextStyle}>{selectedStudent.full_name} • {formatMonthLabel(selectedMonth)} • {goalType}</div>
+              </div>
+              <button type="button" onClick={() => setReportOpen(false)} style={{ background: '#172033', boxShadow: 'none', alignSelf: 'start' }}>Закрыть</button>
+            </div>
+            <div style={{ display: 'grid', gap: 14 }}>
+              <div style={{ ...panelStyle, boxShadow: 'none' }}>
+                <h3 style={{ fontSize: 20, marginBottom: 10 }}>Краткая сводка</h3>
+                <p style={{ color: '#435066', lineHeight: 1.55, marginBottom: 0 }}>
+                  Общий прогресс: <strong>{formatPercent(currentStats.overallProgress)}</strong>. Средняя оценка за занятия: <strong>{formatAverage(currentStats.averageLessonGrade)}</strong>. Средняя оценка за ДЗ: <strong>{formatAverage(currentStats.averageAssignmentGrade)}</strong>. Посещаемость: <strong>{formatPercent(currentStats.attendancePercent)}</strong>.
+                </p>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
+                <div style={{ ...panelStyle, boxShadow: 'none' }}>
+                  <h3 style={{ fontSize: 18, marginBottom: 10 }}>Сильные стороны</h3>
+                  {strengths.map((item) => <p key={item} style={{ color: '#435066', marginBottom: 8 }}>{item}</p>)}
+                </div>
+                <div style={{ ...panelStyle, boxShadow: 'none' }}>
+                  <h3 style={{ fontSize: 18, marginBottom: 10 }}>Зоны роста</h3>
+                  {weaknesses.map((item) => <p key={item} style={{ color: '#435066', marginBottom: 8 }}>{item}</p>)}
+                </div>
+              </div>
+              <label style={{ display: 'grid', gap: 8, color: '#556173', fontSize: 14 }}>
+                Комментарий репетитора
+                <textarea value={reportComment} onChange={(event) => setReportComment(event.target.value)} placeholder="Например: ученик стал увереннее решать квадратные уравнения, но стоит закрепить задачи на проценты." rows={4} />
+              </label>
+              {reportComment && (
+                <div style={{ ...panelStyle, boxShadow: 'none', background: 'rgba(217,111,50,0.08)' }}>
+                  <h3 style={{ fontSize: 18, marginBottom: 10 }}>Комментарий</h3>
+                  <p style={{ color: '#435066', lineHeight: 1.55, marginBottom: 0 }}>{reportComment}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

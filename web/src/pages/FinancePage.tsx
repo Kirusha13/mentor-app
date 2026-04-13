@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { getLessons, type Lesson } from '../api/lessons';
+import { confirmPayment, getLessons, type Lesson } from '../api/lessons';
 import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import {
@@ -19,6 +19,9 @@ const panelStyle = {
 } as const;
 
 type PresetRange = 'month' | 'quarter' | 'year';
+type ForecastRange = 'week' | 'month';
+type ChartRange = 'week' | 'month' | 'year';
+type FinanceTab = 'income' | 'subscriptions';
 type RelationOption = {
   id: number;
   studentName: string;
@@ -29,6 +32,12 @@ type RelationOption = {
   remaining: number;
   status: TutorStudent['status'];
   rate: number;
+};
+type ChartTooltip = {
+  key: string;
+  title: string;
+  value: string;
+  note?: string;
 };
 
 function formatDate(date: Date) {
@@ -88,14 +97,6 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function percentageDelta(current: number, previous: number) {
-  if (previous === 0) {
-    return current === 0 ? 0 : 100;
-  }
-
-  return ((current - previous) / previous) * 100;
-}
-
 function clampPercent(value: number) {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(100, value));
@@ -120,17 +121,87 @@ function lessonCost(lesson: Lesson) {
   return Number.isFinite(value) ? value : 0;
 }
 
-function getPreviousRange(from: string, to: string) {
-  const currentFrom = startOfDay(new Date(`${from}T00:00:00`));
-  const currentTo = endOfDay(new Date(`${to}T00:00:00`));
-  const diff = currentTo.getTime() - currentFrom.getTime();
-  const prevTo = addDays(currentFrom, -1);
-  const prevFrom = new Date(prevTo.getTime() - diff);
+function getCurrentRange(range: ForecastRange | ChartRange) {
+  const today = new Date();
+
+  if (range === 'week') {
+    const day = today.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    const monday = addDays(startOfDay(today), mondayOffset);
+    const sunday = addDays(monday, 6);
+
+    return {
+      from: formatDate(monday),
+      to: formatDate(endOfDay(sunday)),
+    };
+  }
+
+  if (range === 'year') {
+    return {
+      from: formatDate(new Date(today.getFullYear(), 0, 1)),
+      to: formatDate(endOfDay(new Date(today.getFullYear(), 11, 31))),
+    };
+  }
 
   return {
-    from: formatDate(prevFrom),
-    to: formatDate(prevTo),
+    from: formatDate(new Date(today.getFullYear(), today.getMonth(), 1)),
+    to: formatDate(endOfDay(new Date(today.getFullYear(), today.getMonth() + 1, 0))),
   };
+}
+
+function isRealFinancialLesson(lesson: Lesson) {
+  return (
+    lesson.tutor_student_id !== null &&
+    !['cancelled', 'rescheduled', 'booking_rejected', 'reschedule_rejected'].includes(
+      lesson.conduct_status
+    )
+  );
+}
+
+function getLessonStartDateTime(lesson: Lesson) {
+  return new Date(`${lesson.lesson_date}T${lesson.start_time}`);
+}
+
+function formatReadableDate(date: string) {
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date(`${date}T00:00:00`));
+}
+
+function getDaysSince(date: string) {
+  const today = startOfDay(new Date()).getTime();
+  const lessonDate = startOfDay(new Date(`${date}T00:00:00`)).getTime();
+  return Math.max(0, Math.floor((today - lessonDate) / 86_400_000));
+}
+
+function getWeekOfMonth(date: Date) {
+  return Math.ceil(date.getDate() / 7);
+}
+
+function getDateRangeLength(from: string, to: string) {
+  const fromDate = startOfDay(new Date(`${from}T00:00:00`)).getTime();
+  const toDate = startOfDay(new Date(`${to}T00:00:00`)).getTime();
+  return Math.max(1, Math.floor((toDate - fromDate) / 86_400_000) + 1);
+}
+
+function chartTooltipStyle(visible: boolean) {
+  return {
+    position: 'absolute',
+    top: 18,
+    right: 18,
+    padding: '10px 12px',
+    borderRadius: 14,
+    background: '#172033',
+    color: '#fff',
+    boxShadow: '0 16px 36px rgba(15,23,42,0.18)',
+    minWidth: 170,
+    opacity: visible ? 1 : 0,
+    transform: visible ? 'translateY(0) scale(1)' : 'translateY(6px) scale(0.98)',
+    pointerEvents: 'none',
+    transition: 'opacity 220ms ease, transform 220ms ease',
+    zIndex: 2,
+  } as const;
 }
 
 export default function FinancePage() {
@@ -141,7 +212,10 @@ export default function FinancePage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<FinanceTab>('income');
   const [preset, setPreset] = useState<PresetRange>('month');
+  const [forecastRange, setForecastRange] = useState<ForecastRange>('week');
+  const [chartRange, setChartRange] = useState<ChartRange>('week');
   const [dateFrom, setDateFrom] = useState(() => getPresetDates('month').from);
   const [dateTo, setDateTo] = useState(() => getPresetDates('month').to);
   const [selectedTutorStudentId, setSelectedTutorStudentId] = useState('');
@@ -154,6 +228,9 @@ export default function FinancePage() {
   const [editingAbonement, setEditingAbonement] = useState(false);
   const [editLessons, setEditLessons] = useState('');
   const [editRate, setEditRate] = useState('');
+  const [processingPaymentId, setProcessingPaymentId] = useState<number | null>(null);
+  const [dailyTooltip, setDailyTooltip] = useState<ChartTooltip | null>(null);
+  const [subjectTooltip, setSubjectTooltip] = useState<ChartTooltip | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -193,27 +270,57 @@ export default function FinancePage() {
     return filterLessonsByRange(lessons, dateFrom, dateTo);
   }, [dateFrom, dateTo, lessons, rangeError]);
 
-  const previousRange = useMemo(() => {
-    if (rangeError) return null;
-    return getPreviousRange(dateFrom, dateTo);
-  }, [dateFrom, dateTo, rangeError]);
+  const forecastDateRange = useMemo(() => getCurrentRange(forecastRange), [forecastRange]);
+  const chartDateRange = useMemo(() => getCurrentRange(chartRange), [chartRange]);
+  const forecastLessons = useMemo(
+    () => filterLessonsByRange(lessons, forecastDateRange.from, forecastDateRange.to),
+    [forecastDateRange.from, forecastDateRange.to, lessons]
+  );
+  const chartLessons = useMemo(
+    () => filterLessonsByRange(lessons, chartDateRange.from, chartDateRange.to),
+    [chartDateRange.from, chartDateRange.to, lessons]
+  );
 
-  const previousLessons = useMemo(() => {
-    if (!previousRange) return [];
-    return filterLessonsByRange(lessons, previousRange.from, previousRange.to);
-  }, [lessons, previousRange]);
-
-  const currentConducted = filteredLessons.filter((lesson) => lesson.conduct_status === 'conducted');
-  const previousConducted = previousLessons.filter((lesson) => lesson.conduct_status === 'conducted');
-  const paidLessons = currentConducted.filter((lesson) => lesson.payment_status === 'paid');
+  const currentFinancialLessons = filteredLessons.filter(isRealFinancialLesson);
+  const forecastFinancialLessons = forecastLessons.filter(isRealFinancialLesson);
+  const chartFinancialLessons = chartLessons.filter(isRealFinancialLesson);
+  const currentConducted = currentFinancialLessons.filter((lesson) => lesson.conduct_status === 'conducted');
+  const forecastConducted = forecastFinancialLessons.filter((lesson) => lesson.conduct_status === 'conducted');
+  const chartConducted = chartFinancialLessons.filter((lesson) => lesson.conduct_status === 'conducted');
+  const chartPaidLessons = chartConducted.filter((lesson) => lesson.payment_status === 'paid');
+  const forecastPaidLessons = forecastConducted.filter((lesson) => lesson.payment_status === 'paid');
+  const forecastPaymentPendingLessons = forecastConducted.filter(
+    (lesson) => lesson.payment_status === 'payment_pending'
+  );
+  const forecastUnpaidLessons = forecastConducted.filter((lesson) => lesson.payment_status === 'unpaid');
+  const paymentPendingLessons = currentConducted.filter(
+    (lesson) => lesson.payment_status === 'payment_pending'
+  );
   const unpaidLessons = currentConducted.filter((lesson) => lesson.payment_status === 'unpaid');
-  const income = paidLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
-  const previousIncome = previousConducted
-    .filter((lesson) => lesson.payment_status === 'paid')
-    .reduce((sum, lesson) => sum + lessonCost(lesson), 0);
   const debt = unpaidLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
-  const lessonsDelta = percentageDelta(currentConducted.length, previousConducted.length);
-  const incomeDelta = percentageDelta(income, previousIncome);
+  const pendingConfirmation = paymentPendingLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+  const forecastFutureScheduledLessons = forecastFinancialLessons.filter(
+    (lesson) =>
+      lesson.conduct_status === 'scheduled' && getLessonStartDateTime(lesson).getTime() >= Date.now()
+  );
+  const forecastPaidIncome = forecastPaidLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+  const forecastDebt = forecastUnpaidLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+  const forecastPendingConfirmation = forecastPaymentPendingLessons.reduce(
+    (sum, lesson) => sum + lessonCost(lesson),
+    0
+  );
+  const forecastPlannedIncome = forecastFutureScheduledLessons.reduce(
+    (sum, lesson) => sum + lessonCost(lesson),
+    0
+  );
+  const forecastIncome =
+    forecastPaidIncome + forecastDebt + forecastPendingConfirmation + forecastPlannedIncome;
+  const forecastConductedAccrued = forecastConducted.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+  const forecastCollectionRate =
+    forecastConductedAccrued > 0 ? clampPercent((forecastPaidIncome / forecastConductedAccrued) * 100) : 0;
+  const forecastFactIncome = forecastPaidIncome + forecastPendingConfirmation + forecastDebt;
+  const forecastGap = Math.max(forecastIncome - forecastPaidIncome - forecastPendingConfirmation, 0);
+  const forecastProgress = forecastIncome > 0 ? clampPercent((forecastFactIncome / forecastIncome) * 100) : 0;
 
   const studentMap = useMemo(
     () => new Map(students.map((student) => [student.id, student])),
@@ -223,6 +330,11 @@ export default function FinancePage() {
   const subjectMap = useMemo(
     () => new Map(subjects.map((subject) => [subject.id, subject])),
     [subjects]
+  );
+
+  const relationMap = useMemo(
+    () => new Map(tutorStudents.map((relation) => [relation.id, relation])),
+    [tutorStudents]
   );
 
   const relationOptions = useMemo<RelationOption[]>(() => {
@@ -299,9 +411,11 @@ export default function FinancePage() {
     }
   }, [relationOptions, selectedTutorStudentId]);
 
-  const debtRows = unpaidLessons
+  const receivableLessons = [...unpaidLessons, ...paymentPendingLessons];
+
+  const debtRows = receivableLessons
     .map((lesson) => {
-      const relation = tutorStudents.find((item) => item.id === lesson.tutor_student_id);
+      const relation = lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id) : null;
       const student = relation ? studentMap.get(relation.student_id) : null;
       const subject = relation ? subjectMap.get(relation.subject_id) : null;
 
@@ -311,39 +425,181 @@ export default function FinancePage() {
         subjectName: relation?.subject_name ?? lesson.subject_name ?? subject?.name ?? 'Без предмета',
         lessonDate: lesson.lesson_date,
         cost: lessonCost(lesson),
+        daysSince: getDaysSince(lesson.lesson_date),
+        paymentStatus: lesson.payment_status,
+        status:
+          lesson.payment_status === 'payment_pending'
+            ? 'Ожидает подтверждения'
+            : 'Не оплачено',
       };
     })
-    .sort((a, b) => a.lessonDate.localeCompare(b.lessonDate));
+    .sort((a, b) => b.daysSince - a.daysSince);
 
-  const metricCards = [
-    {
-      title: 'Оплачено за период',
-      value: formatCurrency(income),
-      note:
-        previousIncome === 0 && income === 0
-          ? 'В обоих периодах пока нет оплаченных проведённых занятий'
-          : `${incomeDelta >= 0 ? '+' : ''}${incomeDelta.toFixed(0)}% к прошлому периоду`,
-      accent: '#d96f32',
-    },
-    {
-      title: 'Долги',
-      value: formatCurrency(debt),
-      note:
-        unpaidLessons.length > 0
-          ? `${unpaidLessons.length} неоплаченных проведённых занятий`
-          : 'За выбранный период долгов нет',
-      accent: '#a63f3c',
-    },
-    {
-      title: 'Проведённые занятия',
-      value: String(currentConducted.length),
-      note:
-        previousConducted.length === 0 && currentConducted.length === 0
-          ? 'Сравнивать пока не с чем'
-          : `${lessonsDelta >= 0 ? '+' : ''}${lessonsDelta.toFixed(0)}% к прошлому периоду`,
-      accent: '#2a6fdb',
-    },
+  const dailyIncomeRows = useMemo(() => {
+    const grouped = new Map<string, { label: string; fullLabel: string; value: number; lessons: number }>();
+
+    if (chartRange === 'week') {
+      const rows: { key: string; label: string; fullLabel: string; value: number; lessons: number }[] = [];
+      const start = startOfDay(new Date(`${chartDateRange.from}T00:00:00`));
+      const daysCount = getDateRangeLength(chartDateRange.from, chartDateRange.to);
+
+      for (let index = 0; index < daysCount; index += 1) {
+        const date = formatDate(addDays(start, index));
+        const dayLessons = chartPaidLessons.filter((lesson) => lesson.lesson_date === date);
+        rows.push({
+          key: date,
+          label: formatReadableDate(date),
+          fullLabel: new Intl.DateTimeFormat('ru-RU', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          }).format(new Date(`${date}T00:00:00`)),
+          value: dayLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0),
+          lessons: dayLessons.length,
+        });
+      }
+
+      return rows;
+    }
+
+    chartPaidLessons.forEach((lesson) => {
+      const date = new Date(`${lesson.lesson_date}T00:00:00`);
+      const key =
+        chartRange === 'month'
+          ? `week-${getWeekOfMonth(date)}`
+          : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label =
+        chartRange === 'month'
+          ? `${getWeekOfMonth(date)} нед.`
+          : new Intl.DateTimeFormat('ru-RU', { month: 'short' }).format(date);
+      const fullLabel =
+        chartRange === 'month'
+          ? `${getWeekOfMonth(date)} неделя месяца`
+          : new Intl.DateTimeFormat('ru-RU', {
+              month: 'long',
+              year: 'numeric',
+            }).format(date);
+      const current = grouped.get(key) ?? { label, value: 0, lessons: 0, fullLabel };
+      grouped.set(key, {
+        label,
+        value: current.value + lessonCost(lesson),
+        lessons: current.lessons + 1,
+        fullLabel,
+      });
+    });
+
+    return Array.from(grouped, ([key, row]) => ({
+      key,
+      label: row.label,
+      fullLabel: row.fullLabel,
+      value: row.value,
+      lessons: row.lessons,
+    }));
+  }, [chartDateRange.from, chartDateRange.to, chartPaidLessons, chartRange]);
+
+  const averageWeekRows = useMemo(() => {
+    const year = new Date().getFullYear();
+    const rows: { key: string; label: string; fullLabel: string; value: number; total: number }[] = [];
+
+    for (let month = 0; month < 12; month += 1) {
+      const monthStart = new Date(year, month, 1);
+      const monthEnd = new Date(year, month + 1, 0);
+      const monthLessons = lessons
+        .filter(isRealFinancialLesson)
+        .filter((lesson) => {
+          const date = new Date(`${lesson.lesson_date}T00:00:00`);
+          return (
+            date >= monthStart &&
+            date <= monthEnd &&
+            lesson.conduct_status === 'conducted' &&
+            lesson.payment_status === 'paid'
+          );
+        });
+      const total = monthLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+      const weeksInMonth = Math.ceil(monthEnd.getDate() / 7);
+
+      rows.push({
+        key: `${year}-${String(month + 1).padStart(2, '0')}`,
+        label: new Intl.DateTimeFormat('ru-RU', { month: 'short' }).format(monthStart),
+        fullLabel: new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(monthStart),
+        total,
+        value: total / weeksInMonth,
+      });
+    }
+
+    return rows;
+  }, [lessons]);
+
+  const lowAbonements = useMemo(
+    () =>
+      activeAbonements
+        .filter((option) => option.remaining <= 2)
+        .sort((a, b) => a.remaining - b.remaining),
+    [activeAbonements]
+  );
+
+  const financeTips = useMemo(() => {
+    const tips: { title: string; text: string; accent: string }[] = [];
+    const topDebt = debtRows[0] ?? null;
+
+    if (topDebt) {
+      tips.push({
+        title: 'Старый долг',
+        text: `${topDebt.studentName}: ${formatCurrency(topDebt.cost)}, ${topDebt.daysSince} дн.`,
+        accent: '#a63f3c',
+      });
+    }
+
+    if (forecastPendingConfirmation > 0) {
+      tips.push({
+        title: 'Проверить оплату',
+        text: `${formatCurrency(forecastPendingConfirmation)} уже на подтверждении.`,
+        accent: '#2a6fdb',
+      });
+    }
+
+    if (forecastGap > 0) {
+      tips.push({
+        title: 'До прогноза',
+        text: `Осталось закрыть ${formatCurrency(forecastGap)} занятиями и оплатами.`,
+        accent: '#2f7d5a',
+      });
+    }
+
+    if (lowAbonements.length > 0) {
+      const first = lowAbonements[0];
+      tips.push({
+        title: 'Абонемент',
+        text: `${first.studentName}, ${first.subjectName}: осталось ${first.remaining} зан.`,
+        accent: '#d96f32',
+      });
+    }
+
+    if (!tips.length) {
+      tips.push({
+        title: 'Всё спокойно',
+        text: 'Нет срочных долгов, проверок и абонементов на исходе.',
+        accent: '#2f7d5a',
+      });
+    }
+
+    return tips.slice(0, 3);
+  }, [debtRows, forecastGap, forecastPendingConfirmation, lowAbonements]);
+
+  const maxDailyIncome = Math.max(...dailyIncomeRows.map((row) => row.value), 1);
+  const maxAverageWeekIncome = Math.max(...averageWeekRows.map((row) => row.value), 1);
+  const forecastParts = [
+    { label: 'Оплачено', value: forecastPaidIncome, color: '#d96f32' },
+    { label: 'Долги', value: forecastDebt, color: '#a63f3c' },
+    { label: 'На проверке', value: forecastPendingConfirmation, color: '#2a6fdb' },
+    { label: 'В расписании', value: forecastPlannedIncome, color: '#2f7d5a' },
   ];
+  const forecastRangeLabel = forecastRange === 'week' ? 'текущую неделю' : 'текущий месяц';
+  const chartRangeLabel = {
+    week: 'по дням текущей недели',
+    month: 'по неделям текущего месяца',
+    year: 'по месяцам текущего года',
+  }[chartRange];
 
   const applyPreset = (nextPreset: PresetRange) => {
     const nextRange = getPresetDates(nextPreset);
@@ -364,6 +620,19 @@ export default function FinancePage() {
   const handleOpenAbonementDetails = (relationId: number) => {
     setSelectedTutorStudentId(String(relationId));
     setDetailsModalOpen(true);
+  };
+
+  const handlePaymentDecision = async (lessonId: number, confirm: boolean) => {
+    try {
+      setProcessingPaymentId(lessonId);
+      const updated = await confirmPayment(lessonId, { confirm });
+      setLessons((prev) => prev.map((lesson) => (lesson.id === updated.id ? updated : lesson)));
+    } catch (error) {
+      console.error('Ошибка подтверждения оплаты:', error);
+      alert(getApiErrorMessage(error, 'Не удалось обработать оплату.'));
+    } finally {
+      setProcessingPaymentId(null);
+    }
   };
 
   const handleSubmitCreateAbonement = async () => {
@@ -460,50 +729,44 @@ export default function FinancePage() {
             'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
         }}
       >
-        <div
+        <h1
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 16,
-            alignItems: 'flex-start',
-            flexWrap: 'wrap',
+            fontSize: 'clamp(2rem, 4vw, 3rem)',
+            lineHeight: 0.98,
+            letterSpacing: '-0.04em',
+            marginBottom: 0,
           }}
         >
-          <div>
-            <h1
-              style={{
-                fontSize: 'clamp(2rem, 4vw, 3rem)',
-                lineHeight: 0.98,
-                letterSpacing: '-0.04em',
-                marginBottom: 10,
-              }}
-            >
-              Финансы и абонементы
-            </h1>
-          </div>
-
-          <div
-            style={{
-              minWidth: isMobile ? '100%' : 240,
-              borderRadius: 18,
-              padding: 14,
-              background: '#172033',
-              color: '#fff',
-            }}
-          >
-            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 12, marginBottom: 6 }}>
-              Текущий период
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.1, marginBottom: 8 }}>
-              {dateFrom} - {dateTo}
-            </div>
-            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 14 }}>
-              Всего уроков в диапазоне: {filteredLessons.length}
-            </div>
-          </div>
-        </div>
+          Финансы и абонементы
+        </h1>
       </section>
 
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        {[
+          ['income', 'Доходы'],
+          ['subscriptions', 'Абонементы'],
+        ].map(([value, label]) => {
+          const active = activeTab === value;
+
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setActiveTab(value as FinanceTab)}
+              style={{
+                background: active ? '#172033' : 'rgba(23,32,51,0.07)',
+                color: active ? '#fff' : '#243041',
+                boxShadow: 'none',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === 'income' && (
+        <>
       <section style={{ ...panelStyle, marginBottom: 16 }}>
         <div
           style={{
@@ -514,9 +777,9 @@ export default function FinancePage() {
           }}
         >
           <div style={{ display: 'grid', gap: 10 }}>
-            <div style={{ fontSize: 19, fontWeight: 800, color: '#1f2a3b' }}>Период расчёта</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: '#1f2a3b' }}>Период истории</div>
             <div style={{ color: '#687486', fontSize: 14 }}>
-              Можно быстро выбрать типовой диапазон или задать даты вручную.
+              Для списка проблемных оплат и ручной проверки прошлых недель, месяцев и года.
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {[
@@ -590,51 +853,335 @@ export default function FinancePage() {
         )}
       </section>
 
-      <section
-        style={{
-          display: 'grid',
-          gridTemplateColumns: isTablet ? '1fr' : 'repeat(3, minmax(0, 1fr))',
-          gap: 16,
-          marginBottom: 16,
-        }}
-      >
-        {metricCards.map((card) => (
-          <article key={card.title} style={panelStyle}>
-            <div style={{ color: '#6a7586', fontSize: 14, marginBottom: 10 }}>{card.title}</div>
-            <div
-              style={{
-                fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
-                fontWeight: 800,
-                color: '#1f2a3b',
-                marginBottom: 10,
-              }}
-            >
-              {loading || rangeError ? 'вЂ”' : card.value}
+      <section style={{ marginBottom: 16 }}>
+        <article style={panelStyle}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+              marginBottom: 16,
+            }}
+          >
+            <div>
+              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Прогноз дохода</h3>
+              <div style={{ color: '#687486', fontSize: 14 }}>
+                Ожидаемый доход за {forecastRangeLabel} по всем занятиям в расписании.
+              </div>
             </div>
             <div
               style={{
-                display: 'inline-flex',
-                padding: '7px 10px',
+                display: 'grid',
+                gap: 10,
+                justifyItems: isMobile ? 'start' : 'end',
+              }}
+            >
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {[
+                  ['week', 'Неделя'],
+                  ['month', 'Месяц'],
+                ].map(([value, label]) => {
+                  const active = forecastRange === value;
+
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setForecastRange(value as ForecastRange)}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: 999,
+                        background: active ? '#172033' : 'rgba(23,32,51,0.07)',
+                        color: active ? '#fff' : '#243041',
+                        boxShadow: 'none',
+                        fontSize: 13,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
+                <div style={{ color: '#687486', fontSize: 13 }}>
+                  {forecastDateRange.from} - {forecastDateRange.to}
+                </div>
+                <div style={{ color: '#1f2a3b', fontSize: 28, fontWeight: 900 }}>
+                  {loading ? '—' : formatCurrency(forecastIncome)}
+                </div>
+                <div style={{ color: '#687486', fontSize: 13 }}>
+                  факт: {loading ? '—' : formatCurrency(forecastFactIncome)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              height: 14,
+              borderRadius: 999,
+              background: 'rgba(23,32,51,0.08)',
+              overflow: 'hidden',
+              marginBottom: 14,
+            }}
+          >
+            <div
+              style={{
+                width: `${forecastProgress}%`,
+                height: '100%',
                 borderRadius: 999,
-                background: `${card.accent}14`,
-                color: card.accent,
-                fontWeight: 700,
-                fontSize: 13,
+                background: 'linear-gradient(90deg, #d96f32 0%, #2f7d5a 100%)',
+                transition: 'width 260ms ease',
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isTablet ? '1fr' : '1fr 0.8fr',
+              gap: 14,
+              alignItems: 'stretch',
+            }}
+          >
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, minmax(0, 1fr))',
+                gap: 10,
               }}
             >
-              {loading || rangeError ? 'Ждём данные' : card.note}
+              {forecastParts.map((part) => (
+                <div
+                  key={part.label}
+                  style={{
+                    padding: 12,
+                    borderRadius: 16,
+                    background: `${part.color}10`,
+                    border: `1px solid ${part.color}22`,
+                  }}
+                >
+                  <div style={{ color: '#687486', fontSize: 13, marginBottom: 6 }}>{part.label}</div>
+                  <div style={{ color: '#1f2a3b', fontWeight: 900 }}>
+                    {loading ? '—' : formatCurrency(part.value)}
+                  </div>
+                </div>
+              ))}
             </div>
-          </article>
-        ))}
+
+            <div
+              style={{
+                padding: 14,
+                borderRadius: 16,
+                background: 'rgba(23,32,51,0.04)',
+                border: '1px solid rgba(24,33,47,0.07)',
+                display: 'grid',
+                gap: 10,
+              }}
+            >
+              <div style={{ color: '#1f2a3b', fontWeight: 900 }}>
+                Прогноз закрыт на {loading ? '—' : `${forecastProgress.toFixed(0)}%`}
+              </div>
+              <div style={{ color: '#687486', fontSize: 14 }}>
+                Собираемость оплат: {loading ? '—' : `${forecastCollectionRate.toFixed(0)}%`}
+              </div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {financeTips.map((tip) => (
+                  <div
+                    key={tip.title}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '8px minmax(0, 1fr)',
+                      gap: 8,
+                      alignItems: 'start',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        background: tip.accent,
+                        marginTop: 6,
+                      }}
+                    />
+                    <span style={{ color: '#435066', fontSize: 13, lineHeight: 1.4 }}>
+                      <strong style={{ color: '#1f2a3b' }}>{tip.title}:</strong> {tip.text}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: 14,
+              padding: 12,
+              borderRadius: 16,
+              background: 'rgba(47,125,90,0.08)',
+              color: '#2f6f51',
+              fontWeight: 700,
+              fontSize: 14,
+            }}
+          >
+            Если неделя/месяц закончится по расписанию, ожидаемый доход составит{' '}
+            {loading ? '—' : formatCurrency(forecastIncome)}.
+          </div>
+        </article>
       </section>
 
       <section
         style={{
           display: 'grid',
-          gridTemplateColumns: isTablet ? '1fr' : '1.1fr 0.9fr',
+          gridTemplateColumns: isTablet ? '1fr' : '1.15fr 0.85fr',
           gap: 16,
+          alignItems: 'start',
+          marginBottom: 16,
         }}
       >
+        <div style={{ display: 'grid', gap: 16 }}>
+        <article style={{ ...panelStyle, position: 'relative', overflow: 'hidden' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+              marginBottom: 14,
+            }}
+          >
+            <div>
+              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Динамика дохода</h3>
+              <div style={{ color: '#687486', fontSize: 14 }}>
+                {chartRangeLabel}. Наведи на столбец, чтобы увидеть сумму.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {[
+                ['week', 'Неделя'],
+                ['month', 'Месяц'],
+                ['year', 'Год'],
+              ].map(([value, label]) => {
+                const active = chartRange === value;
+
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setChartRange(value as ChartRange);
+                      setDailyTooltip(null);
+                      setSubjectTooltip(null);
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 999,
+                      background: active ? '#172033' : 'rgba(23,32,51,0.07)',
+                      color: active ? '#fff' : '#243041',
+                      boxShadow: 'none',
+                      fontSize: 13,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={chartTooltipStyle(Boolean(dailyTooltip))}>
+            <div style={{ color: 'rgba(255,255,255,0.68)', fontSize: 12, marginBottom: 4 }}>
+              {dailyTooltip?.title ?? 'Дата'}
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 900 }}>{dailyTooltip?.value ?? formatCurrency(0)}</div>
+            <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 12, marginTop: 3 }}>
+              {dailyTooltip?.note ?? 'Наведи на столбец'}
+            </div>
+          </div>
+
+          {loading ? (
+            <p style={{ color: '#687486', marginBottom: 0 }}>Ждём данные для графика.</p>
+          ) : dailyIncomeRows.every((row) => row.value === 0) ? (
+            <p style={{ color: '#687486', marginBottom: 0 }}>
+              В выбранном периоде пока нет оплаченных занятий.
+            </p>
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${Math.max(dailyIncomeRows.length, 1)}, minmax(18px, 1fr))`,
+                gap: 8,
+                alignItems: 'end',
+                minHeight: 120,
+                paddingTop: 4,
+              }}
+            >
+              {dailyIncomeRows.map((row) => (
+                <div
+                  key={row.key}
+                  onMouseEnter={() =>
+                    setDailyTooltip({
+                      key: row.key,
+                      title: row.fullLabel,
+                      value: formatCurrency(row.value),
+                      note:
+                        row.lessons > 0
+                          ? `${row.lessons} оплач. зан.`
+                          : 'Оплат в этот день не было',
+                    })
+                  }
+                  onMouseLeave={() => setDailyTooltip(null)}
+                  onFocus={() =>
+                    setDailyTooltip({
+                      key: row.key,
+                      title: row.fullLabel,
+                      value: formatCurrency(row.value),
+                      note:
+                        row.lessons > 0
+                          ? `${row.lessons} оплач. зан.`
+                          : 'Оплат в этот день не было',
+                    })
+                  }
+                  onBlur={() => setDailyTooltip(null)}
+                  tabIndex={0}
+                  style={{ display: 'grid', gap: 8, alignItems: 'end' }}
+                >
+                  <div
+                    style={{
+                      height: `${Math.max(8, (row.value / maxDailyIncome) * 96)}px`,
+                      borderRadius: '12px 12px 6px 6px',
+                      outline:
+                        dailyTooltip?.key === row.key
+                          ? '3px solid rgba(217,111,50,0.22)'
+                          : '1px solid transparent',
+                      transform: dailyTooltip?.key === row.key ? 'translateY(-2px)' : 'translateY(0)',
+                      transition: 'transform 220ms ease, outline-color 220ms ease, background 220ms ease',
+                      background:
+                        row.value > 0
+                          ? 'linear-gradient(180deg, #d96f32 0%, #f0a45f 100%)'
+                          : 'rgba(23,32,51,0.08)',
+                    }}
+                  />
+                  <div
+                    style={{
+                      color: '#687486',
+                      fontSize: 11,
+                      textAlign: 'center',
+                      writingMode: dailyIncomeRows.length > 14 ? 'vertical-rl' : 'horizontal-tb',
+                    }}
+                  >
+                    {row.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+
         <article style={panelStyle}>
           <div
             style={{
@@ -647,23 +1194,25 @@ export default function FinancePage() {
             }}
           >
             <div>
-              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Неоплаченные занятия</h3>
+              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Оплаты под контролем</h3>
               <div style={{ color: '#687486', fontSize: 14 }}>
-                Здесь видны проведённые, но ещё не оплаченные уроки за выбранный период.
+                Проведённые уроки, по которым ещё нет подтверждённой оплаты.
               </div>
             </div>
-            <div style={{ fontWeight: 800, color: '#1f2a3b' }}>{formatCurrency(debt)}</div>
+            <div style={{ fontWeight: 800, color: '#1f2a3b' }}>
+              {formatCurrency(debt + pendingConfirmation)}
+            </div>
           </div>
 
           {loading ? (
             <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка финансовых записей...</p>
           ) : rangeError ? (
             <p style={{ color: '#9f3f3c', marginBottom: 0 }}>
-              Исправь диапазон дат, чтобы увидеть долги.
+              Исправь диапазон дат, чтобы увидеть оплаты.
             </p>
           ) : debtRows.length === 0 ? (
             <p style={{ color: '#687486', marginBottom: 0 }}>
-              За выбранный период неоплаченных занятий нет.
+              За выбранный период неоплаченных и ожидающих подтверждения занятий нет.
             </p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
@@ -688,13 +1237,173 @@ export default function FinancePage() {
                     <div style={{ color: '#687486', fontSize: 14 }}>{row.subjectName}</div>
                   </div>
                   <div style={{ color: '#435066', fontSize: 14 }}>{row.lessonDate}</div>
-                  <div style={{ fontWeight: 800, color: '#9f3f3c' }}>{formatCurrency(row.cost)}</div>
+                  <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
+                    <div style={{ fontWeight: 800, color: '#9f3f3c' }}>
+                      {formatCurrency(row.cost)}
+                    </div>
+                    <div style={{ color: '#687486', fontSize: 12, marginTop: 3 }}>{row.status}</div>
+                    {row.paymentStatus === 'payment_pending' && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 8,
+                          justifyContent: isMobile ? 'flex-start' : 'flex-end',
+                          flexWrap: 'wrap',
+                          marginTop: 8,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handlePaymentDecision(row.id, true)}
+                          disabled={processingPaymentId === row.id}
+                          style={{
+                            padding: '7px 10px',
+                            borderRadius: 999,
+                            background: '#2f7d5a',
+                            boxShadow: 'none',
+                            fontSize: 12,
+                          }}
+                        >
+                          Подтвердить
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePaymentDecision(row.id, false)}
+                          disabled={processingPaymentId === row.id}
+                          style={{
+                            padding: '7px 10px',
+                            borderRadius: 999,
+                            background: '#a63f3c',
+                            boxShadow: 'none',
+                            fontSize: 12,
+                          }}
+                        >
+                          Отклонить
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </article>
+        </div>
 
+        <article style={{ ...panelStyle, position: 'relative', overflow: 'hidden' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+              marginBottom: 14,
+            }}
+          >
+            <div>
+              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Средняя неделя по месяцам</h3>
+              <div style={{ color: '#687486', fontSize: 14 }}>
+                Помогает сравнить месяцы между собой, как в недельной таблице.
+              </div>
+            </div>
+          </div>
+
+          <div style={chartTooltipStyle(Boolean(subjectTooltip))}>
+            <div style={{ color: 'rgba(255,255,255,0.68)', fontSize: 12, marginBottom: 4 }}>
+              {subjectTooltip?.title ?? 'Месяц'}
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 900 }}>
+              {subjectTooltip?.value ?? formatCurrency(0)}
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 12, marginTop: 3 }}>
+              {subjectTooltip?.note ?? 'Наведи на строку'}
+            </div>
+          </div>
+
+          {loading ? (
+            <p style={{ color: '#687486', marginBottom: 0 }}>Ждём данные по месяцам.</p>
+          ) : averageWeekRows.every((row) => row.value === 0) ? (
+            <p style={{ color: '#687486', marginBottom: 0 }}>
+              В этом году пока нет оплаченных занятий для сравнения.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {averageWeekRows.map((row) => (
+                <div
+                  key={row.key}
+                  onMouseEnter={() =>
+                    setSubjectTooltip({
+                      key: row.key,
+                      title: row.fullLabel,
+                      value: formatCurrency(row.value),
+                      note: `Всего за месяц: ${formatCurrency(row.total)}`,
+                    })
+                  }
+                  onMouseLeave={() => setSubjectTooltip(null)}
+                  onFocus={() =>
+                    setSubjectTooltip({
+                      key: row.key,
+                      title: row.fullLabel,
+                      value: formatCurrency(row.value),
+                      note: `Всего за месяц: ${formatCurrency(row.total)}`,
+                    })
+                  }
+                  onBlur={() => setSubjectTooltip(null)}
+                  tabIndex={0}
+                  style={{
+                    padding: subjectTooltip?.key === row.key ? '10px' : 0,
+                    margin: subjectTooltip?.key === row.key ? '-10px' : 0,
+                    borderRadius: 16,
+                    background:
+                      subjectTooltip?.key === row.key ? 'rgba(42,111,219,0.06)' : 'transparent',
+                    transition: 'background 220ms ease, padding 220ms ease, margin 220ms ease',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      color: '#435066',
+                      fontSize: 14,
+                      marginBottom: 7,
+                    }}
+                  >
+                    <span>{row.label}</span>
+                    <strong style={{ color: '#1f2a3b' }}>
+                      {formatCurrency(row.value)}
+                    </strong>
+                  </div>
+                  <div
+                    style={{
+                      height: 10,
+                      borderRadius: 999,
+                      background: 'rgba(23,32,51,0.08)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${clampPercent((row.value / maxAverageWeekIncome) * 100)}%`,
+                        height: '100%',
+                        borderRadius: 999,
+                        background: 'linear-gradient(90deg, #2a6fdb 0%, #62a5ff 100%)',
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+      </section>
+
+        </>
+      )}
+
+      {activeTab === 'subscriptions' && (
+      <section>
         <article style={panelStyle}>
           <div style={{ marginBottom: 14 }}>
             <h3 style={{ fontSize: 20, marginBottom: 6 }}>Абонементы</h3>
@@ -828,6 +1537,7 @@ export default function FinancePage() {
           )}
         </article>
       </section>
+      )}
 
       {createModalOpen && (
         <div
