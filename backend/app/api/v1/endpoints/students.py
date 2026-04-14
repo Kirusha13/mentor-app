@@ -7,7 +7,7 @@ from app.models.tutor import Tutor
 from app.schemas.student import StudentCreate, StudentOut, StudentUpdate
 from app.services.student_service import (
     create_student,
-    get_student_by_id,
+    get_student_by_id_for_tutor,
     get_student_by_telegram_id,
     get_students_by_tutor,
 )
@@ -41,7 +41,7 @@ async def get_student(
     tutor: Tutor = Depends(get_current_tutor),
     db: AsyncSession = Depends(get_db),
 ):
-    student = await get_student_by_id(db, student_id)
+    student = await get_student_by_id_for_tutor(db, student_id, tutor.id)
     if student is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ученик не найден")
     return student
@@ -54,7 +54,7 @@ async def update_student(
     tutor: Tutor = Depends(get_current_tutor),
     db: AsyncSession = Depends(get_db),
 ):
-    student = await get_student_by_id(db, student_id)
+    student = await get_student_by_id_for_tutor(db, student_id, tutor.id)
     if student is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ученик не найден")
 

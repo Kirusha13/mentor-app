@@ -24,6 +24,19 @@ async def get_student_by_id(db: AsyncSession, student_id: int) -> Student | None
     return result.scalar_one_or_none()
 
 
+async def get_student_by_id_for_tutor(
+    db: AsyncSession, student_id: int, tutor_id: int
+) -> Student | None:
+    """Возвращает ученика только если он принадлежит данному репетитору."""
+    from app.models.tutor_student import TutorStudent
+    result = await db.execute(
+        select(Student)
+        .join(TutorStudent, TutorStudent.student_id == Student.id)
+        .where(Student.id == student_id, TutorStudent.tutor_id == tutor_id)
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_student_by_telegram_id(db: AsyncSession, telegram_id: int) -> Student | None:
     result = await db.execute(select(Student).where(Student.telegram_id == telegram_id))
     return result.scalar_one_or_none()

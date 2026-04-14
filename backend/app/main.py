@@ -1,3 +1,4 @@
+import json
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -159,6 +160,9 @@ async def telegram_login_page(request: Request):
     return HTMLResponse(content=html)
 
 
+_ALLOWED_REDIRECT_SCHEMES = ("mentor://", "exp://")
+
+
 @app.get("/telegram-callback", response_class=HTMLResponse)
 async def telegram_callback(request: Request):
     """
@@ -169,13 +173,18 @@ async def telegram_callback(request: Request):
     params = dict(request.query_params)
     redirect_base = params.pop("redirect", "mentor://auth")
 
+    if not any(redirect_base.startswith(s) for s in _ALLOWED_REDIRECT_SCHEMES):
+        redirect_base = "mentor://auth"
+
     deep_link = redirect_base + "?" + urlencode(params)
+    # JSON-кодирование гарантирует безопасную вставку строки в JS
+    safe_link = json.dumps(deep_link)
     html = f"""<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
 <body>
   <p>Перенаправление...</p>
-  <script>window.location.replace("{deep_link}");</script>
+  <script>window.location.replace({safe_link});</script>
 </body>
 </html>"""
     return HTMLResponse(content=html)

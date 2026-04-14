@@ -23,6 +23,10 @@ def decode_token(token: str) -> dict | None:
     """Возвращает {'sub': '...', 'role': '...'} или None."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return {"sub": payload["sub"], "role": payload.get("role", "tutor")}
+        sub = payload.get("sub")
+        role = payload.get("role")
+        if not sub or not role:
+            return None
+        return {"sub": sub, "role": role}
     except JWTError:
         return None
