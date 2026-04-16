@@ -17,6 +17,7 @@ class TutorStudentOut(BaseModel):
     tutor_id: int
     student_id: int
     subject_id: int
+    level_ids: list[int]
     tutor_name: str | None = None
     subject_name: str | None = None
 
@@ -36,3 +37,4 @@ class TutorStudentUpdate(BaseModel):
     hourly_rate: Decimal | None = None
     subscription_lessons: int | None = None
     used_lessons: int | None = None
+    level_ids: list[int] | None = None

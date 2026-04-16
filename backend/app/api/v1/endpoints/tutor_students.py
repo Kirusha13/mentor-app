@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_tutor
@@ -10,6 +10,7 @@ from app.models.assignment import Assignment
 from app.models.lesson import Lesson
 from app.models.subject import Subject
 from app.models.tutor import Tutor
+from app.models.tutor_level import StudentLevel
 from app.models.tutor_student import TutorStudent
 from app.schemas.tutor_student import TutorStudentCreate, TutorStudentOut, TutorStudentUpdate
 from app.services.subscription_service import SubscriptionStateError, validate_subscription_state
@@ -114,6 +115,10 @@ async def update_tutor_student(
         ts.subscription_lessons = data.subscription_lessons
     if data.used_lessons is not None:
         ts.used_lessons = data.used_lessons
+    if data.level_ids is not None:
+        await db.execute(delete(StudentLevel).where(StudentLevel.tutor_student_id == ts.id))
+        for level_id in data.level_ids:
+            db.add(StudentLevel(tutor_student_id=ts.id, level_id=level_id))
 
     await db.commit()
     await db.refresh(ts)

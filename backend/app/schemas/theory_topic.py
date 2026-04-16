@@ -7,7 +7,7 @@ class TheoryTopicOut(BaseModel):
     id: int
     title: str
     description: str | None
-    study_level: list | None
+    level_ids: list[int]
     tutor_id: int
     subject_id: int
     parent_topic_id: int | None
@@ -20,12 +20,12 @@ class TheoryTopicCreate(BaseModel):
     title: str
     subject_id: int
     description: str | None = None
-    study_level: list | None = None
+    level_ids: list[int] = []
     parent_topic_id: int | None = None
 
 
 class TheoryTopicUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
-    study_level: list | None = None
+    level_ids: list[int] | None = None
     parent_topic_id: int | None = None

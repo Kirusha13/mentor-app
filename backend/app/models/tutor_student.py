@@ -38,3 +38,12 @@ class TutorStudent(TimestampMixin, Base):
     subject: Mapped["Subject"] = relationship(back_populates="tutor_students")
     lessons: Mapped[list["Lesson"]] = relationship(back_populates="tutor_student")
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="tutor_student")
+    student_levels: Mapped[list["StudentLevel"]] = relationship(
+        back_populates="tutor_student",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    @property
+    def level_ids(self) -> list[int]:
+        return [sl.level_id for sl in self.student_levels]

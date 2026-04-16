@@ -36,6 +36,9 @@ mobile/ios/
 # Internal planning/tooling docs
 docs/
 
+# DB schema — применяется вручную через Supabase SQL Editor
+create_db.sql
+
 # Misc
 .DS_Store
 *.tsbuildinfo

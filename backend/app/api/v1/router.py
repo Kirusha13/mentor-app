@@ -11,6 +11,7 @@ from app.api.v1.endpoints import (
     students,
     subjects,
     theory_topics,
+    tutor_levels,
     tutor_students,
     tutors,
 )
@@ -26,6 +27,7 @@ api_router.include_router(tutor_students.router, prefix="/tutor-students", tags=
 api_router.include_router(lessons.router, prefix="/lessons", tags=["lessons"])
 api_router.include_router(assignments.router, prefix="/assignments", tags=["assignments"])
 api_router.include_router(theory_topics.router, prefix="/theory-topics", tags=["theory-topics"])
+api_router.include_router(tutor_levels.router, prefix="/tutor-levels", tags=["tutor-levels"])
 api_router.include_router(materials.router, prefix="/materials", tags=["materials"])
 api_router.include_router(contacts.router, prefix="/contacts", tags=["contacts"])
 

@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_tutor
 from app.core.database import get_db
 from app.models.theory_topic import TheoryTopic
 from app.models.tutor import Tutor
+from app.models.tutor_level import TopicLevel
 from app.schemas.theory_topic import TheoryTopicCreate, TheoryTopicOut, TheoryTopicUpdate
 
 router = APIRouter()
@@ -43,8 +44,11 @@ async def create_topic(
     tutor: Tutor = Depends(get_current_tutor),
     db: AsyncSession = Depends(get_db),
 ):
-    topic = TheoryTopic(tutor_id=tutor.id, **data.model_dump())
+    topic = TheoryTopic(tutor_id=tutor.id, **data.model_dump(exclude={"level_ids"}))
     db.add(topic)
+    await db.flush()
+    for level_id in data.level_ids:
+        db.add(TopicLevel(topic_id=topic.id, level_id=level_id))
     await db.commit()
     await db.refresh(topic)
     return topic
@@ -67,8 +71,18 @@ async def update_topic(
     db: AsyncSession = Depends(get_db),
 ):
     topic = await _get_topic_for_tutor(db, topic_id, tutor.id)
-    for field, value in data.model_dump(exclude_none=True).items():
+
+    update_data = data.model_dump(exclude_none=True)
+    level_ids = update_data.pop("level_ids", None)
+
+    for field, value in update_data.items():
         setattr(topic, field, value)
+
+    if level_ids is not None:
+        await db.execute(delete(TopicLevel).where(TopicLevel.topic_id == topic.id))
+        for level_id in level_ids:
+            db.add(TopicLevel(topic_id=topic.id, level_id=level_id))
+
     await db.commit()
     await db.refresh(topic)
     return topic
