@@ -25,12 +25,14 @@ from app.models.student import Student
 from app.models.subject import Subject
 from app.models.theory_topic import TheoryTopic
 from app.models.tutor import Tutor
+from app.models.tutor_level import TutorLevel
 from app.models.tutor_student import TutorStudent, TutorStudentStatus
 from app.schemas.assignment import AssignmentOut, AssignmentUpdate, StudentAssignmentUpdate
 from app.schemas.lesson import AvailableSlot, LessonOut, RescheduleRequest, StudentLessonCreate
 from app.schemas.material import MaterialOut
 from app.schemas.student import StudentOut, StudentUpdate
 from app.schemas.theory_topic import TheoryTopicOut
+from app.schemas.tutor_level import TutorLevelOut
 from app.schemas.tutor_student import TutorStudentOut
 from app.services.telegram_service import send_to_user
 
@@ -400,6 +402,25 @@ async def delete_assignment_photo(
     await db.commit()
     await db.refresh(assignment)
     return assignment
+
+
+@router.get("/levels", response_model=list[TutorLevelOut], summary="Уровни репетиторов ученика")
+async def my_levels(
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    ts_result = await db.execute(
+        select(TutorStudent.tutor_id).where(TutorStudent.student_id == student.id).distinct()
+    )
+    tutor_ids = [row[0] for row in ts_result.all()]
+    if not tutor_ids:
+        return []
+    result = await db.execute(
+        select(TutorLevel)
+        .where(TutorLevel.tutor_id.in_(tutor_ids))
+        .order_by(TutorLevel.sort_order, TutorLevel.name)
+    )
+    return list(result.scalars().all())
 
 
 @router.get("/topics", response_model=list[TheoryTopicOut], summary="Темы теории")
