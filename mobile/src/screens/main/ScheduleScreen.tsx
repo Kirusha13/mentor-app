@@ -14,6 +14,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getLessons, reportPayment, Lesson } from '../../api/lessons';
+import { getTopicContext, TheoryTopic } from '../../api/materials';
+import TopicModal from '../../components/TopicModal';
 import RescheduleScreen from './RescheduleScreen';
 import BookingScreen from './BookingScreen';
 
@@ -111,6 +113,23 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
   const bg = STATUS_BG[localLesson.conduct_status];
   const [showReschedule, setShowReschedule] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [topicModalVisible, setTopicModalVisible] = useState(false);
+  const [topicContext, setTopicContext] = useState<{ topic: TheoryTopic; allTopics: TheoryTopic[] } | null>(null);
+  const [topicLoading, setTopicLoading] = useState(false);
+
+  const handleOpenTopic = async () => {
+    if (!localLesson.topic_id) return;
+    setTopicLoading(true);
+    setTopicModalVisible(true);
+    try {
+      const ctx = await getTopicContext(localLesson.topic_id);
+      setTopicContext(ctx);
+    } catch {
+      setTopicModalVisible(false);
+    } finally {
+      setTopicLoading(false);
+    }
+  };
 
   const handleReportPayment = async () => {
     Alert.alert(
@@ -173,7 +192,15 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
           <Row label="Время" value={`${localLesson.start_time.slice(0, 5)} – ${localLesson.end_time.slice(0, 5)}`} />
           {localLesson.tutor_name ? <Row label="Репетитор" value={localLesson.tutor_name} /> : null}
           {localLesson.subject_name ? <Row label="Предмет" value={localLesson.subject_name} /> : null}
-          {localLesson.topic_title ? <Row label="Тема" value={localLesson.topic_title} last /> : null}
+          {localLesson.topic_title ? (
+            <TouchableOpacity style={[modal.row, { borderBottomWidth: 0 }]} onPress={handleOpenTopic} activeOpacity={0.7}>
+              <Text style={modal.rowLabel}>Тема</Text>
+              <View style={modal.topicValueWrap}>
+                <Text style={modal.topicValueText} numberOfLines={1}>{localLesson.topic_title}</Text>
+                <Ionicons name="chevron-forward" size={14} color="#2AABEE" />
+              </View>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <View style={modal.section}>
@@ -214,6 +241,14 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      <TopicModal
+        visible={topicModalVisible}
+        topic={topicContext?.topic ?? null}
+        allTopics={topicContext?.allTopics ?? []}
+        loading={topicLoading}
+        onClose={() => setTopicModalVisible(false)}
+      />
     </View>
   );
 }
@@ -545,4 +580,6 @@ const modal = StyleSheet.create({
   paymentBtnTextDisabled: {
     color: '#9E9E9E',
   },
+  topicValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1, justifyContent: 'flex-end' },
+  topicValueText: { fontSize: 14, color: '#2AABEE', fontWeight: '500', flexShrink: 1 },
 });

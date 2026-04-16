@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Assignment,
@@ -25,6 +26,8 @@ import {
   updateAssignment,
   uploadAssignmentPhoto,
 } from '../../api/assignments';
+import { getTopicContext, TheoryTopic } from '../../api/materials';
+import TopicModal from '../../components/TopicModal';
 import { AssignmentsStackParamList } from '../../navigation/AppNavigator';
 import { API_BASE_URL } from '../../api/client';
 
@@ -60,6 +63,9 @@ export default function AssignmentDetailScreen({ route }: Props) {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deletingUrl, setDeletingUrl] = useState<string | null>(null);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
+  const [topicModalVisible, setTopicModalVisible] = useState(false);
+  const [topicContext, setTopicContext] = useState<{ topic: TheoryTopic; allTopics: TheoryTopic[] } | null>(null);
+  const [topicLoading, setTopicLoading] = useState(false);
 
   const deadline = new Date(assignment.deadline);
   const isOverdue = deadline < new Date() && assignment.completion_status !== 'completed';
@@ -78,6 +84,22 @@ export default function AssignmentDetailScreen({ route }: Props) {
         .catch(() => {});
     }
   }, []);
+
+  // ─── Открыть тему ────────────────────────────────────────────────────────
+
+  const handleOpenTopic = async () => {
+    if (!assignment.topic_id) return;
+    setTopicLoading(true);
+    setTopicModalVisible(true);
+    try {
+      const ctx = await getTopicContext(assignment.topic_id);
+      setTopicContext(ctx);
+    } catch {
+      setTopicModalVisible(false);
+    } finally {
+      setTopicLoading(false);
+    }
+  };
 
   // ─── Отправить ответ ──────────────────────────────────────────────────────
 
@@ -179,7 +201,7 @@ export default function AssignmentDetailScreen({ route }: Props) {
               до {deadline.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
-          {(completedAt || assignment.grade != null) && (
+          {(completedAt || assignment.topic_title || assignment.grade != null) && (
             <View style={styles.infoGrid}>
               {completedAt && (
                 <View style={styles.infoRow}>
@@ -188,6 +210,15 @@ export default function AssignmentDetailScreen({ route }: Props) {
                     {completedAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
+              )}
+              {assignment.topic_title && (
+                <TouchableOpacity style={styles.infoRow} onPress={handleOpenTopic} activeOpacity={0.7}>
+                  <Text style={styles.infoLabel}>Тема</Text>
+                  <View style={styles.topicValueWrap}>
+                    <Text style={styles.topicValueText} numberOfLines={1}>{assignment.topic_title}</Text>
+                    <Ionicons name="chevron-forward" size={14} color="#2AABEE" />
+                  </View>
+                </TouchableOpacity>
               )}
               {assignment.grade != null && (
                 <View style={styles.infoRow}>
@@ -204,11 +235,6 @@ export default function AssignmentDetailScreen({ route }: Props) {
         {/* Описание задания */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Задание</Text>
-          {assignment.topic_title && (
-            <View style={styles.topicBadge}>
-              <Text style={styles.topicBadgeText}>{assignment.topic_title}</Text>
-            </View>
-          )}
           <Text style={styles.description}>{assignment.description}</Text>
         </View>
 
@@ -323,6 +349,14 @@ export default function AssignmentDetailScreen({ route }: Props) {
         </View>
       )}
 
+      <TopicModal
+        visible={topicModalVisible}
+        topic={topicContext?.topic ?? null}
+        allTopics={topicContext?.allTopics ?? []}
+        loading={topicLoading}
+        onClose={() => setTopicModalVisible(false)}
+      />
+
       <Modal visible={!!lightboxUri} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setLightboxUri(null)}>
         <TouchableWithoutFeedback onPress={() => setLightboxUri(null)}>
           <View style={styles.lightboxBackdrop}>
@@ -378,14 +412,8 @@ const styles = StyleSheet.create({
   },
   gradeText: { fontSize: 17, fontWeight: '800' },
 
-  topicBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#EFF9FF',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  topicBadgeText: { fontSize: 12, fontWeight: '600', color: '#2AABEE' },
+  topicValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1, justifyContent: 'flex-end' },
+  topicValueText: { fontSize: 13, color: '#2AABEE', fontWeight: '500', flexShrink: 1, textAlign: 'right' },
   description: { fontSize: 15, color: '#333', lineHeight: 22 },
 
   commentInput: {

@@ -1,7 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getTopics, TheoryTopic } from '../../api/materials';
-import { getStudentMe, getTutors, TutorStudent } from '../../api/student';
+import { getLevels, getTutors, TutorLevel, TutorStudent } from '../../api/student';
 import { MaterialsStackParamList } from '../../navigation/AppNavigator';
 
 type Props = {
@@ -26,18 +26,12 @@ type ListItem =
   | { type: 'subject'; subjectId: number; subjectName: string }
   | { type: 'topic'; topic: TheoryTopic; allTopics: TheoryTopic[]; depth: number };
 
-function normalize(v: string): string {
-  return v.trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-// Тема видна если filters пустой, или study_level null, или пересечение непустое
-// Корень дополнительно видна если хотя бы одна дочерняя видна
-function topicVisible(topic: TheoryTopic, allTopics: TheoryTopic[], filters: Set<string>): boolean {
+// Тема видна если фильтр пустой, level_ids пустой, или есть пересечение
+// Родительская тема видна если хотя бы одна дочерняя видна
+function topicVisible(topic: TheoryTopic, allTopics: TheoryTopic[], filters: Set<number>): boolean {
   if (filters.size === 0) return true;
-  const levels = (topic.study_level ?? []).map(v => normalize(String(v)));
-  if (levels.length === 0) return true;
-  const normalizedFilters = [...filters].map(normalize);
-  if (levels.some(l => normalizedFilters.includes(l))) return true;
+  if (topic.level_ids.length === 0) return true;
+  if (topic.level_ids.some(id => filters.has(id))) return true;
   if (topic.parent_topic_id === null) {
     return allTopics
       .filter(t => t.parent_topic_id === topic.id)
@@ -46,24 +40,13 @@ function topicVisible(topic: TheoryTopic, allTopics: TheoryTopic[], filters: Set
   return false;
 }
 
-function sortFilterOptions(options: string[]): string[] {
-  const classes = options
-    .filter(o => /^\d+\s*класс$/i.test(o))
-    .sort((a, b) => parseInt(a) - parseInt(b));
-  const oge = options.filter(o => normalize(o) === 'огэ');
-  const ege = options.filter(o => normalize(o) === 'егэ');
-  const rest = options.filter(
-    o => !/^\d+\s*класс$/i.test(o) && normalize(o) !== 'огэ' && normalize(o) !== 'егэ',
-  );
-  return [...classes, ...oge, ...ege, ...rest];
-}
-
 export default function MaterialsScreen({ navigation }: Props) {
   const [topics, setTopics] = useState<TheoryTopic[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
+  const [levels, setLevels] = useState<TutorLevel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+  const [activeFilters, setActiveFilters] = useState<Set<number>>(new Set());
   const [filterReady, setFilterReady] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const filterInitialized = useRef(false);
@@ -72,32 +55,32 @@ export default function MaterialsScreen({ navigation }: Props) {
   const [expandedSubjects, setExpandedSubjects] = useState<Set<number>>(new Set());
   const [expandedTopics, setExpandedTopics] = useState<Set<number>>(new Set());
 
-  const toggleFilter = useCallback((value: string) => {
+  const toggleFilter = useCallback((id: number) => {
     setActiveFilters(prev => {
       const next = new Set(prev);
-      next.has(value) ? next.delete(value) : next.add(value);
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  }, []);
+
+  // Уровни — конфигурационные данные, грузим один раз при монтировании
+  useEffect(() => {
+    getLevels().then(setLevels);
   }, []);
 
   const load = useCallback(async (showSpinner = true) => {
     if (showSpinner) setLoading(true);
     try {
       const isFirstLoad = !filterInitialized.current;
-      const [topicsData, tsData, profile] = await Promise.all([
-        getTopics(),
-        getTutors(),
-        getStudentMe(),
-      ]);
+      const [topicsData, tsData] = await Promise.all([getTopics(), getTutors()]);
       setTopics(topicsData);
       setTutorStudents(tsData);
 
-      // Устанавливаем фильтр по классу ученика только при первом запуске в сессии
+      // При первом запуске активируем уровни, назначенные ученику
       if (isFirstLoad) {
         filterInitialized.current = true;
-        if (profile.grade != null) {
-          setActiveFilters(new Set([`${profile.grade} класс`]));
-        }
+        const myLevelIds = new Set(tsData.flatMap((ts: TutorStudent) => ts.level_ids));
+        setActiveFilters(myLevelIds);
         setFilterReady(true);
       }
 
@@ -141,10 +124,9 @@ export default function MaterialsScreen({ navigation }: Props) {
     return next;
   });
 
-  // Динамические опции фильтра из всех тем
-  const filterOptions = sortFilterOptions([
-    ...new Set(topics.flatMap(t => (t.study_level ?? []).map(v => String(v)))),
-  ]);
+  // Только уровни, встречающиеся хотя бы в одной теме
+  const usedLevelIds = new Set(topics.flatMap(t => t.level_ids));
+  const filterOptions = levels.filter(l => usedLevelIds.has(l.id));
 
   // Build flat list с учётом фильтра
   const uniqueTutors = [...new Map(tutorStudents.map(t => [t.tutor_id, t])).values()];
@@ -305,15 +287,15 @@ export default function MaterialsScreen({ navigation }: Props) {
                   <Text style={[styles.chipText, !isFiltered && styles.chipTextActive]}>Все</Text>
                 </TouchableOpacity>
 
-                {filterOptions.map(opt => {
-                  const isActive = activeFilters.has(opt);
+                {filterOptions.map(level => {
+                  const isActive = activeFilters.has(level.id);
                   return (
                     <TouchableOpacity
-                      key={opt}
+                      key={level.id}
                       style={[styles.chip, isActive && styles.chipActive]}
-                      onPress={() => toggleFilter(opt)}
+                      onPress={() => toggleFilter(level.id)}
                     >
-                      <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{opt}</Text>
+                      <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{level.name}</Text>
                     </TouchableOpacity>
                   );
                 })}
