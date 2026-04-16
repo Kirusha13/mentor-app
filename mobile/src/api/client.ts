@@ -17,4 +17,21 @@ client.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Обработчик истечения сессии — устанавливается из AuthContext
+let signOutHandler: (() => void) | null = null;
+
+export function setSignOutHandler(fn: () => void) {
+  signOutHandler = fn;
+}
+
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && signOutHandler) {
+      signOutHandler();
+    }
+    return Promise.reject(error);
+  },
+);
+
 export default client;
