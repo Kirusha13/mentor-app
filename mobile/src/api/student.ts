@@ -1,5 +1,11 @@
 import client from './client';
 
+export interface TutorLevel {
+  id: number;
+  name: string;
+  sort_order: number;
+}
+
 export interface StudentProfile {
   id: number;
   full_name: string;
@@ -23,6 +29,7 @@ export interface TutorStudent {
   used_lessons: number | null;
   tutor_name: string | null;
   subject_name: string | null;
+  level_ids: number[];
 }
 
 export async function getStudentMe(): Promise<StudentProfile> {
@@ -32,6 +39,11 @@ export async function getStudentMe(): Promise<StudentProfile> {
 
 export async function getTutors(): Promise<TutorStudent[]> {
   const res = await client.get('/student/tutors');
+  return res.data;
+}
+
+export async function getLevels(): Promise<TutorLevel[]> {
+  const res = await client.get('/student/levels');
   return res.data;
 }
 
