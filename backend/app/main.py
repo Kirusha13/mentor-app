@@ -160,7 +160,13 @@ async def telegram_login_page(request: Request):
     return HTMLResponse(content=html)
 
 
-_ALLOWED_REDIRECT_SCHEMES = ("mentor://", "exp://")
+_ALLOWED_REDIRECT_SCHEMES = (
+    "mentor://",
+    "exp://",
+    "https://mentor-app-kappa-nine.vercel.app/",
+    "http://localhost:5173/",
+    "http://localhost:3000/",
+)
 
 
 @app.get("/telegram-callback", response_class=HTMLResponse)
