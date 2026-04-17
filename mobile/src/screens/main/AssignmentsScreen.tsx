@@ -72,7 +72,7 @@ export default function AssignmentsScreen({ navigation }: Props) {
   for (const section of SECTIONS) {
     const items = assignments
       .filter(a => (section.statuses as readonly string[]).includes(a.completion_status))
-      .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+      .sort((a, b) => b.id - a.id);
     if (items.length === 0 && section.key !== "done") continue;
     listData.push({ type: "header", sectionKey: section.key, label: section.label, color: section.color, count: items.length });
     if (!collapsed[section.key]) {
