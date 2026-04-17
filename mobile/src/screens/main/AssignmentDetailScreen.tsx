@@ -46,6 +46,9 @@ const STATUS_COLOR: Record<Assignment['completion_status'], string> = {
 
 const API_BASE = API_BASE_URL.replace('/api/v1', '');
 
+// Черновики ответов — хранятся пока приложение запущено
+const commentDrafts = new Map<number, string>();
+
 function gradeColor(grade: number) {
   if (grade >= 5) return { backgroundColor: '#E8F5E9', borderColor: '#A5D6A7', text: '#2E7D32' };
   if (grade === 4) return { backgroundColor: '#E3F2FD', borderColor: '#90CAF9', text: '#1565C0' };
@@ -58,7 +61,9 @@ type Props = NativeStackScreenProps<AssignmentsStackParamList, 'AssignmentDetail
 export default function AssignmentDetailScreen({ route }: Props) {
   const { width, height } = useWindowDimensions();
   const [assignment, setAssignment] = useState<Assignment>(route.params.assignment);
-  const [comment, setComment] = useState(assignment.student_comment ?? '');
+  const [comment, setComment] = useState(
+    () => commentDrafts.get(route.params.assignment.id) ?? route.params.assignment.student_comment ?? ''
+  );
   const [submitting, setSubmitting] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deletingUrl, setDeletingUrl] = useState<string | null>(null);
@@ -84,6 +89,17 @@ export default function AssignmentDetailScreen({ route }: Props) {
         .catch(() => {});
     }
   }, []);
+
+  // Сохраняем черновик при каждом изменении текста
+  useEffect(() => {
+    if (!isCompleted) {
+      if (comment) {
+        commentDrafts.set(assignment.id, comment);
+      } else {
+        commentDrafts.delete(assignment.id);
+      }
+    }
+  }, [comment]);
 
   // ─── Открыть тему ────────────────────────────────────────────────────────
 
@@ -119,6 +135,7 @@ export default function AssignmentDetailScreen({ route }: Props) {
               student_comment: comment.trim() || undefined,
               completion_status: 'completed',
             });
+            commentDrafts.delete(assignment.id);
             setAssignment(updated);
           } catch {
             Alert.alert('Ошибка', 'Не удалось отправить ответ');
@@ -186,8 +203,13 @@ export default function AssignmentDetailScreen({ route }: Props) {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
@@ -221,12 +243,19 @@ export default function AssignmentDetailScreen({ route }: Props) {
                 </TouchableOpacity>
               )}
               {assignment.grade != null && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Оценка</Text>
-                  <View style={[styles.gradeBadge, gradeColor(assignment.grade)]}>
-                    <Text style={[styles.gradeText, { color: gradeColor(assignment.grade).text }]}>{assignment.grade}</Text>
+                <>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Оценка</Text>
+                    <View style={[styles.gradeBadge, gradeColor(assignment.grade)]}>
+                      <Text style={[styles.gradeText, { color: gradeColor(assignment.grade).text }]}>{assignment.grade}</Text>
+                    </View>
                   </View>
-                </View>
+                  {assignment.grade_comment ? (
+                    <View style={styles.gradeCommentWrap}>
+                      <Text style={styles.gradeCommentText}>{assignment.grade_comment}</Text>
+                    </View>
+                  ) : null}
+                </>
               )}
             </View>
           )}
@@ -462,9 +491,6 @@ const styles = StyleSheet.create({
 
   submitContainer: {
     padding: 16,
-    backgroundColor: '#f5f5f5',
-    borderTopWidth: 1,
-    borderTopColor: '#e8e8e8',
   },
   submitBtn: {
     backgroundColor: '#4CAF50',
@@ -480,4 +506,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  gradeCommentWrap: { paddingTop: 6, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  gradeCommentText: { fontSize: 13, color: '#555', lineHeight: 19, fontStyle: 'italic' },
 });

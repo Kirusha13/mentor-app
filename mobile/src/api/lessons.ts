@@ -9,6 +9,8 @@ export interface Lesson {
   payment_status: 'unpaid' | 'payment_pending' | 'paid';
   cost: number | null;
   grade: number | null;
+  grade_comment: string | null;
+  student_note: string | null;
   tutor_student_id: number | null;
   topic_id: number | null;
   original_lesson_id: number | null;
@@ -58,5 +60,10 @@ export async function requestReschedule(
 
 export async function reportPayment(lessonId: number): Promise<Lesson> {
   const res = await client.post(`/student/lessons/${lessonId}/report-payment`);
+  return res.data;
+}
+
+export async function updateLessonNote(lessonId: number, note: string | null): Promise<Lesson> {
+  const res = await client.patch(`/student/lessons/${lessonId}/note`, { student_note: note });
   return res.data;
 }
