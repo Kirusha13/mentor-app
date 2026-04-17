@@ -12,6 +12,7 @@ export interface TutorStudent {
   tutor_id: number;
   student_id: number;
   subject_id: number;
+  level_ids: number[];
   tutor_name?: string;
   subject_name?: string;
 }
@@ -29,6 +30,7 @@ export interface UpdateTutorStudentPayload {
   status?: TutorStudentStatus;
   subscription_lessons?: number | null;
   used_lessons?: number | null;
+  level_ids?: number[];
 }
 
 export const getTutorStudents = async (): Promise<TutorStudent[]> => {

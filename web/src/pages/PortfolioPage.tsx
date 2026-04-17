@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getAssignments, type Assignment } from '../api/assignments';
 import { getLessons, type Lesson } from '../api/lessons';
 import { getStudents, type Student } from '../api/students';
@@ -131,9 +132,9 @@ function deltaText(current: number | null, previous: number | null, suffix = '')
 }
 
 function RadarChart({ values }: { values: Array<{ label: string; value: number }> }) {
-  const size = 220;
+  const size = 300;
   const center = size / 2;
-  const radius = 76;
+  const radius = 82;
   const points = values.map((item, index) => {
     const angle = (Math.PI * 2 * index) / values.length - Math.PI / 2;
     const distance = radius * (item.value / 100);
@@ -141,13 +142,13 @@ function RadarChart({ values }: { values: Array<{ label: string; value: number }
       ...item,
       x: center + Math.cos(angle) * distance,
       y: center + Math.sin(angle) * distance,
-      labelX: center + Math.cos(angle) * (radius + 25),
-      labelY: center + Math.sin(angle) * (radius + 25),
+      labelX: center + Math.cos(angle) * (radius + 54),
+      labelY: center + Math.sin(angle) * (radius + 54),
     };
   });
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: '100%', maxWidth: 260 }}>
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: '100%', maxWidth: 360, overflow: 'visible' }}>
       {[0.33, 0.66, 1].map((scale) => (
         <circle key={scale} cx={center} cy={center} r={radius * scale} fill="none" stroke="rgba(23,32,51,0.12)" />
       ))}
@@ -176,6 +177,7 @@ function RadarChart({ values }: { values: Array<{ label: string; value: number }
 }
 
 export default function PortfolioPage() {
+  const [searchParams] = useSearchParams();
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 720px)');
   const [students, setStudents] = useState<Student[]>([]);
@@ -191,6 +193,7 @@ export default function PortfolioPage() {
   const [reportComment, setReportComment] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const requestedStudentId = searchParams.get('student_id');
 
   useEffect(() => {
     const loadData = async () => {
@@ -226,10 +229,14 @@ export default function PortfolioPage() {
       setSelectedStudentId('');
       return;
     }
-    setSelectedStudentId((current) =>
-      current && activeStudents.some((student) => String(student.id) === current) ? current : String(activeStudents[0].id)
-    );
-  }, [activeStudents]);
+    setSelectedStudentId((current) => {
+      if (requestedStudentId && activeStudents.some((student) => String(student.id) === requestedStudentId)) {
+        return requestedStudentId;
+      }
+
+      return current && activeStudents.some((student) => String(student.id) === current) ? current : String(activeStudents[0].id);
+    });
+  }, [activeStudents, requestedStudentId]);
 
   const selectedStudent = useMemo(
     () => activeStudents.find((student) => String(student.id) === selectedStudentId) ?? null,
@@ -262,6 +269,9 @@ export default function PortfolioPage() {
     [assignments, relationIds]
   );
   const previousMonthValue = previousMonth(selectedMonth);
+  const reportCommentKey = selectedStudentId
+    ? `portfolio_comment:${selectedStudentId}:${selectedSubjectFilter}:${selectedMonth}:${goalType}`
+    : '';
   const monthLessons = useMemo(
     () => studentLessons.filter((lesson) => inMonth(lesson.lesson_date, selectedMonth)),
     [selectedMonth, studentLessons]
@@ -365,6 +375,20 @@ export default function PortfolioPage() {
     'В конце месяца обновить комментарий репетитора и сформировать отчёт для опекуна.',
   ];
 
+  useEffect(() => {
+    if (!reportCommentKey) {
+      setReportComment('');
+      return;
+    }
+
+    setReportComment(sessionStorage.getItem(reportCommentKey) ?? '');
+  }, [reportCommentKey]);
+
+  useEffect(() => {
+    if (!reportCommentKey) return;
+    sessionStorage.setItem(reportCommentKey, reportComment);
+  }, [reportComment, reportCommentKey]);
+
   if (loading) return <div style={panelStyle}>Загружаем портфолио...</div>;
 
   if (!selectedStudent) {
@@ -410,21 +434,11 @@ export default function PortfolioPage() {
       <section
         style={{
           ...panelStyle,
-          padding: isMobile ? 18 : 24,
+          padding: isMobile ? 14 : 16,
           marginBottom: 16,
-          background: 'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
         }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : 'minmax(0, 1fr) repeat(4, minmax(170px, 1fr))', gap: 14, alignItems: 'end' }}>
-          <div>
-            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', lineHeight: 0.98, letterSpacing: '-0.04em', marginBottom: 10 }}>
-              Портфолио
-            </h1>
-            <div style={{ ...mutedTextStyle, maxWidth: 720 }}>
-              Учебный отчёт по прогрессу, темам, домашним заданиям и посещаемости.
-            </div>
-          </div>
-
+        <div style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : 'repeat(4, minmax(170px, 1fr))', gap: 14, alignItems: 'end' }}>
           <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ ...mutedTextStyle, fontSize: 14 }}>Ученик</span>
             <select value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
@@ -621,7 +635,7 @@ export default function PortfolioPage() {
                 <h2 style={{ fontSize: 30, marginBottom: 6 }}>Отчёт для опекуна</h2>
                 <div style={mutedTextStyle}>{selectedStudent.full_name} • {formatMonthLabel(selectedMonth)} • {goalType}</div>
               </div>
-              <button type="button" onClick={() => setReportOpen(false)} style={{ background: '#172033', boxShadow: 'none', alignSelf: 'start' }}>Закрыть</button>
+              <button type="button" title="Закрыть" onClick={() => setReportOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#172033', boxShadow: 'none', alignSelf: 'start' }}>×</button>
             </div>
             <div style={{ display: 'grid', gap: 14 }}>
               <div style={{ ...panelStyle, boxShadow: 'none' }}>

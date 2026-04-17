@@ -22,13 +22,13 @@ const NAV_GROUPS = [
       { to: '/students', label: 'Ученики' },
       { to: '/assignments', label: 'Задания' },
       { to: '/materials', label: 'Материалы' },
-      { to: '/portfolio', label: 'Портфолио' },
     ],
   },
   {
     title: 'Структура',
     items: [
       { to: '/subjects', label: 'Предметы' },
+      { to: '/levels', label: 'Уровни' },
       { to: '/contacts', label: 'Контакты' },
     ],
   },

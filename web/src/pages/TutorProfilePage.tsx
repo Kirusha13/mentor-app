@@ -123,34 +123,16 @@ export default function TutorProfilePage() {
       <section
         style={{
           ...panelStyle,
-          background:
-            'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
+          padding: 14,
         }}
       >
         <div
           style={{
             display: 'grid',
-            gap: 16,
-            gridTemplateColumns: 'minmax(0, 1.3fr) minmax(220px, 320px)',
+            gridTemplateColumns: 'minmax(220px, 320px)',
             alignItems: 'start',
           }}
         >
-          <div>
-            <h1
-              style={{
-                fontSize: 'clamp(2rem, 4vw, 3rem)',
-                lineHeight: 0.98,
-                letterSpacing: '-0.04em',
-                marginBottom: 10,
-              }}
-            >
-              Личный кабинет репетитора
-            </h1>
-            <p style={{ color: '#5e6a7b', maxWidth: 720, fontSize: 15, marginBottom: 0 }}>
-              Здесь собраны данные профиля, дата регистрации, Telegram и базовые настройки аккаунта.
-            </p>
-          </div>
-
           <div
             style={{
               borderRadius: 18,

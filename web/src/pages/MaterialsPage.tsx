@@ -9,6 +9,7 @@ import {
   updateMaterial,
 } from '../api/materials';
 import { getSubjects, type Subject } from '../api/subjects';
+import { getTutorLevels, type TutorLevel } from '../api/tutorLevels';
 import {
   createTopic,
   deleteTopic,
@@ -18,6 +19,7 @@ import {
 } from '../api/topics';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { getApiErrorMessage } from '../utils/apiError';
+import { getMediaUrl, isImageSource } from '../utils/media';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -46,8 +48,6 @@ const levelLabels: Record<MaterialLevel, string> = {
   advanced: 'Углублённый',
 };
 
-const topicLevelPresets = ['5 класс', '6 класс', '7 класс', '8 класс', '9 класс', '10 класс', '11 класс', 'ОГЭ', 'ЕГЭ'];
-
 type TopicModalState =
   | { mode: 'create-root'; topic: null }
   | { mode: 'create-child'; topic: TheoryTopic }
@@ -59,12 +59,20 @@ type MaterialModalState =
   | { mode: 'edit'; material: Material }
   | null;
 
-function buildTopicRows(topics: TheoryTopic[], parentId: number | null, depth = 0): Array<TheoryTopic & { depth: number }> {
+function buildTopicRows(
+  topics: TheoryTopic[],
+  parentId: number | null,
+  depth = 0,
+  collapsedIds: Set<number> = new Set()
+): Array<TheoryTopic & { depth: number }> {
   const children = topics
     .filter((topic) => topic.parent_topic_id === parentId)
     .sort((a, b) => a.title.localeCompare(b.title, 'ru-RU'));
 
-  return children.flatMap((topic) => [ { ...topic, depth }, ...buildTopicRows(topics, topic.id, depth + 1) ]);
+  return children.flatMap((topic) => [
+    { ...topic, depth },
+    ...(collapsedIds.has(topic.id) ? [] : buildTopicRows(topics, topic.id, depth + 1, collapsedIds)),
+  ]);
 }
 
 function parseStudyLevel(value: string): string[] | null {
@@ -75,18 +83,11 @@ function parseStudyLevel(value: string): string[] | null {
   return items.length ? items : null;
 }
 
-function toggleStudyLevelValue(current: string, value: string) {
-  const items = parseStudyLevel(current) ?? [];
-  const nextItems = items.includes(value)
-    ? items.filter((item) => item !== value)
-    : [...items, value];
-  return nextItems.join(', ');
-}
-
 export default function MaterialsPage() {
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 720px)');
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [tutorLevels, setTutorLevels] = useState<TutorLevel[]>([]);
   const [topics, setTopics] = useState<TheoryTopic[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,10 +99,13 @@ export default function MaterialsPage() {
   const [search, setSearch] = useState('');
   const [formatFilter, setFormatFilter] = useState<'all' | MaterialFormat>('all');
   const [levelFilter, setLevelFilter] = useState<'all' | MaterialLevel>('all');
+  const [collapsedTopicIds, setCollapsedTopicIds] = useState<Set<number>>(() => new Set());
 
   const [topicTitle, setTopicTitle] = useState('');
   const [topicDescription, setTopicDescription] = useState('');
   const [topicStudyLevel, setTopicStudyLevel] = useState('');
+  const [topicLevelMode, setTopicLevelMode] = useState<'all' | 'custom'>('all');
+  const [topicLevelIds, setTopicLevelIds] = useState<number[]>([]);
 
   const [materialFormat, setMaterialFormat] = useState<MaterialFormat>('text');
   const [materialLevel, setMaterialLevel] = useState<MaterialLevel>('basic');
@@ -112,14 +116,16 @@ export default function MaterialsPage() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [subjectData, topicData, materialData] = await Promise.all([
+        const [subjectData, topicData, materialData, levelData] = await Promise.all([
           getSubjects(),
           getTopics(),
           getMaterials(),
+          getTutorLevels(),
         ]);
         setSubjects(subjectData);
         setTopics(topicData);
         setMaterials(materialData);
+        setTutorLevels(levelData);
       } catch (error) {
         console.error('Ошибка загрузки материалов:', error);
         alert('Не удалось загрузить раздел материалов');
@@ -155,6 +161,7 @@ export default function MaterialsPage() {
       const haystack = [
         topic.title,
         topic.description ?? '',
+        ...((topic.level_ids ?? []).map((levelId) => tutorLevels.find((level) => level.id === levelId)?.name ?? String(levelId))),
         ...(topic.study_level ?? []).map(String),
       ]
         .join(' ')
@@ -162,12 +169,33 @@ export default function MaterialsPage() {
 
       return haystack.includes(normalizedSearch);
     });
-  }, [normalizedSearch, selectedSubjectId, topics]);
+  }, [normalizedSearch, selectedSubjectId, topics, tutorLevels]);
 
   const topicRows = useMemo(
-    () => buildTopicRows(filteredTopics, null),
-    [filteredTopics]
+    () => buildTopicRows(filteredTopics, null, 0, collapsedTopicIds),
+    [collapsedTopicIds, filteredTopics]
   );
+  const childTopicCount = useMemo(() => {
+    const map = new Map<number, number>();
+    filteredTopics.forEach((topic) => {
+      if (topic.parent_topic_id !== null) {
+        map.set(topic.parent_topic_id, (map.get(topic.parent_topic_id) ?? 0) + 1);
+      }
+    });
+    return map;
+  }, [filteredTopics]);
+
+  useEffect(() => {
+    setCollapsedTopicIds((current) => {
+      const next = new Set(current);
+      childTopicCount.forEach((_, topicId) => {
+        if (!next.has(topicId)) {
+          next.add(topicId);
+        }
+      });
+      return next;
+    });
+  }, [childTopicCount]);
 
   useEffect(() => {
     if (!topicRows.length) {
@@ -229,6 +257,8 @@ export default function MaterialsPage() {
     setTopicTitle('');
     setTopicDescription('');
     setTopicStudyLevel('');
+    setTopicLevelMode('all');
+    setTopicLevelIds([]);
   };
 
   const openCreateChildTopic = () => {
@@ -241,6 +271,8 @@ export default function MaterialsPage() {
     setTopicTitle('');
     setTopicDescription('');
     setTopicStudyLevel('');
+    setTopicLevelMode('all');
+    setTopicLevelIds([]);
   };
 
   const openEditTopic = () => {
@@ -249,6 +281,8 @@ export default function MaterialsPage() {
     setTopicTitle(selectedTopic.title);
     setTopicDescription(selectedTopic.description ?? '');
     setTopicStudyLevel(Array.isArray(selectedTopic.study_level) ? selectedTopic.study_level.join(', ') : '');
+    setTopicLevelMode(selectedTopic.level_ids?.length ? 'custom' : 'all');
+    setTopicLevelIds(selectedTopic.level_ids ?? []);
   };
 
   const openCreateMaterial = () => {
@@ -289,6 +323,7 @@ export default function MaterialsPage() {
         const updated = await updateTopic(topicModal.topic.id, {
           title: topicTitle.trim(),
           description: topicDescription.trim() || null,
+          level_ids: topicLevelMode === 'all' ? [] : topicLevelIds,
           study_level: parseStudyLevel(topicStudyLevel),
         });
         setTopics((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
@@ -298,6 +333,7 @@ export default function MaterialsPage() {
           title: topicTitle.trim(),
           subject_id: selectedSubject.id,
           description: topicDescription.trim() || null,
+          level_ids: topicLevelMode === 'all' ? [] : topicLevelIds,
           study_level: parseStudyLevel(topicStudyLevel),
           parent_topic_id: topicModal?.mode === 'create-child' ? topicModal.topic.id : null,
         });
@@ -399,73 +435,11 @@ export default function MaterialsPage() {
 
   return (
     <div>
-      <section
-        style={{
-          ...panelStyle,
-          padding: isMobile ? 18 : 24,
-          marginBottom: 16,
-          background:
-            'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 16,
-            alignItems: 'flex-start',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div>
-            <h1
-
-              style={{
-                fontSize: 'clamp(2rem, 4vw, 3rem)',
-                lineHeight: 0.98,
-                letterSpacing: '-0.04em',
-                marginBottom: 10,
-              }}
-            >
-              Материалы и темы
-            </h1>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              gap: 10,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-            }}
-          >
-            {[
-              `Тем по предмету: ${subjectTopicCount}`,
-              `Материалов: ${subjectMaterialCount}`,
-            ].map((item) => (
-              <span
-                key={item}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 999,
-                  background: 'rgba(23,32,51,0.06)',
-                  color: '#324055',
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
-                {item}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section style={{ ...panelStyle, marginBottom: 16 }}>
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: isTablet ? '1fr' : '1.3fr 1fr 1fr',
+            gridTemplateColumns: isTablet ? '1fr' : '1.2fr 1fr 1fr 1fr auto',
             gap: 12,
             alignItems: 'end',
           }}
@@ -477,6 +451,17 @@ export default function MaterialsPage() {
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Например: квадратные, формула, pdf, ОГЭ"
             />
+          </label>
+
+          <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+            Предмет
+            <select value={selectedSubjectId} onChange={(event) => setSelectedSubjectId(event.target.value)}>
+              {subjects.map((subject) => (
+                <option key={subject.id} value={String(subject.id)}>
+                  {subject.name}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
@@ -508,6 +493,10 @@ export default function MaterialsPage() {
               ))}
             </select>
           </label>
+          <div style={{ display: 'grid', alignContent: 'end', gap: 4, color: '#687486', fontSize: 13 }}>
+            <span>Тем: {subjectTopicCount}</span>
+            <span>Материалов: {subjectMaterialCount}</span>
+          </div>
         </div>
       </section>
 
@@ -519,30 +508,24 @@ export default function MaterialsPage() {
         }}
       >
         <aside style={{ ...panelStyle, display: 'grid', gap: 14, alignContent: 'start' }}>
-          <div>
-            <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 6 }}>Предмет</div>
-            <div style={mutedTextStyle}>Выбери предмет, чтобы увидеть связанные темы.</div>
-          </div>
-
-          <select value={selectedSubjectId} onChange={(event) => setSelectedSubjectId(event.target.value)}>
-            {subjects.map((subject) => (
-              <option key={subject.id} value={String(subject.id)}>
-                {subject.name}
-              </option>
-            ))}
-          </select>
-
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button type="button" onClick={openCreateRootTopic}>
-              Новая тема
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <div>
+              <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 2 }}>Темы</div>
+              <div style={mutedTextStyle}>{selectedSubject?.name ?? 'Предмет не выбран'}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button title="Создать тему" type="button" onClick={openCreateRootTopic} style={{ minWidth: 40, width: 40, height: 40, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center', lineHeight: 1 }}>
+              +
             </button>
             <button
+              title="Создать подтему"
               type="button"
               onClick={openCreateChildTopic}
-              style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+              style={{ minWidth: 40, width: 40, height: 40, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center', lineHeight: 1 }}
             >
-              Подтема
+              ↳
             </button>
+            </div>
           </div>
 
           <div style={{ display: 'grid', gap: 8 }}>
@@ -591,32 +574,61 @@ export default function MaterialsPage() {
                         }}
                       />
                     )}
-                    <div style={{ fontWeight: 700 }}>{topic.title}</div>
-                    {topic.study_level?.length ? (
-                      <div
-                        style={{
-                          marginTop: 6,
-                          display: 'flex',
-                          gap: 6,
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        {topic.study_level.map((level) => (
-                          <span
-                            key={level}
-                            style={{
-                              padding: '4px 8px',
-                              borderRadius: 999,
-                              background: 'rgba(23,32,51,0.06)',
-                              color: '#435066',
-                              fontSize: 12,
-                            }}
-                          >
-                            {level}
-                          </span>
-                        ))}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{topic.title}</div>
+                        {(childTopicCount.get(topic.id) ?? 0) > 0 && (
+                          <div style={{ color: '#687486', fontSize: 12, marginTop: 2 }}>
+                            Подтем: {childTopicCount.get(topic.id)}
+                          </div>
+                        )}
                       </div>
-                    ) : null}
+                      {(childTopicCount.get(topic.id) ?? 0) > 0 && (
+                        <span
+                          title={collapsedTopicIds.has(topic.id) ? 'Показать подтемы' : 'Скрыть подтемы'}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setCollapsedTopicIds((current) => {
+                              const next = new Set(current);
+                              if (next.has(topic.id)) next.delete(topic.id);
+                              else next.add(topic.id);
+                              return next;
+                            });
+                          }}
+                          style={{ width: 28, height: 28, borderRadius: 999, display: 'inline-grid', placeItems: 'center', background: 'rgba(23,32,51,0.08)' }}
+                        >
+                          {collapsedTopicIds.has(topic.id) ? '▸' : '▾'}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 6,
+                        display: 'flex',
+                        gap: 6,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      {(topic.level_ids?.length
+                        ? topic.level_ids.map((levelId) => tutorLevels.find((level) => level.id === levelId)?.name ?? `Уровень #${levelId}`)
+                        : topic.study_level?.length
+                          ? topic.study_level
+                          : ['Все уровни']
+                      ).map((level) => (
+                        <span
+                          key={level}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: 999,
+                            background: 'rgba(23,32,51,0.06)',
+                            color: '#435066',
+                            fontSize: 12,
+                          }}
+                        >
+                          {level}
+                        </span>
+                      ))}
+                    </div>
                     {topic.description && (
                       <div style={{ ...mutedTextStyle, marginTop: 4, fontSize: 13 }}>
                         {topic.description}
@@ -659,10 +671,11 @@ export default function MaterialsPage() {
                   </button>
                   <button
                     type="button"
+                    title="Удалить тему"
                     onClick={handleDeleteTopic}
-                    style={{ background: 'rgba(166,63,59,0.92)', boxShadow: 'none' }}
+                    style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18 }}
                   >
-                    Удалить тему
+                    🗑
                   </button>
                 </div>
               )}
@@ -690,7 +703,9 @@ export default function MaterialsPage() {
                     fontSize: 13,
                   }}
                 >
-                  Уровни: {selectedTopic.study_level?.join(', ') || 'не указаны'}
+                  Уровни: {selectedTopic.level_ids?.length
+                    ? selectedTopic.level_ids.map((levelId) => tutorLevels.find((level) => level.id === levelId)?.name ?? `Уровень #${levelId}`).join(', ')
+                    : 'Все уровни'}
                 </span>
               </div>
             )}
@@ -782,10 +797,11 @@ export default function MaterialsPage() {
                         </button>
                         <button
                           type="button"
+                          title="Удалить материал"
                           onClick={() => handleDeleteMaterial(material)}
-                          style={{ background: 'rgba(166,63,59,0.92)', boxShadow: 'none' }}
+                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18 }}
                         >
-                          Удалить
+                          🗑
                         </button>
                       </div>
                     </div>
@@ -797,9 +813,19 @@ export default function MaterialsPage() {
                     )}
 
                     {material.content_url && (
-                      <a href={material.content_url} target="_blank" rel="noreferrer">
-                        {material.content_url}
-                      </a>
+                      isImageSource(material.content_url) || material.format === 'image' ? (
+                        <a href={getMediaUrl(material.content_url)} target="_blank" rel="noreferrer" style={{ display: 'block' }}>
+                          <img
+                            src={getMediaUrl(material.content_url)}
+                            alt="Материал темы"
+                            style={{ width: 'min(100%, 520px)', maxHeight: 320, objectFit: 'contain', borderRadius: 16, border: '1px solid rgba(24,33,47,0.08)', background: '#fff' }}
+                          />
+                        </a>
+                      ) : (
+                        <a href={getMediaUrl(material.content_url)} target="_blank" rel="noreferrer">
+                          {material.content_url}
+                        </a>
+                      )
                     )}
                   </div>
                 ))}
@@ -857,45 +883,71 @@ export default function MaterialsPage() {
               />
             </label>
 
-            <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-              Уровни обучения
-              <input
-                value={topicStudyLevel}
-                onChange={(event) => setTopicStudyLevel(event.target.value)}
-                placeholder="Например: 9 класс, ОГЭ, ЕГЭ"
-              />
-            </label>
-
             <div style={{ display: 'grid', gap: 8 }}>
-              <div style={{ ...mutedTextStyle, fontSize: 13 }}>
-                Быстрый выбор уровня темы. Это поможет дальше корректно фильтровать материалы и прогресс.
-              </div>
+              <div style={{ color: '#556173', fontSize: 14 }}>Уровни обучения</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {topicLevelPresets.map((level) => {
-                  const active = (parseStudyLevel(topicStudyLevel) ?? []).includes(level);
-                  return (
-                    <button
-                      key={level}
-                      type="button"
-                      onClick={() => setTopicStudyLevel((current) => toggleStudyLevelValue(current, level))}
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: 999,
-                        background: active ? 'rgba(42,111,219,0.12)' : 'rgba(23,32,51,0.05)',
-                        color: active ? '#2a6fdb' : '#324055',
-                        border: active
-                          ? '1px solid rgba(42,111,219,0.24)'
-                          : '1px solid rgba(24,33,47,0.08)',
-                        boxShadow: 'none',
-                        fontWeight: 700,
-                        fontSize: 12,
-                      }}
-                    >
-                      {level}
-                    </button>
-                  );
-                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTopicLevelMode('all');
+                    setTopicLevelIds([]);
+                  }}
+                  style={{
+                    background: topicLevelMode === 'all' ? '#2a6fdb' : 'rgba(23,32,51,0.08)',
+                    color: topicLevelMode === 'all' ? '#fff' : '#324055',
+                    boxShadow: 'none',
+                  }}
+                >
+                  Все уровни
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTopicLevelMode('custom')}
+                  style={{
+                    background: topicLevelMode === 'custom' ? '#2a6fdb' : 'rgba(23,32,51,0.08)',
+                    color: topicLevelMode === 'custom' ? '#fff' : '#324055',
+                    boxShadow: 'none',
+                  }}
+                >
+                  Выбрать уровни
+                </button>
               </div>
+              {topicLevelMode === 'custom' && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {tutorLevels.length === 0 ? (
+                    <div style={mutedTextStyle}>Сначала создай уровни в настройках.</div>
+                  ) : (
+                    tutorLevels.map((level) => {
+                      const active = topicLevelIds.includes(level.id);
+                      return (
+                        <button
+                          key={level.id}
+                          type="button"
+                          onClick={() =>
+                            setTopicLevelIds((current) =>
+                              active ? current.filter((id) => id !== level.id) : [...current, level.id]
+                            )
+                          }
+                          style={{
+                            padding: '8px 10px',
+                            borderRadius: 999,
+                            background: active ? 'rgba(42,111,219,0.12)' : 'rgba(23,32,51,0.05)',
+                            color: active ? '#2a6fdb' : '#324055',
+                            border: active
+                              ? '1px solid rgba(42,111,219,0.24)'
+                              : '1px solid rgba(24,33,47,0.08)',
+                            boxShadow: 'none',
+                            fontWeight: 700,
+                            fontSize: 12,
+                          }}
+                        >
+                          {level.name}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
