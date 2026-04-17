@@ -23,6 +23,7 @@ export interface Assignment {
   deadline: string;
   completion_status: 'assigned' | 'in_progress' | 'completed' | 'overdue';
   grade: number | null;
+  grade_comment: string | null;
   attachments: AssignmentAttachments | null;
   student_comment: string | null;
   student_files: string[] | null;

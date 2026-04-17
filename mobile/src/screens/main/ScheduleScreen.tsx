@@ -1,19 +1,22 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { getLessons, reportPayment, Lesson } from '../../api/lessons';
+import { getLessons, reportPayment, updateLessonNote, Lesson } from '../../api/lessons';
 import { getTopicContext, TheoryTopic } from '../../api/materials';
 import TopicModal from '../../components/TopicModal';
 import RescheduleScreen from './RescheduleScreen';
@@ -67,6 +70,16 @@ const PAYMENT_DOT_COLOR: Record<Lesson['payment_status'], string> = {
   paid: '#4CAF50',
 };
 
+function getPaymentIcon(
+  paymentStatus: Lesson['payment_status'],
+  conductStatus: Lesson['conduct_status'],
+): string {
+  if (paymentStatus === 'paid') return 'checkmark-outline';
+  if (paymentStatus === 'payment_pending') return 'time-outline';
+  if (conductStatus === 'conducted') return 'alert-outline';
+  return 'wallet-outline';
+}
+
 function getWeekStart(d: Date): Date {
   const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
@@ -108,6 +121,7 @@ function pluralLesson(n: number): string {
 // ─── Модальное окно ────────────────────────────────────────────────────────────
 
 function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: () => void; onRefresh: () => void }) {
+  const { top: topInset } = useSafeAreaInsets();
   const [localLesson, setLocalLesson] = useState(lesson);
   const color = STATUS_COLOR[localLesson.conduct_status];
   const bg = STATUS_BG[localLesson.conduct_status];
@@ -116,6 +130,10 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
   const [topicModalVisible, setTopicModalVisible] = useState(false);
   const [topicContext, setTopicContext] = useState<{ topic: TheoryTopic; allTopics: TheoryTopic[] } | null>(null);
   const [topicLoading, setTopicLoading] = useState(false);
+  const [note, setNote] = useState(lesson.student_note ?? '');
+  const [savingNote, setSavingNote] = useState(false);
+  const noteDirty = note !== (localLesson.student_note ?? '');
+  const scrollRef = useRef<ScrollView>(null);
 
   const handleOpenTopic = async () => {
     if (!localLesson.topic_id) return;
@@ -128,6 +146,18 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
       setTopicModalVisible(false);
     } finally {
       setTopicLoading(false);
+    }
+  };
+
+  const handleSaveNote = async () => {
+    setSavingNote(true);
+    try {
+      const updated = await updateLessonNote(localLesson.id, note.trim() || null);
+      setLocalLesson(updated);
+    } catch {
+      Alert.alert('Ошибка', 'Не удалось сохранить заметку');
+    } finally {
+      setSavingNote(false);
     }
   };
 
@@ -170,10 +200,16 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
   }
 
   const canReschedule = localLesson.conduct_status === 'scheduled';
-  const canReportPayment = localLesson.conduct_status === 'conducted' && localLesson.payment_status !== 'paid';
+  const canReportPayment =
+    localLesson.payment_status !== 'paid' &&
+    !['cancelled', 'rescheduled', 'booking_rejected', 'reschedule_rejected'].includes(localLesson.conduct_status);
 
   return (
-    <View style={modal.container}>
+    <KeyboardAvoidingView
+      style={modal.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? topInset : 0}
+    >
       <View style={modal.header}>
         <TouchableOpacity onPress={onClose} style={modal.closeBtn}>
           <Text style={modal.closeBtnText}>✕</Text>
@@ -182,7 +218,7 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
         <View style={modal.closeBtn} />
       </View>
 
-      <ScrollView contentContainerStyle={modal.body}>
+      <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={modal.body}>
         <View style={[modal.statusBadge, { backgroundColor: bg, borderLeftColor: color }]}>
           <Text style={[modal.statusText, { color }]}>{STATUS_LABEL[localLesson.conduct_status]}</Text>
         </View>
@@ -219,9 +255,29 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
 
         {localLesson.grade != null && (
           <View style={modal.section}>
-            <Row label="Оценка" value={String(localLesson.grade)} bold last />
+            <Row label="Оценка" value={String(localLesson.grade)} bold last={!localLesson.grade_comment} />
+            {localLesson.grade_comment ? (
+              <View style={modal.gradeCommentWrap}>
+                <Text style={modal.gradeCommentText}>{localLesson.grade_comment}</Text>
+              </View>
+            ) : null}
           </View>
         )}
+
+        <View style={modal.section}>
+          <Text style={modal.noteLabel}>Личная заметка</Text>
+          <TextInput
+            style={modal.noteInput}
+            value={note}
+            onChangeText={setNote}
+            placeholder="Только для себя..."
+            placeholderTextColor="#bbb"
+            multiline
+            textAlignVertical="top"
+            editable={!savingNote}
+            onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150)}
+          />
+        </View>
 
         {canReschedule && (
           <TouchableOpacity style={modal.rescheduleBtn} onPress={() => setShowReschedule(true)}>
@@ -242,6 +298,21 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
         )}
       </ScrollView>
 
+      {noteDirty && (
+        <View style={modal.saveNoteContainer}>
+          <TouchableOpacity
+            style={[modal.saveNoteBtn, savingNote && { opacity: 0.6 }]}
+            onPress={handleSaveNote}
+            disabled={savingNote}
+          >
+            {savingNote
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={modal.saveNoteBtnText}>Сохранить заметку</Text>
+            }
+          </TouchableOpacity>
+        </View>
+      )}
+
       <TopicModal
         visible={topicModalVisible}
         topic={topicContext?.topic ?? null}
@@ -249,7 +320,7 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
         loading={topicLoading}
         onClose={() => setTopicModalVisible(false)}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -382,15 +453,16 @@ export default function ScheduleScreen() {
                 </View>
                 {lesson.tutor_name ? <Text style={styles.cardMeta}>{lesson.tutor_name}</Text> : null}
                 {lesson.subject_name ? <Text style={styles.cardSubject}>{lesson.subject_name}</Text> : null}
-                <Text style={styles.cardCost}>{lesson.cost} ₽</Text>
-                {lesson.conduct_status === 'conducted' && (
-                  <View style={styles.cardPaymentRow}>
-                    <View style={[styles.paymentDot, { backgroundColor: PAYMENT_DOT_COLOR[lesson.payment_status] }]} />
-                    <Text style={[styles.paymentLabel, { color: PAYMENT_DOT_COLOR[lesson.payment_status] }]}>
-                      {PAYMENT_LABEL[lesson.payment_status]}
-                    </Text>
+                <View style={styles.cardBottom}>
+                  <Text style={styles.cardCost}>{lesson.cost} ₽</Text>
+                  <View style={[styles.paymentIconWrap, { borderColor: PAYMENT_DOT_COLOR[lesson.payment_status] }]}>
+                    <Ionicons
+                      name={getPaymentIcon(lesson.payment_status, lesson.conduct_status) as any}
+                      size={14}
+                      color={PAYMENT_DOT_COLOR[lesson.payment_status]}
+                    />
                   </View>
-                )}
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -509,10 +581,16 @@ const styles = StyleSheet.create({
   cardTime: { fontSize: 12, color: '#777' },
   cardMeta: { fontSize: 14, color: '#333', fontWeight: '500' },
   cardSubject: { fontSize: 13, color: '#666', marginTop: 2 },
-  cardCost: { fontSize: 13, fontWeight: '600', color: '#1a1a1a', marginTop: 6 },
-  cardPaymentRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
-  paymentDot: { width: 7, height: 7, borderRadius: 3.5 },
-  paymentLabel: { fontSize: 11, fontWeight: '500' },
+  cardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  cardCost: { fontSize: 13, fontWeight: '600', color: '#1a1a1a' },
+  paymentIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   unpaidBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -582,4 +660,28 @@ const modal = StyleSheet.create({
   },
   topicValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1, justifyContent: 'flex-end' },
   topicValueText: { fontSize: 14, color: '#2AABEE', fontWeight: '500', flexShrink: 1 },
+  gradeCommentWrap: { paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  gradeCommentText: { fontSize: 13, color: '#555', lineHeight: 19, fontStyle: 'italic' },
+  noteLabel: { fontSize: 12, fontWeight: '600', color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
+  noteInput: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 14,
+    color: '#1a1a1a',
+    minHeight: 80,
+    backgroundColor: '#fafafa',
+  },
+  saveNoteContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  saveNoteBtn: {
+    backgroundColor: '#2AABEE',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  saveNoteBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

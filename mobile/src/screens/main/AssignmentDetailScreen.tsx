@@ -221,12 +221,19 @@ export default function AssignmentDetailScreen({ route }: Props) {
                 </TouchableOpacity>
               )}
               {assignment.grade != null && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Оценка</Text>
-                  <View style={[styles.gradeBadge, gradeColor(assignment.grade)]}>
-                    <Text style={[styles.gradeText, { color: gradeColor(assignment.grade).text }]}>{assignment.grade}</Text>
+                <>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Оценка</Text>
+                    <View style={[styles.gradeBadge, gradeColor(assignment.grade)]}>
+                      <Text style={[styles.gradeText, { color: gradeColor(assignment.grade).text }]}>{assignment.grade}</Text>
+                    </View>
                   </View>
-                </View>
+                  {assignment.grade_comment ? (
+                    <View style={styles.gradeCommentWrap}>
+                      <Text style={styles.gradeCommentText}>{assignment.grade_comment}</Text>
+                    </View>
+                  ) : null}
+                </>
               )}
             </View>
           )}
@@ -480,4 +487,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  gradeCommentWrap: { paddingTop: 6, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  gradeCommentText: { fontSize: 13, color: '#555', lineHeight: 19, fontStyle: 'italic' },
 });
