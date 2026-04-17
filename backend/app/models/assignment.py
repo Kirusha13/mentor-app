@@ -31,6 +31,7 @@ class Assignment(TimestampMixin, Base):
     )
     grade: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     attachments: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    grade_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     student_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     student_files: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     tutor_student_id: Mapped[int] = mapped_column(

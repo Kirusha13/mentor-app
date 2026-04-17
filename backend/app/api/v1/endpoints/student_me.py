@@ -28,7 +28,7 @@ from app.models.tutor import Tutor
 from app.models.tutor_level import TutorLevel
 from app.models.tutor_student import TutorStudent, TutorStudentStatus
 from app.schemas.assignment import AssignmentOut, AssignmentUpdate, StudentAssignmentUpdate
-from app.schemas.lesson import AvailableSlot, LessonOut, RescheduleRequest, StudentLessonCreate
+from app.schemas.lesson import AvailableSlot, RescheduleRequest, StudentLessonCreate, StudentLessonNoteUpdate, StudentLessonOut
 from app.schemas.material import MaterialOut
 from app.schemas.student import StudentOut, StudentUpdate
 from app.schemas.theory_topic import TheoryTopicOut
@@ -169,7 +169,7 @@ async def join_by_token(
     return d
 
 
-@router.get("/lessons", response_model=list[LessonOut], summary="Мои занятия")
+@router.get("/lessons", response_model=list[StudentLessonOut], summary="Мои занятия")
 async def my_lessons(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -205,7 +205,28 @@ async def my_lessons(
     return lessons
 
 
-@router.post("/lessons", response_model=LessonOut, status_code=status.HTTP_201_CREATED, summary="Записаться на занятие")
+@router.patch("/lessons/{lesson_id}/note", response_model=StudentLessonOut, summary="Сохранить личную заметку к занятию")
+async def update_lesson_note(
+    lesson_id: int,
+    data: StudentLessonNoteUpdate,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Lesson)
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(Lesson.id == lesson_id, TutorStudent.student_id == student.id)
+    )
+    lesson = result.scalar_one_or_none()
+    if lesson is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Занятие не найдено")
+    lesson.student_note = data.student_note
+    await db.commit()
+    await db.refresh(lesson)
+    return lesson
+
+
+@router.post("/lessons", response_model=StudentLessonOut, status_code=status.HTTP_201_CREATED, summary="Записаться на занятие")
 async def book_lesson(
     data: StudentLessonCreate,
     student: Student = Depends(get_current_student),
@@ -533,7 +554,7 @@ async def _get_available_windows(student, db):
     return slots
 
 
-@router.post("/reschedule/{lesson_id}", response_model=LessonOut, summary="Запрос на перенос занятия")
+@router.post("/reschedule/{lesson_id}", response_model=StudentLessonOut, summary="Запрос на перенос занятия")
 async def request_reschedule(
     lesson_id: int,
     data: RescheduleRequest,
@@ -608,7 +629,7 @@ async def my_materials(
     return list(result.scalars().all())
 
 
-@router.post("/lessons/{lesson_id}/report-payment", response_model=LessonOut, summary="Сообщить об оплате")
+@router.post("/lessons/{lesson_id}/report-payment", response_model=StudentLessonOut, summary="Сообщить об оплате")
 async def report_payment(
     lesson_id: int,
     student: Student = Depends(get_current_student),

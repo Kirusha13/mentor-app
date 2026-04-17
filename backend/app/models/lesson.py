@@ -1,7 +1,7 @@
 import enum
 from datetime import date, time
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, ForeignKey, Numeric, SmallInteger, Time
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, ForeignKey, Numeric, SmallInteger, Text, Time
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -48,6 +48,9 @@ class Lesson(TimestampMixin, Base):
     )
     cost: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     grade: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    tutor_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    grade_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    student_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     reminder_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     tutor_student_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("tutor_student.id", ondelete="RESTRICT"), nullable=True

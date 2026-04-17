@@ -7,6 +7,7 @@ from app.models.lesson import ConductStatus, PaymentStatus
 
 
 class LessonOut(BaseModel):
+    """Занятие для репетитора — включает tutor_comment и grade_comment, не включает student_note."""
     id: int
     lesson_date: date
     start_time: time
@@ -15,8 +16,33 @@ class LessonOut(BaseModel):
     payment_status: PaymentStatus
     cost: Decimal | None
     grade: int | None
+    tutor_comment: str | None = None
+    grade_comment: str | None = None
     tutor_student_id: int | None
     tutor_id: int | None = None
+    topic_id: int | None
+    original_lesson_id: int | None
+    created_at: datetime
+    tutor_name: str | None = None
+    subject_name: str | None = None
+    topic_title: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class StudentLessonOut(BaseModel):
+    """Занятие для ученика — включает grade_comment и student_note, не включает tutor_comment."""
+    id: int
+    lesson_date: date
+    start_time: time
+    end_time: time
+    conduct_status: ConductStatus
+    payment_status: PaymentStatus
+    cost: Decimal | None
+    grade: int | None
+    grade_comment: str | None = None
+    student_note: str | None = None
+    tutor_student_id: int | None
     topic_id: int | None
     original_lesson_id: int | None
     created_at: datetime
@@ -73,7 +99,14 @@ class LessonUpdate(BaseModel):
     payment_status: PaymentStatus | None = None
     cost: Decimal | None = None
     grade: int | None = None
+    tutor_comment: str | None = None
+    grade_comment: str | None = None
     topic_id: int | None = None
+
+
+class StudentLessonNoteUpdate(BaseModel):
+    """Обновление личной заметки ученика к занятию."""
+    student_note: str | None = None
 
 
 class StudentLessonCreate(BaseModel):
