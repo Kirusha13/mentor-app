@@ -195,7 +195,7 @@ async def my_lessons(
         if row.Lesson.id in seen:
             continue
         seen.add(row.Lesson.id)
-        d = LessonOut.model_validate(row.Lesson).model_dump()
+        d = StudentLessonOut.model_validate(row.Lesson).model_dump()
         d["tutor_name"] = row.tutor_name
         d["subject_name"] = row.subject_name
         if row.Lesson.topic_id:
@@ -299,7 +299,7 @@ async def book_lesson(
         f"Ученик {student.full_name} запрашивает запись на {lesson.lesson_date.strftime('%d.%m.%Y')} в {lesson.start_time.strftime('%H:%M')}",
     )
 
-    d = LessonOut.model_validate(lesson).model_dump()
+    d = StudentLessonOut.model_validate(lesson).model_dump()
     d["tutor_name"] = (await db.execute(select(Tutor.full_name).where(Tutor.id == ts.tutor_id))).scalar_one_or_none()
     d["subject_name"] = (await db.execute(select(Subject.name).where(Subject.id == ts.subject_id))).scalar_one_or_none()
     if lesson.topic_id:
@@ -658,7 +658,7 @@ async def report_payment(
         f"Ученик {student.full_name} сообщил об оплате занятия {lesson.lesson_date.strftime('%d.%m.%Y')}",
     )
 
-    d = LessonOut.model_validate(lesson).model_dump()
+    d = StudentLessonOut.model_validate(lesson).model_dump()
     ts_result = await db.execute(
         select(TutorStudent, Tutor.full_name.label("tutor_name"), Subject.name.label("subject_name"))
         .join(Tutor, Tutor.id == TutorStudent.tutor_id)
