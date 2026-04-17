@@ -4,7 +4,8 @@ export interface TheoryTopic {
   id: number;
   title: string;
   description: string | null;
-  study_level: string[] | null;
+  level_ids: number[];
+  study_level?: string[] | null;
   tutor_id: number;
   subject_id: number;
   parent_topic_id: number | null;
@@ -20,6 +21,7 @@ export interface CreateTopicPayload {
   title: string;
   subject_id: number;
   description?: string | null;
+  level_ids?: number[];
   study_level?: string[] | null;
   parent_topic_id?: number | null;
 }
@@ -27,6 +29,7 @@ export interface CreateTopicPayload {
 export interface UpdateTopicPayload {
   title?: string;
   description?: string | null;
+  level_ids?: number[];
   study_level?: string[] | null;
   parent_topic_id?: number | null;
 }

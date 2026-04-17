@@ -1,13 +1,26 @@
 import type { TheoryTopic } from '../api/topics';
+import type { TutorLevel } from '../api/tutorLevels';
 
 export function normalizeLevelValue(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 export function topicMatchesStudentLevel(
-  topic: Pick<TheoryTopic, 'study_level'>,
-  grade: number | null | undefined
+  topic: Pick<TheoryTopic, 'level_ids' | 'study_level'>,
+  gradeOrLevelIds: number | null | undefined | number[]
 ) {
+  if (Array.isArray(gradeOrLevelIds)) {
+    const topicLevelIds = topic.level_ids ?? [];
+    if (!topicLevelIds.length) return true;
+    if (!gradeOrLevelIds.length) return true;
+    return topicLevelIds.some((levelId) => gradeOrLevelIds.includes(levelId));
+  }
+
+  const grade = gradeOrLevelIds;
+  if (topic.level_ids?.length) {
+    return true;
+  }
+
   const levels = (topic.study_level ?? [])
     .map((item) => normalizeLevelValue(String(item)))
     .filter(Boolean);
@@ -31,6 +44,17 @@ export function topicMatchesStudentLevel(
   return false;
 }
 
-export function formatTopicLevels(studyLevel: string[] | null | undefined) {
-  return studyLevel && studyLevel.length ? studyLevel.join(', ') : 'Все уровни';
+export function formatTopicLevels(
+  topicOrStudyLevel: Pick<TheoryTopic, 'level_ids' | 'study_level'> | string[] | null | undefined,
+  tutorLevels: TutorLevel[] = []
+) {
+  if (Array.isArray(topicOrStudyLevel) || !topicOrStudyLevel) {
+    return topicOrStudyLevel && topicOrStudyLevel.length ? topicOrStudyLevel.join(', ') : 'Все уровни';
+  }
+
+  const levelIds = topicOrStudyLevel.level_ids ?? [];
+  if (!levelIds.length) return 'Все уровни';
+
+  const levelMap = new Map(tutorLevels.map((level) => [level.id, level.name]));
+  return levelIds.map((levelId) => levelMap.get(levelId) ?? `Уровень #${levelId}`).join(', ');
 }

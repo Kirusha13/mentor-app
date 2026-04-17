@@ -6,6 +6,7 @@ import AssignmentsPage from '../pages/AssignmentsPage';
 import ContactsPage from '../pages/ContactsPage';
 import DashboardPage from '../pages/DashboardPage';
 import FinancePage from '../pages/FinancePage';
+import LevelsPage from '../pages/LevelsPage';
 import LoginPage from '../pages/LoginPage';
 import MaterialsPage from '../pages/MaterialsPage';
 import NotFoundPage from '../pages/NotFoundPage';
@@ -42,6 +43,7 @@ export default function AppRouter() {
         <Route path="/finance" element={<ProtectedLayout><FinancePage /></ProtectedLayout>} />
         <Route path="/portfolio" element={<ProtectedLayout><PortfolioPage /></ProtectedLayout>} />
         <Route path="/profile" element={<ProtectedLayout><TutorProfilePage /></ProtectedLayout>} />
+        <Route path="/levels" element={<ProtectedLayout><LevelsPage /></ProtectedLayout>} />
 
         <Route path="*" element={<NotFoundPage />} />
         <Route path="" element={<Navigate to="/" replace />} />

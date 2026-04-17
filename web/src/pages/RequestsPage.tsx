@@ -113,27 +113,6 @@ export default function RequestsPage() {
 
   return (
     <div>
-      <section
-        style={{
-          ...panelStyle,
-          padding: 28,
-          marginBottom: 22,
-          background: 'linear-gradient(140deg, rgba(255,248,240,0.98) 0%, rgba(255,255,255,0.9) 100%)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', lineHeight: 0.98, letterSpacing: '-0.04em', marginBottom: 10 }}>
-              Запросы
-            </h1>
-          </div>
-          <div style={{ minWidth: 160, borderRadius: 16, padding: '12px 14px', background: '#172033', color: '#fff' }}>
-            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 12, marginBottom: 6 }}>Всего запросов</div>
-            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1 }}>{withMeta.length}</div>
-          </div>
-        </div>
-      </section>
-
       <section style={panelStyle}>
         {loading ? (
           <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка запросов...</p>
