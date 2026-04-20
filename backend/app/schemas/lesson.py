@@ -7,7 +7,7 @@ from app.models.lesson import ConductStatus, PaymentStatus
 
 
 class LessonOut(BaseModel):
-    """Занятие для репетитора — включает tutor_comment и grade_comment, не включает student_note."""
+    """Занятие для репетитора — включает tutor_note и grade_comment, не включает student_note."""
     id: int
     lesson_date: date
     start_time: time
@@ -16,7 +16,7 @@ class LessonOut(BaseModel):
     payment_status: PaymentStatus
     cost: Decimal | None
     grade: int | None
-    tutor_comment: str | None = None
+    tutor_note: str | None = None
     grade_comment: str | None = None
     tutor_student_id: int | None
     tutor_id: int | None = None
@@ -31,7 +31,7 @@ class LessonOut(BaseModel):
 
 
 class StudentLessonOut(BaseModel):
-    """Занятие для ученика — включает grade_comment и student_note, не включает tutor_comment."""
+    """Занятие для ученика — включает grade_comment и student_note, не включает tutor_note."""
     id: int
     lesson_date: date
     start_time: time
@@ -99,7 +99,7 @@ class LessonUpdate(BaseModel):
     payment_status: PaymentStatus | None = None
     cost: Decimal | None = None
     grade: int | None = None
-    tutor_comment: str | None = None
+    tutor_note: str | None = None
     grade_comment: str | None = None
     topic_id: int | None = None
 
