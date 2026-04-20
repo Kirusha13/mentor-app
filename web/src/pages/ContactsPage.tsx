@@ -275,61 +275,6 @@ export default function ContactsPage() {
 
   return (
     <div>
-      <section
-        style={{
-          ...panelStyle,
-          padding: '20px',
-          marginBottom: '16px',
-          background:
-            'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 16,
-            alignItems: 'flex-start',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div>
-            <h1
-              style={{
-                fontSize: 'clamp(2rem, 4vw, 3rem)',
-                lineHeight: 0.98,
-                letterSpacing: '-0.04em',
-                marginBottom: 10,
-              }}
-            >
-              Контактные лица и связи с учениками
-            </h1>
-            <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 14, marginBottom: 0 }}>
-              Поиск, создание, редактирование и привязка контактных лиц.
-            </p>
-          </div>
-          <div
-            style={{
-              minWidth: 176,
-              borderRadius: 16,
-              padding: '12px 14px',
-              background: '#172033',
-              color: '#fff',
-            }}
-          >
-            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 12, marginBottom: 6 }}>
-              Всего контактов
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, marginBottom: 6 }}>
-              {filteredRecords.length}
-            </div>
-            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 12 }}>
-              Найдено по текущему фильтру
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section style={{ ...panelStyle, marginBottom: 16 }}>
         <div
           style={{
@@ -460,10 +405,11 @@ export default function ContactsPage() {
               </div>
               <button
                 type="button"
+                title="Закрыть"
                 onClick={() => setCreateModalOpen(false)}
-                style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none', padding: '10px 14px' }}
+                style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 22 }}
               >
-                Закрыть
+                ×
               </button>
             </div>
 
@@ -568,10 +514,11 @@ export default function ContactsPage() {
               </div>
               <button
                 type="button"
+                title="Закрыть"
                 onClick={closeDetails}
-                style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none', padding: '10px 14px' }}
+                style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 22 }}
               >
-                Закрыть
+                ×
               </button>
             </div>
 

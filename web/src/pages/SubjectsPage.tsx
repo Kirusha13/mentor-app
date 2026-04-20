@@ -6,7 +6,6 @@ import {
   updateSubject,
   type Subject,
 } from '../api/subjects';
-import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -19,8 +18,6 @@ const panelStyle = {
 const DEFAULT_COLORS = ['#d96f32', '#2a6fdb', '#2f7d63', '#7b61c8', '#cc8b00', '#c9485b'];
 
 export default function SubjectsPage() {
-  const isTablet = useMediaQuery('(max-width: 1100px)');
-  const isMobile = useMediaQuery('(max-width: 720px)');
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -28,6 +25,7 @@ export default function SubjectsPage() {
   const [newRate, setNewRate] = useState('');
   const [newColor, setNewColor] = useState(DEFAULT_COLORS[0]);
   const [creating, setCreating] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [editRate, setEditRate] = useState('');
@@ -74,6 +72,7 @@ export default function SubjectsPage() {
       setNewName('');
       setNewRate('');
       setNewColor(DEFAULT_COLORS[0]);
+      setCreateModalOpen(false);
       alert(`Предмет "${created.name}" создан`);
     } catch (error) {
       console.error('Ошибка создания предмета:', error);
@@ -147,75 +146,22 @@ export default function SubjectsPage() {
 
   return (
     <div>
-      <section
-        style={{
-          ...panelStyle,
-          padding: 28,
-          marginBottom: 22,
-          background:
-            'linear-gradient(140deg, rgba(245,248,255,0.98) 0%, rgba(255,255,255,0.9) 100%)',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 16,
-            alignItems: 'flex-start',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div>
-            <h1
-              style={{
-              fontSize: 'clamp(2rem, 4vw, 3rem)',
-              lineHeight: 0.98,
-              letterSpacing: '-0.04em',
-              marginBottom: 10,
-              }}
-            >
-              Предметы и токены приглашения
-            </h1>
-            <p style={{ color: '#5e6a7b', maxWidth: 760, fontSize: 16, marginBottom: 0 }}>
-              Управляй списком предметов, ставками, цветами и invitation token в одном месте.
-            </p>
-          </div>
-
-          <div
-            style={{
-              minWidth: isMobile ? '100%' : 176,
-              borderRadius: 16,
-              padding: '12px 14px',
-              background: '#172033',
-              color: '#fff',
-            }}
-          >
-            <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 12, marginBottom: 6 }}>
-              Всего предметов
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, marginBottom: 6 }}>
-              {subjects.length}
-            </div>
-            <div style={{ color: 'rgba(255,255,255,0.74)', fontSize: 12 }}>
-              Доступно для приглашения и привязки учеников
-            </div>
-          </div>
-        </div>
-      </section>
-
       <div
         style={{
           display: 'grid',
           gap: 18,
-          gridTemplateColumns: isTablet ? '1fr' : 'minmax(320px, 380px) minmax(0, 1fr)',
+          gridTemplateColumns: '1fr',
           alignItems: 'start',
         }}
       >
+        {createModalOpen && (
+          <div onClick={() => setCreateModalOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.48)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 40 }}>
+            <div onClick={(event) => event.stopPropagation()} style={{ width: 'min(520px, 100%)' }}>
         <section style={panelStyle}>
-          <h3 style={{ fontSize: 22, marginBottom: 10 }}>Создать предмет</h3>
-          <p style={{ color: '#687486', marginBottom: 14 }}>
-            Новый предмет получает цвет, ставку по умолчанию и token приглашения.
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+            <h3 style={{ fontSize: 22, marginBottom: 0 }}>Создать предмет</h3>
+            <button title="Закрыть" type="button" onClick={() => setCreateModalOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 22 }}>×</button>
+          </div>
 
           <div style={{ display: 'grid', gap: 10 }}>
             <input
@@ -260,31 +206,34 @@ export default function SubjectsPage() {
             </button>
           </div>
         </section>
+            </div>
+          </div>
+        )}
 
-        <section style={panelStyle}>
+        <section style={{ ...panelStyle, padding: 16 }}>
           <div
             style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
+              display: 'grid',
+              gridTemplateColumns: 'minmax(180px, 1fr) auto',
+              alignItems: 'end',
               gap: 12,
-              flexWrap: 'wrap',
               marginBottom: 16,
             }}
           >
             <div>
               <h3 style={{ fontSize: 22, marginBottom: 6 }}>Список предметов</h3>
-              <div style={{ color: '#6b7788' }}>
-                Переименование, изменение ставки, цвета и копирование token.
-              </div>
+              <div style={{ color: '#6b7788', fontSize: 14 }}>Всего предметов: {subjects.length}</div>
             </div>
 
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Поиск по названию"
-              style={{ maxWidth: 260 }}
-            />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Поиск по названию"
+                style={{ maxWidth: 260 }}
+              />
+              <button title="Создать предмет" type="button" onClick={() => setCreateModalOpen(true)} style={{ minWidth: 40, width: 40, height: 40, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center' }}>+</button>
+            </div>
           </div>
 
           {loading ? (
@@ -310,10 +259,11 @@ export default function SubjectsPage() {
                     key={subject.id}
                     style={{
                       border: '1px solid rgba(24,33,47,0.08)',
+                      borderLeft: `5px solid ${subject.color || '#d96f32'}`,
                       borderRadius: '20px',
                       padding: '18px',
-                      background:
-                        'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.9) 100%)',
+                      background: '#fff',
+                      boxShadow: '0 10px 24px rgba(15,23,42,0.05)',
                     }}
                   >
                     <div
@@ -449,13 +399,20 @@ export default function SubjectsPage() {
                               Редактировать
                             </button>
                             <button
+                              title="Удалить предмет"
                               onClick={() => handleDelete(subject.id, subject.name)}
                               style={{
+                                minWidth: 42,
+                                width: 42,
+                                height: 42,
+                                padding: 0,
+                                borderRadius: 999,
                                 background: '#a63f3b',
                                 boxShadow: 'none',
+                                fontSize: 18,
                               }}
                             >
-                              Удалить
+                              🗑
                             </button>
                           </>
                         )}

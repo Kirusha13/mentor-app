@@ -18,7 +18,6 @@ const panelStyle = {
   boxShadow: 'var(--shadow-card)',
 } as const;
 
-type PresetRange = 'month' | 'quarter' | 'year';
 type ForecastRange = 'week' | 'month';
 type ChartRange = 'week' | 'month' | 'year';
 type FinanceTab = 'income' | 'subscriptions';
@@ -65,23 +64,9 @@ function addDays(date: Date, days: number) {
   return copy;
 }
 
-function getPresetDates(preset: PresetRange) {
+function getDefaultHistoryRange() {
   const today = new Date();
   const end = endOfDay(today);
-
-  if (preset === 'quarter') {
-    return {
-      from: formatDate(addDays(startOfDay(today), -89)),
-      to: formatDate(end),
-    };
-  }
-
-  if (preset === 'year') {
-    return {
-      from: formatDate(addDays(startOfDay(today), -364)),
-      to: formatDate(end),
-    };
-  }
 
   return {
     from: formatDate(new Date(today.getFullYear(), today.getMonth(), 1)),
@@ -213,11 +198,10 @@ export default function FinancePage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FinanceTab>('income');
-  const [preset, setPreset] = useState<PresetRange>('month');
   const [forecastRange, setForecastRange] = useState<ForecastRange>('week');
   const [chartRange, setChartRange] = useState<ChartRange>('week');
-  const [dateFrom, setDateFrom] = useState(() => getPresetDates('month').from);
-  const [dateTo, setDateTo] = useState(() => getPresetDates('month').to);
+  const [dateFrom] = useState(() => getDefaultHistoryRange().from);
+  const [dateTo] = useState(() => getDefaultHistoryRange().to);
   const [selectedTutorStudentId, setSelectedTutorStudentId] = useState('');
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -315,11 +299,7 @@ export default function FinancePage() {
   );
   const forecastIncome =
     forecastPaidIncome + forecastDebt + forecastPendingConfirmation + forecastPlannedIncome;
-  const forecastConductedAccrued = forecastConducted.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
-  const forecastCollectionRate =
-    forecastConductedAccrued > 0 ? clampPercent((forecastPaidIncome / forecastConductedAccrued) * 100) : 0;
   const forecastFactIncome = forecastPaidIncome + forecastPendingConfirmation + forecastDebt;
-  const forecastGap = Math.max(forecastIncome - forecastPaidIncome - forecastPendingConfirmation, 0);
   const forecastProgress = forecastIncome > 0 ? clampPercent((forecastFactIncome / forecastIncome) * 100) : 0;
 
   const studentMap = useMemo(
@@ -499,6 +479,7 @@ export default function FinancePage() {
 
   const averageWeekRows = useMemo(() => {
     const year = new Date().getFullYear();
+    const currentMonthIndex = new Date().getMonth();
     const rows: { key: string; label: string; fullLabel: string; value: number; total: number }[] = [];
 
     for (let month = 0; month < 12; month += 1) {
@@ -516,6 +497,10 @@ export default function FinancePage() {
           );
         });
       const total = monthLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+      if (month > currentMonthIndex && total === 0) {
+        continue;
+      }
+
       const weeksInMonth = Math.ceil(monthEnd.getDate() / 7);
 
       rows.push({
@@ -530,67 +515,10 @@ export default function FinancePage() {
     return rows;
   }, [lessons]);
 
-  const lowAbonements = useMemo(
-    () =>
-      activeAbonements
-        .filter((option) => option.remaining <= 2)
-        .sort((a, b) => a.remaining - b.remaining),
-    [activeAbonements]
-  );
-
-  const financeTips = useMemo(() => {
-    const tips: { title: string; text: string; accent: string }[] = [];
-    const topDebt = debtRows[0] ?? null;
-
-    if (topDebt) {
-      tips.push({
-        title: 'Старый долг',
-        text: `${topDebt.studentName}: ${formatCurrency(topDebt.cost)}, ${topDebt.daysSince} дн.`,
-        accent: '#a63f3c',
-      });
-    }
-
-    if (forecastPendingConfirmation > 0) {
-      tips.push({
-        title: 'Проверить оплату',
-        text: `${formatCurrency(forecastPendingConfirmation)} уже на подтверждении.`,
-        accent: '#2a6fdb',
-      });
-    }
-
-    if (forecastGap > 0) {
-      tips.push({
-        title: 'До прогноза',
-        text: `Осталось закрыть ${formatCurrency(forecastGap)} занятиями и оплатами.`,
-        accent: '#2f7d5a',
-      });
-    }
-
-    if (lowAbonements.length > 0) {
-      const first = lowAbonements[0];
-      tips.push({
-        title: 'Абонемент',
-        text: `${first.studentName}, ${first.subjectName}: осталось ${first.remaining} зан.`,
-        accent: '#d96f32',
-      });
-    }
-
-    if (!tips.length) {
-      tips.push({
-        title: 'Всё спокойно',
-        text: 'Нет срочных долгов, проверок и абонементов на исходе.',
-        accent: '#2f7d5a',
-      });
-    }
-
-    return tips.slice(0, 3);
-  }, [debtRows, forecastGap, forecastPendingConfirmation, lowAbonements]);
-
   const maxDailyIncome = Math.max(...dailyIncomeRows.map((row) => row.value), 1);
   const maxAverageWeekIncome = Math.max(...averageWeekRows.map((row) => row.value), 1);
   const forecastParts = [
     { label: 'Оплачено', value: forecastPaidIncome, color: '#d96f32' },
-    { label: 'Долги', value: forecastDebt, color: '#a63f3c' },
     { label: 'На проверке', value: forecastPendingConfirmation, color: '#2a6fdb' },
     { label: 'В расписании', value: forecastPlannedIncome, color: '#2f7d5a' },
   ];
@@ -600,13 +528,6 @@ export default function FinancePage() {
     month: 'по неделям текущего месяца',
     year: 'по месяцам текущего года',
   }[chartRange];
-
-  const applyPreset = (nextPreset: PresetRange) => {
-    const nextRange = getPresetDates(nextPreset);
-    setPreset(nextPreset);
-    setDateFrom(nextRange.from);
-    setDateTo(nextRange.to);
-  };
 
   const handleCreateNewAbonement = () => {
     const nextRelation = availableForCreation[0] ?? null;
@@ -720,27 +641,6 @@ export default function FinancePage() {
 
   return (
     <div>
-      <section
-        style={{
-          ...panelStyle,
-          padding: isMobile ? 18 : 24,
-          marginBottom: 16,
-          background:
-            'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 'clamp(2rem, 4vw, 3rem)',
-            lineHeight: 0.98,
-            letterSpacing: '-0.04em',
-            marginBottom: 0,
-          }}
-        >
-          Финансы и абонементы
-        </h1>
-      </section>
-
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         {[
           ['income', 'Доходы'],
@@ -767,92 +667,6 @@ export default function FinancePage() {
 
       {activeTab === 'income' && (
         <>
-      <section style={{ ...panelStyle, marginBottom: 16 }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: isTablet ? '1fr' : '1.2fr 1fr',
-            gap: 16,
-            alignItems: 'end',
-          }}
-        >
-          <div style={{ display: 'grid', gap: 10 }}>
-            <div style={{ fontSize: 19, fontWeight: 800, color: '#1f2a3b' }}>Период истории</div>
-            <div style={{ color: '#687486', fontSize: 14 }}>
-              Для списка проблемных оплат и ручной проверки прошлых недель, месяцев и года.
-            </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {[
-                ['month', 'Месяц'],
-                ['quarter', '90 дней'],
-                ['year', 'Год'],
-              ].map(([value, label]) => {
-                const active = preset === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => applyPreset(value as PresetRange)}
-                    style={{
-                      background: active ? '#d96f32' : 'rgba(23,32,51,0.92)',
-                      boxShadow: 'none',
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-              gap: 10,
-            }}
-          >
-            <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-              С даты
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(event) => {
-                  setPreset('month');
-                  setDateFrom(event.target.value);
-                }}
-              />
-            </label>
-            <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-              По дату
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(event) => {
-                  setPreset('month');
-                  setDateTo(event.target.value);
-                }}
-              />
-            </label>
-          </div>
-        </div>
-
-        {rangeError && (
-          <div
-            style={{
-              marginTop: 14,
-              padding: '12px 14px',
-              borderRadius: 14,
-              background: 'rgba(166,63,59,0.08)',
-              color: '#9f3f3c',
-              border: '1px solid rgba(166,63,59,0.12)',
-            }}
-          >
-            {rangeError}
-          </div>
-        )}
-      </section>
-
       <section style={{ marginBottom: 16 }}>
         <article style={panelStyle}>
           <div
@@ -941,7 +755,7 @@ export default function FinancePage() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: isTablet ? '1fr' : '1fr 0.8fr',
+              gridTemplateColumns: '1fr',
               gap: 14,
               alignItems: 'stretch',
             }}
@@ -969,50 +783,6 @@ export default function FinancePage() {
                   </div>
                 </div>
               ))}
-            </div>
-
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 16,
-                background: 'rgba(23,32,51,0.04)',
-                border: '1px solid rgba(24,33,47,0.07)',
-                display: 'grid',
-                gap: 10,
-              }}
-            >
-              <div style={{ color: '#1f2a3b', fontWeight: 900 }}>
-                Прогноз закрыт на {loading ? '—' : `${forecastProgress.toFixed(0)}%`}
-              </div>
-              <div style={{ color: '#687486', fontSize: 14 }}>
-                Собираемость оплат: {loading ? '—' : `${forecastCollectionRate.toFixed(0)}%`}
-              </div>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {financeTips.map((tip) => (
-                  <div
-                    key={tip.title}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '8px minmax(0, 1fr)',
-                      gap: 8,
-                      alignItems: 'start',
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        background: tip.accent,
-                        marginTop: 6,
-                      }}
-                    />
-                    <span style={{ color: '#435066', fontSize: 13, lineHeight: 1.4 }}>
-                      <strong style={{ color: '#1f2a3b' }}>{tip.title}:</strong> {tip.text}
-                    </span>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
 
@@ -1574,10 +1344,11 @@ export default function FinancePage() {
               </div>
               <button
                 type="button"
+                title="Закрыть"
                 onClick={() => setCreateModalOpen(false)}
-                style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none', padding: '10px 14px' }}
+                style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 22 }}
               >
-                Закрыть
+                ×
               </button>
             </div>
 
@@ -1682,13 +1453,14 @@ export default function FinancePage() {
                 </button>
                 <button
                   type="button"
+                  title="Закрыть"
                   onClick={() => {
                     setDetailsModalOpen(false);
                     setEditingAbonement(false);
                   }}
-                  style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none', padding: '10px 14px' }}
+                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 22 }}
                 >
-                  Закрыть
+                  ×
                 </button>
               </div>
             </div>

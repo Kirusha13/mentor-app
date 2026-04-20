@@ -163,15 +163,6 @@ export default function DashboardPage() {
     [activeLessons, relationMap, studentMap, subjectMap, topicMap, today]
   );
 
-  const nextLesson = useMemo(
-    () =>
-      activeLessons
-        .filter((lesson) => lesson.conduct_status === 'scheduled' && toDateTime(lesson).getTime() >= now.getTime())
-        .sort((a, b) => toDateTime(a).getTime() - toDateTime(b).getTime())
-        .map(enrichLesson)[0] ?? null,
-    [activeLessons, relationMap, studentMap, subjectMap, topicMap]
-  );
-
   const weekLessons = useMemo(
     () =>
       activeLessons.filter((lesson) => {
@@ -278,119 +269,29 @@ export default function DashboardPage() {
     <div style={{ display: 'grid', gap: 16 }}>
       <section
         style={{
-          ...panelStyle,
-          padding: isMobile ? 16 : 20,
-          background:
-            'linear-gradient(140deg, rgba(255,249,242,0.98) 0%, rgba(255,255,255,0.9) 100%)',
-        }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: isTablet ? '1fr' : 'minmax(0, 0.85fr) minmax(300px, 1.15fr)',
-            gap: 16,
-            alignItems: 'stretch',
-          }}
-        >
-          <div>
-            <h1
-              style={{
-                fontSize: 'clamp(1.8rem, 3.2vw, 2.45rem)',
-                lineHeight: 0.98,
-                letterSpacing: '-0.04em',
-                marginBottom: 8,
-              }}
-            >
-              Главная
-            </h1>
-            <p style={{ color: '#5e6a7b', maxWidth: 560, fontSize: 14, marginBottom: 0 }}>
-              Короткий ежедневник: ближайшее занятие, деньги дня и задачи, которые нельзя забыть.
-            </p>
-          </div>
-
-          <article
-            style={{
-              borderRadius: 24,
-              padding: 16,
-              background: '#172033',
-              color: '#fff',
-              minHeight: 170,
-              display: 'grid',
-              alignContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <div>
-              <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13, marginBottom: 8 }}>
-                Ближайшее занятие
-              </div>
-              {nextLesson ? (
-                <>
-                  <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.02, marginBottom: 8 }}>
-                    {nextLesson.student?.full_name ?? 'Ученик'}
-                  </div>
-                  <div style={{ color: 'rgba(255,255,255,0.78)', fontSize: 14, display: 'grid', gap: 6 }}>
-                    <span>{nextLesson.subject?.name ?? 'Без предмета'}</span>
-                    <span>
-                      {nextLesson.lesson.lesson_date} • {toTime(nextLesson.lesson.start_time)} -{' '}
-                      {toTime(nextLesson.lesson.end_time)}
-                    </span>
-                    <span>Тема: {nextLesson.topic?.title ?? 'не указана'}</span>
-                  </div>
-                </>
-              ) : (
-                <div style={{ color: 'rgba(255,255,255,0.78)', fontSize: 14 }}>
-                  Ближайших подтверждённых занятий пока нет.
-                </div>
-              )}
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: 12,
-                alignItems: 'center',
-                flexWrap: 'wrap',
-              }}
-            >
-              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>
-                {todayLessons.length} зан. сегодня
-              </span>
-              <button
-                type="button"
-                onClick={() => navigate('/schedule')}
-                style={{ background: 'rgba(255,255,255,0.1)', boxShadow: 'none' }}
-              >
-                К календарю
-              </button>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section
-        style={{
           display: 'grid',
-          gridTemplateColumns: isTablet ? '1fr' : '0.95fr 1.05fr',
+          gridTemplateColumns: isTablet ? '1fr' : 'max-content minmax(0, 1fr)',
           gap: 12,
         }}
       >
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
-            gap: 12,
+            gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(3, max-content)' : 'max-content',
+            gap: 8,
+            alignContent: 'start',
+            justifyContent: 'start',
           }}
         >
           {financeCards.map((card) => (
-            <article key={card.title} style={{ ...panelStyle, padding: 16 }}>
-              <div style={{ ...mutedTextStyle, marginBottom: 8 }}>{card.title}</div>
-              <div style={{ color: '#1f2a3b', fontSize: 24, fontWeight: 900 }}>{card.value}</div>
+            <article key={card.title} style={{ ...panelStyle, padding: '8px 11px', borderRadius: 14, minHeight: 0, width: 'max-content', minWidth: 146, maxWidth: 170 }}>
+              <div style={{ ...mutedTextStyle, marginBottom: 2, fontSize: 11, lineHeight: 1.15 }}>{card.title}</div>
+              <div style={{ color: '#1f2a3b', fontSize: 18, fontWeight: 900, lineHeight: 1.1, whiteSpace: 'nowrap' }}>{card.value}</div>
             </article>
           ))}
         </div>
 
-        <article style={{ ...panelStyle, padding: 16 }}>
+        <article style={{ ...panelStyle, padding: 14, minWidth: 0 }}>
           <div
             style={{
               display: 'flex',
@@ -402,7 +303,6 @@ export default function DashboardPage() {
           >
             <div>
               <h3 style={{ fontSize: 18, marginBottom: 4 }}>Заработок за неделю</h3>
-              <div style={{ ...mutedTextStyle, fontSize: 13 }}>Факт по оплаченным занятиям, Пн-Вс.</div>
             </div>
             <strong style={{ color: '#1f2a3b' }}>{formatCurrency(todayPaid)}</strong>
           </div>
@@ -455,7 +355,6 @@ export default function DashboardPage() {
           >
             <div>
               <h3 style={{ fontSize: 20, marginBottom: 6 }}>Сегодня</h3>
-              <div style={mutedTextStyle}>Только подтверждённые занятия на день.</div>
             </div>
           </div>
 
@@ -564,8 +463,7 @@ export default function DashboardPage() {
 
         <article style={panelStyle}>
           <div style={{ marginBottom: 14 }}>
-            <h3 style={{ fontSize: 20, marginBottom: 6 }}>Что нужно сделать</h3>
-            <div style={mutedTextStyle}>Короткий чек-лист дня без лишних деталей.</div>
+            <h3 style={{ fontSize: 20, marginBottom: 6 }}>Чек-лист на сегодня</h3>
           </div>
 
           <div style={{ display: 'grid', gap: 9 }}>
