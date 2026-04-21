@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -14,7 +14,7 @@ class TutorLevel(TimestampMixin, Base):
         BigInteger, ForeignKey("tutors.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_favourite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     topic_levels: Mapped[list["TopicLevel"]] = relationship(
         back_populates="level", cascade="all, delete-orphan"

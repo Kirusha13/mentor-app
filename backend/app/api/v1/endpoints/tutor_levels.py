@@ -19,7 +19,7 @@ async def list_levels(
     result = await db.execute(
         select(TutorLevel)
         .where(TutorLevel.tutor_id == tutor.id)
-        .order_by(TutorLevel.sort_order, TutorLevel.name)
+        .order_by(TutorLevel.name)
     )
     return list(result.scalars().all())
 

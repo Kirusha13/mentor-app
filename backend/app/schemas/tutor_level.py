@@ -7,7 +7,7 @@ class TutorLevelOut(BaseModel):
     id: int
     tutor_id: int
     name: str
-    sort_order: int
+    is_favourite: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -15,9 +15,9 @@ class TutorLevelOut(BaseModel):
 
 class TutorLevelCreate(BaseModel):
     name: str
-    sort_order: int = 0
+    is_favourite: bool = False
 
 
 class TutorLevelUpdate(BaseModel):
     name: str | None = None
-    sort_order: int | None = None
+    is_favourite: bool | None = None
