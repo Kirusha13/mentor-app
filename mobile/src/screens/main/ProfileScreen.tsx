@@ -238,9 +238,9 @@ export default function ProfileScreen() {
                 </View>
                 {/* Предметы */}
                 {subjects.map((ts) => {
-                  const remaining = ts.subscription_hours != null
-                    ? ts.subscription_hours - (ts.used_hours ?? 0)
-                    : null;
+                  const totalH = ts.subscription_hours != null ? parseFloat(String(ts.subscription_hours)) : null;
+                  const usedH = parseFloat(String(ts.used_hours ?? 0));
+                  const remaining = totalH != null ? totalH - usedH : null;
                   return (
                     <View key={ts.id} style={styles.subjectRow}>
                       <Text style={styles.subjectName}>{ts.subject_name ?? '—'}</Text>
@@ -248,7 +248,7 @@ export default function ProfileScreen() {
                         {remaining != null && remaining > 0 && (
                           <View style={styles.subscriptionBadge}>
                             <Text style={styles.subscriptionBadgeText}>
-                              {remaining} из {ts.subscription_hours} ч.
+                              {remaining} из {totalH} ч.
                             </Text>
                           </View>
                         )}
