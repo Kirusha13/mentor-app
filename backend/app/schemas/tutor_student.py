@@ -12,8 +12,8 @@ class TutorStudentOut(BaseModel):
     hourly_rate: Decimal
     rate_set_at: datetime
     started_at: date
-    subscription_lessons: int | None
-    used_lessons: int | None
+    subscription_hours: Decimal | None
+    used_hours: Decimal | None
     tutor_id: int
     student_id: int
     subject_id: int
@@ -29,12 +29,12 @@ class TutorStudentCreate(BaseModel):
     subject_id: int
     hourly_rate: Decimal
     started_at: date
-    subscription_lessons: int | None = None
+    subscription_hours: Decimal | None = None
 
 
 class TutorStudentUpdate(BaseModel):
     status: TutorStudentStatus | None = None
     hourly_rate: Decimal | None = None
-    subscription_lessons: int | None = None
-    used_lessons: int | None = None
+    subscription_hours: Decimal | None = None
+    used_hours: Decimal | None = None
     level_ids: list[int] | None = None

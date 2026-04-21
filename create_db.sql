@@ -7,16 +7,19 @@
 -- 0. Удаление существующих объектов (для пересоздания схемы)
 -- ------------------------------------------------------------
 
-DROP TABLE IF EXISTS assignments    CASCADE;
-DROP TABLE IF EXISTS lessons        CASCADE;
-DROP TABLE IF EXISTS materials      CASCADE;
-DROP TABLE IF EXISTS theory_topics  CASCADE;
-DROP TABLE IF EXISTS tutor_student  CASCADE;
-DROP TABLE IF EXISTS student_contact CASCADE;
-DROP TABLE IF EXISTS subjects       CASCADE;
-DROP TABLE IF EXISTS contacts       CASCADE;
-DROP TABLE IF EXISTS students       CASCADE;
-DROP TABLE IF EXISTS tutors         CASCADE;
+DROP TABLE IF EXISTS student_levels    CASCADE;
+DROP TABLE IF EXISTS topic_levels      CASCADE;
+DROP TABLE IF EXISTS tutor_levels      CASCADE;
+DROP TABLE IF EXISTS assignments       CASCADE;
+DROP TABLE IF EXISTS lessons           CASCADE;
+DROP TABLE IF EXISTS materials         CASCADE;
+DROP TABLE IF EXISTS theory_topics     CASCADE;
+DROP TABLE IF EXISTS tutor_student     CASCADE;
+DROP TABLE IF EXISTS student_contact   CASCADE;
+DROP TABLE IF EXISTS subjects          CASCADE;
+DROP TABLE IF EXISTS contacts          CASCADE;
+DROP TABLE IF EXISTS students          CASCADE;
+DROP TABLE IF EXISTS tutors            CASCADE;
 
 DROP TYPE IF EXISTS material_format_enum      CASCADE;
 DROP TYPE IF EXISTS material_level_enum       CASCADE;
@@ -48,12 +51,15 @@ CREATE TYPE conduct_status_enum AS ENUM (
     'cancelled',           -- Отменено
     'rescheduled',         -- Перенесено
     'reschedule_pending',  -- Ожидает переноса
-    'reschedule_rejected'  -- Перенос отклонён
+    'reschedule_rejected', -- Перенос отклонён
+    'booking_pending',     -- Запрос на запись ожидает подтверждения
+    'booking_rejected'     -- Запрос на запись отклонён
 );
 
 CREATE TYPE payment_status_enum AS ENUM (
-    'unpaid',       -- Не оплачено
-    'paid'          -- Оплачено
+    'unpaid',          -- Не оплачено
+    'payment_pending', -- Ожидает подтверждения
+    'paid'             -- Оплачено
 );
 
 CREATE TYPE completion_status_enum AS ENUM (
@@ -174,6 +180,20 @@ CREATE TABLE tutor_student (
 );
 
 -- ------------------------------------------------------------
+-- 8. Уровни обучения репетитора (tutor_levels)
+-- ------------------------------------------------------------
+
+CREATE TABLE tutor_levels (
+    id          BIGSERIAL    PRIMARY KEY,
+    tutor_id    BIGINT       NOT NULL REFERENCES tutors(id) ON DELETE CASCADE,
+    name        VARCHAR(100) NOT NULL,
+    sort_order  INT          NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE(tutor_id, name)
+);
+
+-- ------------------------------------------------------------
 -- 9. Темы теории (theory_topics)
 -- ------------------------------------------------------------
 
@@ -181,7 +201,6 @@ CREATE TABLE theory_topics (
     id                 BIGSERIAL       PRIMARY KEY,
     title              VARCHAR(255)    NOT NULL,
     description        TEXT            NULL,
-    study_level        JSONB           NULL,     -- напр.: ["ОГЭ", "9 класс"]
     tutor_id           BIGINT          NOT NULL REFERENCES tutors(id)         ON DELETE CASCADE,
     subject_id         BIGINT          NOT NULL REFERENCES subjects(id)       ON DELETE RESTRICT,
     parent_topic_id    BIGINT          NULL     REFERENCES theory_topics(id)  ON DELETE SET NULL,
@@ -190,7 +209,27 @@ CREATE TABLE theory_topics (
 );
 
 -- ------------------------------------------------------------
--- 10. Материалы (materials)
+-- 10. Связь тема–уровень M:M (topic_levels)
+-- ------------------------------------------------------------
+
+CREATE TABLE topic_levels (
+    topic_id  BIGINT NOT NULL REFERENCES theory_topics(id) ON DELETE CASCADE,
+    level_id  BIGINT NOT NULL REFERENCES tutor_levels(id)  ON DELETE CASCADE,
+    PRIMARY KEY (topic_id, level_id)
+);
+
+-- ------------------------------------------------------------
+-- 11. Связь ученик–уровень M:M (student_levels)
+-- ------------------------------------------------------------
+
+CREATE TABLE student_levels (
+    tutor_student_id  BIGINT NOT NULL REFERENCES tutor_student(id) ON DELETE CASCADE,
+    level_id          BIGINT NOT NULL REFERENCES tutor_levels(id)  ON DELETE CASCADE,
+    PRIMARY KEY (tutor_student_id, level_id)
+);
+
+-- ------------------------------------------------------------
+-- 12. Материалы (materials)
 -- ------------------------------------------------------------
 
 CREATE TABLE materials (
@@ -211,7 +250,7 @@ CREATE TABLE materials (
 );
 
 -- ------------------------------------------------------------
--- 11. Занятия (lessons)
+-- 13. Занятия (lessons)
 -- ------------------------------------------------------------
 
 CREATE TABLE lessons (
@@ -237,7 +276,7 @@ CREATE TABLE lessons (
 );
 
 -- ------------------------------------------------------------
--- 12. Домашние задания (assignments)
+-- 14. Домашние задания (assignments)
 -- ------------------------------------------------------------
 
 CREATE TABLE assignments (
@@ -255,11 +294,8 @@ CREATE TABLE assignments (
 );
 
 -- ------------------------------------------------------------
--- 13. Индексы
+-- 15. Индексы
 -- ------------------------------------------------------------
-
--- tutors
-CREATE INDEX idx_tutors_telegram_id       ON tutors(telegram_id);
 
 -- students
 CREATE INDEX idx_students_telegram_id     ON students(telegram_id);
@@ -277,10 +313,20 @@ CREATE INDEX idx_tutor_student_tutor      ON tutor_student(tutor_id);
 CREATE INDEX idx_tutor_student_student    ON tutor_student(student_id);
 CREATE INDEX idx_tutor_student_subject    ON tutor_student(subject_id);
 
+-- tutor_levels
+CREATE INDEX idx_tutor_levels_tutor       ON tutor_levels(tutor_id);
+
 -- theory_topics
 CREATE INDEX idx_theory_topics_tutor      ON theory_topics(tutor_id);
 CREATE INDEX idx_theory_topics_subject    ON theory_topics(subject_id);
 CREATE INDEX idx_theory_topics_parent     ON theory_topics(parent_topic_id);
+
+-- topic_levels
+CREATE INDEX idx_topic_levels_level       ON topic_levels(level_id);
+
+-- student_levels
+CREATE INDEX idx_student_levels_ts        ON student_levels(tutor_student_id);
+CREATE INDEX idx_student_levels_level     ON student_levels(level_id);
 
 -- materials
 CREATE INDEX idx_materials_topic          ON materials(topic_id);

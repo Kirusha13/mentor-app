@@ -1,7 +1,8 @@
 import enum
 from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, Numeric
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Numeric
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,8 +28,8 @@ class TutorStudent(TimestampMixin, Base):
     hourly_rate: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     rate_set_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     started_at: Mapped[date] = mapped_column(Date, nullable=False)
-    subscription_lessons: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    used_lessons: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
+    subscription_hours: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    used_hours: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=0)
     tutor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tutors.id", ondelete="RESTRICT"), nullable=False)
     student_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("students.id", ondelete="RESTRICT"), nullable=False)
     subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="RESTRICT"), nullable=False)
