@@ -44,7 +44,6 @@ async def telegram_login(
         await db.commit()
         await db.refresh(tutor)
     else:
-        tutor.full_name = full_name or tutor.full_name
         tutor.avatar_url = data.photo_url or tutor.avatar_url
         tutor.last_visited_at = now
         await db.commit()
