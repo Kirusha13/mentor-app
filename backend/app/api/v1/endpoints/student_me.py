@@ -450,16 +450,14 @@ async def my_topics(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
-    # Получаем tutor_id через связку
     ts_result = await db.execute(
-        select(TutorStudent.tutor_id).where(TutorStudent.student_id == student.id).limit(1)
+        select(TutorStudent.tutor_id).where(TutorStudent.student_id == student.id)
     )
-    row = ts_result.scalar_one_or_none()
-    if row is None:
+    tutor_ids = list(ts_result.scalars().all())
+    if not tutor_ids:
         return []
-    tutor_id = row
 
-    q = select(TheoryTopic).where(TheoryTopic.tutor_id == tutor_id)
+    q = select(TheoryTopic).where(TheoryTopic.tutor_id.in_(tutor_ids))
     if subject_id:
         q = q.where(TheoryTopic.subject_id == subject_id)
     result = await db.execute(q.order_by(TheoryTopic.title))
