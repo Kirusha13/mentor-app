@@ -21,6 +21,9 @@ export interface Lesson {
   payment_status: PaymentStatus;
   cost: number | null;
   grade: number | null;
+  tutor_note: string | null;
+  grade_comment: string | null;
+  student_note: string | null;
   tutor_student_id: number | null;
   tutor_id: number | null;
   topic_id: number | null;
@@ -48,6 +51,8 @@ export interface UpdateLessonPayload {
   payment_status?: PaymentStatus;
   cost?: number;
   grade?: number;
+  tutor_note?: string | null;
+  grade_comment?: string | null;
   topic_id?: number | null;
 }
 

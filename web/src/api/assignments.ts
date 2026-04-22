@@ -26,6 +26,7 @@ export interface Assignment {
   deadline: string;
   completion_status: CompletionStatus;
   grade: number | null;
+  grade_comment: string | null;
   attachments: AssignmentAttachments | null;
   student_comment: string | null;
   student_files: string[] | null;
@@ -54,6 +55,7 @@ export interface UpdateAssignmentPayload {
   deadline?: string;
   completion_status?: CompletionStatus;
   grade?: number;
+  grade_comment?: string | null;
   attachments?: AssignmentAttachments | null;
   topic_id?: number | null;
 }

@@ -308,8 +308,13 @@ export default function ContactsPage() {
               placeholder="Например: мама, Иван, математика"
               style={{ flex: '1 1 280px' }}
             />
-            <button type="button" onClick={() => setCreateModalOpen(true)}>
-              Добавить контакт
+            <button
+              type="button"
+              title="Добавить контакт"
+              onClick={() => setCreateModalOpen(true)}
+              style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center' }}
+            >
+              +
             </button>
           </div>
         </div>
@@ -586,17 +591,19 @@ export default function ContactsPage() {
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <button
                       type="button"
+                      title="Редактировать контакт"
                       onClick={() => startEditingContact(selectedRecord)}
-                      style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                      style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                     >
-                      Редактировать
+                      ✎
                     </button>
                     <button
                       type="button"
+                      title="Отвязать контакт"
                       onClick={() => handleRemoveContact(selectedRecord)}
-                      style={{ background: 'rgba(166,63,59,0.92)', boxShadow: 'none' }}
+                      style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                     >
-                      Отвязать
+                      🗑
                     </button>
                   </div>
                 </div>

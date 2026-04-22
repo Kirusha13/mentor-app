@@ -54,6 +54,7 @@ type AssignmentColumn = {
   key: string;
   title: string;
   color: string;
+  status?: CompletionStatus;
   items: Assignment[];
 };
 
@@ -111,6 +112,9 @@ export default function AssignmentsPage() {
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [attachedLinks, setAttachedLinks] = useState<AssignmentLinkAttachment[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<AssignmentFileAttachment[]>([]);
+  const [assignmentGradeCommentDraft, setAssignmentGradeCommentDraft] = useState('');
+  const [assignmentCommentSaving, setAssignmentCommentSaving] = useState(false);
+  const [statusPreviewLimit] = useState(5);
 
   const relationOptions = useMemo(
     () =>
@@ -149,6 +153,10 @@ export default function AssignmentsPage() {
     () => normalizeAttachments(selectedAssignment?.attachments ?? null),
     [selectedAssignment]
   );
+
+  useEffect(() => {
+    setAssignmentGradeCommentDraft(selectedAssignment?.grade_comment ?? '');
+  }, [selectedAssignment]);
 
   const availableTopics = useMemo(() => {
     const selectedRelation = relationOptions.find(
@@ -333,7 +341,7 @@ export default function AssignmentsPage() {
 
   const handlePatchAssignment = async (
     assignmentId: number,
-    payload: { completion_status?: CompletionStatus; grade?: number }
+    payload: { completion_status?: CompletionStatus; grade?: number; grade_comment?: string | null }
   ) => {
     try {
       const updated = await updateAssignment(assignmentId, payload);
@@ -342,6 +350,30 @@ export default function AssignmentsPage() {
     } catch (error) {
       console.error('Ошибка обновления задания:', error);
       alert('Не удалось обновить задание');
+    }
+  };
+
+  const handleSaveAssignmentGradeComment = async () => {
+    if (!selectedAssignment) {
+      return;
+    }
+
+    if ((selectedAssignment.grade_comment ?? '') === assignmentGradeCommentDraft.trim()) {
+      return;
+    }
+
+    try {
+      setAssignmentCommentSaving(true);
+      const updated = await updateAssignment(selectedAssignment.id, {
+        grade_comment: assignmentGradeCommentDraft.trim() || null,
+      });
+      upsertAssignment(updated);
+      setSelectedAssignmentId(updated.id);
+    } catch (error) {
+      console.error('Ошибка сохранения комментария к оценке ДЗ:', error);
+      alert('Не удалось сохранить комментарий к оценке ДЗ');
+    } finally {
+      setAssignmentCommentSaving(false);
     }
   };
 
@@ -414,18 +446,21 @@ export default function AssignmentsPage() {
         key: 'active',
         title: 'В работе',
         color: '#2a6fdb',
+        status: 'in_progress',
         items: sortByDeadline(active),
       },
       {
         key: 'overdue',
         title: 'Просрочено',
         color: '#a63f3b',
+        status: 'overdue',
         items: sortByDeadline(overdue),
       },
       {
         key: 'checked',
         title: 'Проверено',
         color: '#2f7d63',
+        status: 'completed',
         items: sortByDeadline(checked),
       },
     ];
@@ -707,7 +742,30 @@ export default function AssignmentsPage() {
                     </div>
                   ) : (
                     <div style={{ display: 'grid', gap: 10 }}>
-                      {column.items.map(renderAssignmentCard)}
+                      {column.items.slice(0, statusPreviewLimit).map(renderAssignmentCard)}
+                      {column.items.length > statusPreviewLimit && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (column.status) {
+                              setStatusFilter(column.status);
+                            }
+                          }}
+                          style={{
+                            justifySelf: 'start',
+                            background: 'transparent',
+                            color: column.color,
+                            border: `1px solid ${column.color}33`,
+                            boxShadow: 'none',
+                            padding: '8px 12px',
+                            borderRadius: 999,
+                            fontSize: 12,
+                            fontWeight: 800,
+                          }}
+                        >
+                          Смотреть все ({column.items.length})
+                        </button>
+                      )}
                     </div>
                   )}
                 </section>
@@ -841,6 +899,32 @@ export default function AssignmentsPage() {
                   >
                     Поставить оценку
                   </button>
+                </div>
+
+                <div style={{ marginTop: 16 }}>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontSize: 13, color: '#687486' }}>Комментарий к оценке за ДЗ</span>
+                    <textarea
+                      value={assignmentGradeCommentDraft}
+                      onChange={(event) => setAssignmentGradeCommentDraft(event.target.value)}
+                      rows={4}
+                      placeholder="Например: решение верное, но нужно внимательнее оформлять ответ"
+                      style={{ resize: 'vertical' }}
+                    />
+                  </label>
+                  <div style={{ marginTop: 10 }}>
+                    <button
+                      type="button"
+                      onClick={handleSaveAssignmentGradeComment}
+                      disabled={
+                        assignmentCommentSaving ||
+                        (selectedAssignment.grade_comment ?? '') === assignmentGradeCommentDraft.trim()
+                      }
+                      style={{ boxShadow: 'none' }}
+                    >
+                      {assignmentCommentSaving ? 'Сохраняем...' : 'Сохранить комментарий'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

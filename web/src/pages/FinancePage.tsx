@@ -106,6 +106,20 @@ function lessonCost(lesson: Lesson) {
   return Number.isFinite(value) ? value : 0;
 }
 
+function getLessonDurationHours(lesson: Lesson) {
+  const start = new Date(`2000-01-01T${lesson.start_time}`);
+  const end = new Date(`2000-01-01T${lesson.end_time}`);
+  return Math.max(0, end.getTime() - start.getTime()) / 3_600_000;
+}
+
+function calculateLessonCostByRate(lesson: Lesson, hourlyRate: number | null | undefined) {
+  const rate = Number(hourlyRate ?? 0);
+  if (Number.isFinite(rate) && rate > 0) {
+    return Math.round(rate * getLessonDurationHours(lesson));
+  }
+  return lessonCost(lesson);
+}
+
 function getCurrentRange(range: ForecastRange | ChartRange) {
   const today = new Date();
 
@@ -265,6 +279,21 @@ export default function FinancePage() {
     [chartDateRange.from, chartDateRange.to, lessons]
   );
 
+  const studentMap = useMemo(
+    () => new Map(students.map((student) => [student.id, student])),
+    [students]
+  );
+
+  const subjectMap = useMemo(
+    () => new Map(subjects.map((subject) => [subject.id, subject])),
+    [subjects]
+  );
+
+  const relationMap = useMemo(
+    () => new Map(tutorStudents.map((relation) => [relation.id, relation])),
+    [tutorStudents]
+  );
+
   const currentFinancialLessons = filteredLessons.filter(isRealFinancialLesson);
   const forecastFinancialLessons = forecastLessons.filter(isRealFinancialLesson);
   const chartFinancialLessons = chartLessons.filter(isRealFinancialLesson);
@@ -281,20 +310,32 @@ export default function FinancePage() {
     (lesson) => lesson.payment_status === 'payment_pending'
   );
   const unpaidLessons = currentConducted.filter((lesson) => lesson.payment_status === 'unpaid');
-  const debt = unpaidLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
-  const pendingConfirmation = paymentPendingLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+  const debt = unpaidLessons.reduce(
+    (sum, lesson) => sum + calculateLessonCostByRate(lesson, lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null),
+    0
+  );
+  const pendingConfirmation = paymentPendingLessons.reduce(
+    (sum, lesson) => sum + calculateLessonCostByRate(lesson, lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null),
+    0
+  );
   const forecastFutureScheduledLessons = forecastFinancialLessons.filter(
     (lesson) =>
       lesson.conduct_status === 'scheduled' && getLessonStartDateTime(lesson).getTime() >= Date.now()
   );
-  const forecastPaidIncome = forecastPaidLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
-  const forecastDebt = forecastUnpaidLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+  const forecastPaidIncome = forecastPaidLessons.reduce(
+    (sum, lesson) => sum + calculateLessonCostByRate(lesson, lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null),
+    0
+  );
+  const forecastDebt = forecastUnpaidLessons.reduce(
+    (sum, lesson) => sum + calculateLessonCostByRate(lesson, lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null),
+    0
+  );
   const forecastPendingConfirmation = forecastPaymentPendingLessons.reduce(
-    (sum, lesson) => sum + lessonCost(lesson),
+    (sum, lesson) => sum + calculateLessonCostByRate(lesson, lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null),
     0
   );
   const forecastPlannedIncome = forecastFutureScheduledLessons.reduce(
-    (sum, lesson) => sum + lessonCost(lesson),
+    (sum, lesson) => sum + calculateLessonCostByRate(lesson, lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null),
     0
   );
   const forecastIncome =
@@ -302,28 +343,13 @@ export default function FinancePage() {
   const forecastFactIncome = forecastPaidIncome + forecastPendingConfirmation + forecastDebt;
   const forecastProgress = forecastIncome > 0 ? clampPercent((forecastFactIncome / forecastIncome) * 100) : 0;
 
-  const studentMap = useMemo(
-    () => new Map(students.map((student) => [student.id, student])),
-    [students]
-  );
-
-  const subjectMap = useMemo(
-    () => new Map(subjects.map((subject) => [subject.id, subject])),
-    [subjects]
-  );
-
-  const relationMap = useMemo(
-    () => new Map(tutorStudents.map((relation) => [relation.id, relation])),
-    [tutorStudents]
-  );
-
   const relationOptions = useMemo<RelationOption[]>(() => {
     return tutorStudents
       .map((relation) => {
         const student = studentMap.get(relation.student_id);
         const subject = subjectMap.get(relation.subject_id);
-        const total = relation.subscription_lessons ?? 0;
-        const used = relation.used_lessons ?? 0;
+        const total = relation.subscription_hours ?? 0;
+        const used = relation.used_hours ?? 0;
 
         return {
           id: relation.id,
@@ -404,7 +430,7 @@ export default function FinancePage() {
         studentName: student?.full_name ?? 'Без ученика',
         subjectName: relation?.subject_name ?? lesson.subject_name ?? subject?.name ?? 'Без предмета',
         lessonDate: lesson.lesson_date,
-        cost: lessonCost(lesson),
+        cost: calculateLessonCostByRate(lesson, relation?.hourly_rate),
         daysSince: getDaysSince(lesson.lesson_date),
         paymentStatus: lesson.payment_status,
         status:
@@ -434,7 +460,15 @@ export default function FinancePage() {
             month: 'long',
             year: 'numeric',
           }).format(new Date(`${date}T00:00:00`)),
-          value: dayLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0),
+          value: dayLessons.reduce(
+            (sum, lesson) =>
+              sum +
+              calculateLessonCostByRate(
+                lesson,
+                lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null
+              ),
+            0
+          ),
           lessons: dayLessons.length,
         });
       }
@@ -462,7 +496,12 @@ export default function FinancePage() {
       const current = grouped.get(key) ?? { label, value: 0, lessons: 0, fullLabel };
       grouped.set(key, {
         label,
-        value: current.value + lessonCost(lesson),
+        value:
+          current.value +
+          calculateLessonCostByRate(
+            lesson,
+            lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null
+          ),
         lessons: current.lessons + 1,
         fullLabel,
       });
@@ -496,7 +535,15 @@ export default function FinancePage() {
             lesson.payment_status === 'paid'
           );
         });
-      const total = monthLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+      const total = monthLessons.reduce(
+        (sum, lesson) =>
+          sum +
+          calculateLessonCostByRate(
+            lesson,
+            lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null
+          ),
+        0
+      );
       if (month > currentMonthIndex && total === 0) {
         continue;
       }
@@ -566,7 +613,7 @@ export default function FinancePage() {
     const used = Number(createUsedLessons || '0');
 
     if (!Number.isInteger(total) || total < 1) {
-      alert('Количество занятий в абонементе должно быть целым числом больше нуля.');
+      alert('Количество часов в абонементе должно быть целым числом больше нуля.');
       return;
     }
 
@@ -576,15 +623,15 @@ export default function FinancePage() {
     }
 
     if (used > total) {
-      alert('Использованные занятия не могут превышать размер абонемента.');
+      alert('Использованные часы не могут превышать размер абонемента.');
       return;
     }
 
     try {
       setSavingAbonement(true);
       const updated = await updateTutorStudent(Number(createTutorStudentId), {
-        subscription_lessons: total,
-        used_lessons: used,
+        subscription_hours: total,
+        used_hours: used,
       });
       setTutorStudents((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
       setSelectedTutorStudentId(String(updated.id));
@@ -607,7 +654,7 @@ export default function FinancePage() {
     const rate = Number(editRate);
 
     if (!Number.isInteger(total) || total < 1) {
-      alert('Количество занятий должно быть целым числом больше нуля.');
+      alert('Количество часов должно быть целым числом больше нуля.');
       return;
     }
 
@@ -617,15 +664,15 @@ export default function FinancePage() {
     }
 
     if (selectedRelation.used > total) {
-      alert('Нельзя поставить количество занятий меньше уже использованных.');
+      alert('Нельзя поставить количество часов меньше уже использованных.');
       return;
     }
 
     try {
       setSavingAbonement(true);
       const updated = await updateTutorStudent(selectedRelation.id, {
-        subscription_lessons: total,
-        used_lessons: selectedRelation.used,
+        subscription_hours: total,
+        used_hours: selectedRelation.used,
         hourly_rate: rate,
       });
       setTutorStudents((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
@@ -634,6 +681,32 @@ export default function FinancePage() {
     } catch (error) {
       console.error('Ошибка обновления абонемента:', error);
       alert(getApiErrorMessage(error, 'Не удалось обновить абонемент.'));
+    } finally {
+      setSavingAbonement(false);
+    }
+  };
+
+  const handleDeleteAbonement = async () => {
+    if (!selectedRelation) {
+      return;
+    }
+
+    if (!window.confirm(`Снять абонемент у ученика «${selectedRelation.studentName}»?`)) {
+      return;
+    }
+
+    try {
+      setSavingAbonement(true);
+      const updated = await updateTutorStudent(selectedRelation.id, {
+        subscription_hours: 0,
+        used_hours: 0,
+      });
+      setTutorStudents((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setDetailsModalOpen(false);
+      setEditingAbonement(false);
+    } catch (error) {
+      console.error('Ошибка удаления абонемента:', error);
+      alert(getApiErrorMessage(error, 'Не удалось снять абонемент.'));
     } finally {
       setSavingAbonement(false);
     }
@@ -682,7 +755,7 @@ export default function FinancePage() {
             <div>
               <h3 style={{ fontSize: 20, marginBottom: 6 }}>Прогноз дохода</h3>
               <div style={{ color: '#687486', fontSize: 14 }}>
-                Ожидаемый доход за {forecastRangeLabel} по всем занятиям в расписании.
+                Ожидаемый доход за {forecastRangeLabel} по ставке за час и длительности занятий.
               </div>
             </div>
             <div
@@ -1176,10 +1249,7 @@ export default function FinancePage() {
       <section>
         <article style={panelStyle}>
           <div style={{ marginBottom: 14 }}>
-            <h3 style={{ fontSize: 20, marginBottom: 6 }}>Абонементы</h3>
-            <div style={{ color: '#687486', fontSize: 14 }}>
-              В списке показаны только уже созданные абонементы. Новый абонемент создаётся отдельно.
-            </div>
+            <h3 style={{ fontSize: 20, marginBottom: 0 }}>Абонементы</h3>
           </div>
 
           {!relationOptions.length ? (
@@ -1191,22 +1261,20 @@ export default function FinancePage() {
               <div
                 style={{
                   display: 'flex',
-                  justifyContent: 'space-between',
+                  justifyContent: 'flex-end',
                   gap: 10,
                   alignItems: 'center',
                   flexWrap: 'wrap',
                 }}
               >
-                <div style={{ color: '#556173', fontSize: 14 }}>
-                  В списке только активные абонементы. Новую связку можно настроить отдельно.
-                </div>
                 {availableForCreation.length > 0 && (
                   <button
                     type="button"
+                    title="Создать абонемент"
                     onClick={handleCreateNewAbonement}
-                    style={{ background: '#d96f32', boxShadow: 'none' }}
+                    style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#d96f32', boxShadow: 'none', fontSize: 20, display: 'inline-grid', placeItems: 'center' }}
                   >
-                    Создать новый
+                    +
                   </button>
                 )}
               </div>
@@ -1222,8 +1290,7 @@ export default function FinancePage() {
                     fontSize: 14,
                   }}
                 >
-                  Активных абонементов пока нет.
-                  {availableForCreation.length > 0 ? ' Нажми «Создать новый», чтобы завести первый.' : ''}
+                  Абонементов пока нет.
                 </div>
               ) : (
                 <div style={{ display: 'grid', gap: 10 }}>
@@ -1293,7 +1360,7 @@ export default function FinancePage() {
                             fontSize: 13,
                           }}
                         >
-                          <span>Всего: {option.total}</span>
+                          <span>Всего часов: {option.total}</span>
                           <span>Использовано: {option.used}</span>
                           <span>Осталось: {option.remaining}</span>
                         </div>
@@ -1338,9 +1405,6 @@ export default function FinancePage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
               <div>
                 <h3 style={{ fontSize: 22, marginBottom: 6 }}>Создать абонемент</h3>
-                <div style={{ color: '#687486', fontSize: 14 }}>
-                  Выбери связку ученик-предмет и задай параметры нового абонемента.
-                </div>
               </div>
               <button
                 type="button"
@@ -1374,7 +1438,7 @@ export default function FinancePage() {
               }}
             >
               <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-                Количество занятий
+                Количество часов
                 <input
                   type="number"
                   min="1"
@@ -1446,10 +1510,19 @@ export default function FinancePage() {
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
+                  title={editingAbonement ? 'Скрыть редактирование' : 'Редактировать абонемент'}
                   onClick={() => setEditingAbonement((current) => !current)}
-                  style={{ background: '#d96f32', boxShadow: 'none', padding: '10px 14px' }}
+                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#d96f32', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                 >
-                  {editingAbonement ? 'Скрыть редактирование' : 'Редактировать'}
+                  ✎
+                </button>
+                <button
+                  type="button"
+                  title="Удалить абонемент"
+                  onClick={handleDeleteAbonement}
+                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                >
+                  🗑
                 </button>
                 <button
                   type="button"
@@ -1489,7 +1562,7 @@ export default function FinancePage() {
                 )}
               </div>
               <div style={{ padding: 14, borderRadius: 16, background: 'rgba(23,32,51,0.03)' }}>
-                <div style={{ color: '#687486', fontSize: 13, marginBottom: 6 }}>Всего занятий</div>
+                <div style={{ color: '#687486', fontSize: 13, marginBottom: 6 }}>Всего часов</div>
                 {editingAbonement ? (
                   <input
                     type="number"
@@ -1527,7 +1600,7 @@ export default function FinancePage() {
             </div>
 
             <div style={{ color: '#435066', fontSize: 14 }}>
-              Осталось занятий: <strong>{selectedRelation.remaining}</strong>
+              Осталось часов: <strong>{selectedRelation.remaining}</strong>
             </div>
 
             {editingAbonement && (

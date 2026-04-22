@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   createMaterial,
   deleteMaterial,
@@ -666,14 +666,19 @@ export default function MaterialsPage() {
 
               {selectedTopic && (
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <button type="button" onClick={openEditTopic}>
-                    Редактировать тему
+                  <button
+                    type="button"
+                    title="Редактировать тему"
+                    onClick={openEditTopic}
+                    style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                  >
+                    ✎
                   </button>
                   <button
                     type="button"
                     title="Удалить тему"
                     onClick={handleDeleteTopic}
-                    style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18 }}
+                    style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                   >
                     🗑
                   </button>
@@ -729,9 +734,25 @@ export default function MaterialsPage() {
                 </div>
               </div>
 
-              <button type="button" onClick={openCreateMaterial} disabled={!selectedTopic}>
-                Добавить материал
-              </button>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  title="Открыть уровни"
+                  onClick={() => (window.location.href = '/levels')}
+                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                >
+                  ≡
+                </button>
+                <button
+                  type="button"
+                  title="Добавить материал"
+                  onClick={openCreateMaterial}
+                  disabled={!selectedTopic}
+                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, boxShadow: 'none', fontSize: 22, display: 'inline-grid', placeItems: 'center' }}
+                >
+                  +
+                </button>
+              </div>
             </div>
 
             {!selectedTopic ? (
@@ -792,14 +813,19 @@ export default function MaterialsPage() {
                       </div>
 
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button type="button" onClick={() => openEditMaterial(material)}>
-                          Редактировать
+                        <button
+                          type="button"
+                          title="Редактировать материал"
+                          onClick={() => openEditMaterial(material)}
+                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                        >
+                          ✎
                         </button>
                         <button
                           type="button"
                           title="Удалить материал"
                           onClick={() => handleDeleteMaterial(material)}
-                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18 }}
+                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                         >
                           🗑
                         </button>

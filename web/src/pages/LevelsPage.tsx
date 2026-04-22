@@ -26,14 +26,25 @@ export default function LevelsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newSortOrder, setNewSortOrder] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
-  const [editSortOrder, setEditSortOrder] = useState('');
+  const [editIsFavourite, setEditIsFavourite] = useState(false);
+  const [showOnlyFavourites, setShowOnlyFavourites] = useState(false);
 
   const sortedLevels = useMemo(
-    () => [...levels].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'ru-RU')),
+    () =>
+      [...levels].sort((a, b) => {
+        if (a.is_favourite !== b.is_favourite) {
+          return a.is_favourite ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name, 'ru-RU');
+      }),
     [levels]
+  );
+
+  const visibleLevels = useMemo(
+    () => (showOnlyFavourites ? sortedLevels.filter((level) => level.is_favourite) : sortedLevels),
+    [showOnlyFavourites, sortedLevels]
   );
 
   useEffect(() => {
@@ -55,7 +66,7 @@ export default function LevelsPage() {
   const startEdit = (level: TutorLevel) => {
     setEditingId(level.id);
     setEditName(level.name);
-    setEditSortOrder(String(level.sort_order));
+    setEditIsFavourite(level.is_favourite);
   };
 
   const handleCreate = async () => {
@@ -69,11 +80,10 @@ export default function LevelsPage() {
       setSaving(true);
       const created = await createTutorLevel({
         name,
-        sort_order: newSortOrder.trim() ? Number(newSortOrder) : undefined,
+        is_favourite: false,
       });
       setLevels((prev) => [...prev, created]);
       setNewName('');
-      setNewSortOrder('');
     } catch (error) {
       console.error('Ошибка создания уровня:', error);
       alert(getApiErrorMessage(error, 'Не удалось создать уровень'));
@@ -93,7 +103,7 @@ export default function LevelsPage() {
       setSaving(true);
       const updated = await updateTutorLevel(level.id, {
         name,
-        sort_order: editSortOrder.trim() ? Number(editSortOrder) : 0,
+        is_favourite: editIsFavourite,
       });
       setLevels((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
       setEditingId(null);
@@ -119,13 +129,24 @@ export default function LevelsPage() {
     }
   };
 
+  const handleToggleFavourite = async (level: TutorLevel) => {
+    try {
+      const updated = await updateTutorLevel(level.id, {
+        is_favourite: !level.is_favourite,
+      });
+      setLevels((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (error) {
+      console.error('Ошибка обновления избранного уровня:', error);
+      alert(getApiErrorMessage(error, 'Не удалось обновить избранное'));
+    }
+  };
+
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <section style={{ ...panelStyle, display: 'grid', gap: 12 }}>
         <h3 style={{ fontSize: 20, marginBottom: 0 }}>Добавить уровень</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 160px auto', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto', gap: 10, alignItems: 'center' }}>
           <input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Например: 9 класс, ОГЭ, ЕГЭ база" />
-          <input value={newSortOrder} onChange={(event) => setNewSortOrder(event.target.value)} type="number" placeholder="Порядок" />
           <button type="button" onClick={handleCreate} disabled={saving}>
             Добавить
           </button>
@@ -133,14 +154,20 @@ export default function LevelsPage() {
       </section>
 
       <section style={panelStyle}>
-        <h3 style={{ fontSize: 20, marginBottom: 14 }}>Список уровней</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+          <h3 style={{ fontSize: 20, marginBottom: 0 }}>Список уровней</h3>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#435066', fontSize: 14 }}>
+            <input type="checkbox" checked={showOnlyFavourites} onChange={(event) => setShowOnlyFavourites(event.target.checked)} />
+            Избранные
+          </label>
+        </div>
         {loading ? (
           <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Загрузка...</p>
-        ) : sortedLevels.length === 0 ? (
+        ) : visibleLevels.length === 0 ? (
           <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Уровней пока нет. Темы без уровней будут считаться доступными всем.</p>
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
-            {sortedLevels.map((level) => {
+            {visibleLevels.map((level) => {
               const editing = editingId === level.id;
 
               return (
@@ -148,7 +175,7 @@ export default function LevelsPage() {
                   key={level.id}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: editing ? 'minmax(220px, 1fr) 140px auto' : '80px minmax(220px, 1fr) auto',
+                    gridTemplateColumns: editing ? 'minmax(220px, 1fr) auto auto' : 'minmax(220px, 1fr) auto',
                     gap: 10,
                     alignItems: 'center',
                     padding: 14,
@@ -160,7 +187,10 @@ export default function LevelsPage() {
                   {editing ? (
                     <>
                       <input value={editName} onChange={(event) => setEditName(event.target.value)} />
-                      <input value={editSortOrder} onChange={(event) => setEditSortOrder(event.target.value)} type="number" />
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#435066', fontSize: 14, whiteSpace: 'nowrap' }}>
+                        <input type="checkbox" checked={editIsFavourite} onChange={(event) => setEditIsFavourite(event.target.checked)} />
+                        Избранное
+                      </label>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         <button type="button" onClick={() => handleSave(level)} disabled={saving}>
                           Сохранить
@@ -172,14 +202,28 @@ export default function LevelsPage() {
                     </>
                   ) : (
                     <>
-                      <strong style={{ color: '#687486' }}>#{level.sort_order}</strong>
                       <div>
-                        <div style={{ fontWeight: 900, color: '#1f2a3b', marginBottom: 4 }}>{level.name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <button
+                            type="button"
+                            title={level.is_favourite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                            onClick={() => handleToggleFavourite(level)}
+                            style={{ minWidth: 34, width: 34, height: 34, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.04)', color: level.is_favourite ? '#d96f32' : '#98a3b3', border: '1px solid rgba(24,33,47,0.08)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                          >
+                            ★
+                          </button>
+                          <div style={{ fontWeight: 900, color: '#1f2a3b' }}>{level.name}</div>
+                        </div>
                         <div style={mutedTextStyle}>Используется для тем, ДЗ, расписания и карточек учеников.</div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={() => startEdit(level)}>
-                          Редактировать
+                        <button
+                          type="button"
+                          title="Редактировать уровень"
+                          onClick={() => startEdit(level)}
+                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                        >
+                          ✎
                         </button>
                         <button type="button" title="Удалить уровень" onClick={() => handleDelete(level)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18 }}>
                           🗑

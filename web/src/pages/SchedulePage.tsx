@@ -116,6 +116,15 @@ function toTime(value: string) {
   return value.slice(0, 5);
 }
 
+function getDurationHours(startTime: string, endTime: string) {
+  const minutes = Math.max(0, toMinutes(endTime) - toMinutes(startTime));
+  return minutes / 60;
+}
+
+function calculateLessonCost(rate: number, startTime: string, endTime: string) {
+  return Math.round(rate * getDurationHours(startTime, endTime));
+}
+
 function statusColor(status: ConductStatus) {
   if (status === 'conducted') return '#2f7d63';
   if (status === 'cancelled') return '#a63f3b';
@@ -269,6 +278,10 @@ export default function SchedulePage() {
   const [rescheduleStartTime, setRescheduleStartTime] = useState('');
   const [rescheduleEndTime, setRescheduleEndTime] = useState('');
   const [showRescheduledLessons, setShowRescheduledLessons] = useState(true);
+  const [tutorNoteDraft, setTutorNoteDraft] = useState('');
+  const [lessonGradeCommentDraft, setLessonGradeCommentDraft] = useState('');
+  const [lessonCommentSaving, setLessonCommentSaving] = useState(false);
+  const [showLessonNoteEditor, setShowLessonNoteEditor] = useState(false);
 
   const dayDate = useMemo(() => atMidnight(anchorDate), [anchorDate]);
   const weekStart = useMemo(() => startOfWeek(anchorDate), [anchorDate]);
@@ -453,6 +466,9 @@ export default function SchedulePage() {
       setRescheduleDate('');
       setRescheduleStartTime('');
       setRescheduleEndTime('');
+      setTutorNoteDraft('');
+      setLessonGradeCommentDraft('');
+      setShowLessonNoteEditor(false);
       return;
     }
 
@@ -466,6 +482,9 @@ export default function SchedulePage() {
     setRescheduleDate(selectedLesson.lesson_date);
     setRescheduleStartTime(toTime(selectedLesson.start_time));
     setRescheduleEndTime(toTime(selectedLesson.end_time));
+    setTutorNoteDraft(selectedLesson.tutor_note ?? '');
+    setLessonGradeCommentDraft(selectedLesson.grade_comment ?? '');
+    setShowLessonNoteEditor(Boolean(selectedLesson.tutor_note?.trim()));
   }, [selectedLesson]);
 
   useEffect(() => {
@@ -487,8 +506,9 @@ export default function SchedulePage() {
   useEffect(() => {
     const selected = tutorStudentOptions.find((item) => String(item.id) === selectedTutorStudentId);
     if (!selected) return;
-    setCost((current) => current || (selected.rate ? String(selected.rate) : ''));
-  }, [selectedTutorStudentId, tutorStudentOptions]);
+    const nextCost = calculateLessonCost(selected.rate, `${startTime}:00`, `${endTime}:00`);
+    setCost(nextCost > 0 ? String(nextCost) : '');
+  }, [endTime, selectedTutorStudentId, startTime, tutorStudentOptions]);
 
   useEffect(() => {
     setNewTopicId((current) =>
@@ -690,7 +710,13 @@ export default function SchedulePage() {
 
   const handleLessonPatch = async (
     lessonId: number,
-    payload: { conduct_status?: ConductStatus; payment_status?: PaymentStatus; grade?: number }
+    payload: {
+      conduct_status?: ConductStatus;
+      payment_status?: PaymentStatus;
+      grade?: number;
+      tutor_note?: string | null;
+      grade_comment?: string | null;
+    }
   ) => {
     try {
       const updated = await updateLesson(lessonId, payload);
@@ -867,14 +893,14 @@ export default function SchedulePage() {
           border: selectedLessonId === lesson.id ? `2px solid ${accent}` : `1px solid ${accent}`,
         }}
       >
-        <div style={{ fontSize: tiny || weekCard ? 10 : compact ? 11 : 12, fontWeight: 900, lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
+        <div style={{ fontSize: tiny ? 10 : weekCard ? 11.5 : compact ? 11 : 12, fontWeight: 900, lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
           {toTime(lesson.start_time)} - {toTime(lesson.end_time)}
         </div>
         <div
           style={{
             fontWeight: 800,
-            fontSize: tiny ? 10 : weekCard ? 10.5 : compact ? 11 : 12,
-            lineHeight: weekCard ? 1.05 : 1.08,
+            fontSize: tiny ? 10 : weekCard ? 11.5 : compact ? 11 : 12,
+            lineHeight: weekCard ? 1.08 : 1.08,
             overflow: 'hidden',
             display: '-webkit-box',
             WebkitLineClamp: textClamp,
@@ -884,6 +910,23 @@ export default function SchedulePage() {
         >
           {title}
         </div>
+        {weekCard && !windowCard && (
+          <div
+            style={{
+              fontSize: 10,
+              opacity: 0.92,
+              lineHeight: 1.12,
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              wordBreak: 'break-word',
+              flexShrink: 0,
+            }}
+          >
+            {(subject?.name ?? 'Без предмета')} • {lesson.cost ?? '—'} ₽
+          </div>
+        )}
         {!tiny && !weekCard && (
           <div style={{ fontSize: compact ? 9 : 11, opacity: 0.92, lineHeight: 1.12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
             {subtitle}
@@ -904,6 +947,34 @@ export default function SchedulePage() {
         )}
       </div>
     );
+  };
+
+  const handleLessonCommentsSave = async () => {
+    if (!selectedLesson || isWindow(selectedLesson)) {
+      return;
+    }
+
+    if (
+      (selectedLesson.tutor_note ?? '') === tutorNoteDraft.trim() &&
+      (selectedLesson.grade_comment ?? '') === lessonGradeCommentDraft.trim()
+    ) {
+      return;
+    }
+
+    try {
+      setLessonCommentSaving(true);
+      const updated = await updateLesson(selectedLesson.id, {
+        tutor_note: tutorNoteDraft.trim() || null,
+        grade_comment: lessonGradeCommentDraft.trim() || null,
+      });
+      upsertLesson(updated);
+      setSelectedLessonId(updated.id);
+    } catch (error) {
+      console.error('Ошибка сохранения комментариев к занятию:', error);
+      alert(getApiErrorMessage(error, 'Не удалось сохранить заметки к занятию'));
+    } finally {
+      setLessonCommentSaving(false);
+    }
   };
 
   const renderTimeLabels = () => (
@@ -1228,7 +1299,7 @@ export default function SchedulePage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                 <div>
                   <h3 style={{ fontSize: 28, lineHeight: 1.02, marginBottom: 8 }}>Создать занятие</h3>
-                  <p style={{ color: '#5d6778', marginBottom: 0 }}>Заполни ученика, дату, время, стоимость и тему занятия.</p>
+                  <p style={{ color: '#5d6778', marginBottom: 0 }}>Заполни ученика, дату, время и тему занятия. Стоимость посчитается автоматически.</p>
                 </div>
                 <button onClick={() => setIsCreateLessonOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>×</button>
               </div>
@@ -1259,7 +1330,7 @@ export default function SchedulePage() {
                 <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
                 <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
               </div>
-              <input type="number" value={cost} onChange={(event) => setCost(event.target.value)} placeholder="Стоимость" />
+              <input type="number" value={cost} readOnly placeholder="Стоимость" style={{ background: 'rgba(23,32,51,0.04)', color: '#435066' }} />
               <select value={newTopicId} onChange={(event) => setNewTopicId(event.target.value)}>
                 <option value="">Без темы</option>
                 {availableCreateTopics.map((topic) => (
@@ -1427,10 +1498,10 @@ export default function SchedulePage() {
                       {selectedWindow ? 'Свободный слот' : statusLabel(selectedLesson.conduct_status)}
                     </div>
                     <h3 style={{ fontSize: 28, lineHeight: 1.02, marginBottom: 8 }}>{selectedWindow ? 'Свободный слот' : student?.full_name ?? 'Ученик'}</h3>
-                    <p style={{ color: '#5d6778', marginBottom: 0 }}>
+                    <p style={{ color: '#5d6778', marginBottom: 0, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                       {selectedWindow
-                        ? `Окно репетитора • ${selectedLesson.lesson_date}`
-                        : `${subject?.name ?? 'Без предмета'} • ${selectedLesson.lesson_date}`}
+                        ? `Окно репетитора • ${selectedLesson.lesson_date} • ${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`
+                        : `${subject?.name ?? 'Без предмета'} • ${selectedLesson.lesson_date} • ${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`}
                     </p>
                   </div>
                   <button onClick={() => setSelectedLessonId(null)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>×</button>
@@ -1447,13 +1518,11 @@ export default function SchedulePage() {
                         ['Статус', 'Доступен для записи'],
                       ]
                     : [
-                        ['Дата', selectedLesson.lesson_date],
-                        ['Время', `${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`],
+                        ['Занятие', `${selectedLesson.lesson_date} • ${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`],
                         ['Тема занятия', topic?.title ?? 'Без темы'],
                         ['Стоимость', `${selectedLesson.cost ?? '—'} ₽`],
                         ['Оплата', paymentLabel(selectedLesson.payment_status)],
                         ['Оценка', selectedLesson.grade ? String(selectedLesson.grade) : 'Не выставлена'],
-                        ['ID связки', selectedLesson.tutor_student_id ? String(selectedLesson.tutor_student_id) : '—'],
                       ]
                   ).map(([label, value]) => (
                     <div key={label} style={{ padding: 14, borderRadius: 16, background: 'rgba(23,32,51,0.04)', border: '1px solid rgba(24,33,47,0.06)' }}>
@@ -1464,31 +1533,32 @@ export default function SchedulePage() {
                 </div>
 
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>Быстрые действия</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                     <button
+                      title={isEditingLesson ? 'Скрыть редактирование' : 'Редактировать занятие'}
                       onClick={() => {
                         setIsEditingLesson((prev) => !prev);
                         setIsReschedulingLesson(false);
                       }}
-                      style={{ background: isEditingLesson ? 'rgba(23,32,51,0.92)' : '#d96f32', boxShadow: 'none' }}
+                      style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: isEditingLesson ? 'rgba(23,32,51,0.92)' : '#d96f32', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                     >
-                      {isEditingLesson ? 'Скрыть редактирование' : 'Редактировать'}
+                      ✎
                     </button>
                     {canMarkConducted && (
-                      <button onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'conducted' })}>
-                        Проведено
+                      <button title="Отметить проведённым" onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'conducted' })} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#2f7d63', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}>
+                        ✓
                       </button>
                     )}
                     {canOpenReschedule && (
                       <button
+                        title={isReschedulingLesson ? 'Скрыть перенос' : 'Перенести занятие'}
                         onClick={() => {
                           setIsReschedulingLesson((prev) => !prev);
                           setIsEditingLesson(false);
                         }}
-                        style={{ background: isReschedulingLesson ? '#7b61c8' : 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: isReschedulingLesson ? '#7b61c8' : 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                       >
-                        {isReschedulingLesson ? 'Скрыть перенос' : 'Перенести'}
+                        ↻
                       </button>
                     )}
                     {canApproveBooking && (
@@ -1525,18 +1595,20 @@ export default function SchedulePage() {
                     )}
                     {selectedWindow && (
                       <button
+                        title="Удалить слот"
                         onClick={() => handleLessonDelete(selectedLesson)}
-                        style={{ background: '#a63f3b', boxShadow: 'none' }}
+                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#a63f3b', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                       >
                         🗑
                       </button>
                     )}
                     {canCancelLesson && (
                       <button
+                        title="Отменить занятие"
                         onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'cancelled' })}
-                        style={{ background: '#a63f3b', boxShadow: 'none' }}
+                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#a63f3b', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                       >
-                        Отменить занятие
+                        ⊘
                       </button>
                     )}
                   </div>
@@ -1617,9 +1689,38 @@ export default function SchedulePage() {
                 )}
 
                 {!selectedWindow && (
-                  <div>
-                    <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>Оценка</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'grid', gap: 14 }}>
+                    <div style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 18, background: 'rgba(23,32,51,0.035)', border: '1px solid rgba(24,33,47,0.06)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                        <div style={{ fontSize: 14, color: '#687486' }}>Оценка за занятие</div>
+                        <button
+                          type="button"
+                          title={
+                            showLessonNoteEditor
+                              ? 'Скрыть заметку'
+                              : selectedLesson.tutor_note?.trim()
+                                ? 'Редактировать заметку'
+                                : 'Добавить личную заметку'
+                          }
+                          onClick={() => setShowLessonNoteEditor((prev) => !prev)}
+                          style={{
+                            minWidth: 36,
+                            width: 36,
+                            height: 36,
+                            padding: 0,
+                            borderRadius: 999,
+                            background: showLessonNoteEditor ? 'rgba(23,32,51,0.92)' : '#d96f32',
+                            boxShadow: 'none',
+                            fontSize: 18,
+                            display: 'inline-grid',
+                            placeItems: 'center',
+                          }}
+                        >
+                          {selectedLesson.tutor_note?.trim() ? '✎' : '+'}
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <input
                         type="number"
                         min="1"
@@ -1633,6 +1734,55 @@ export default function SchedulePage() {
                         style={{ maxWidth: 100 }}
                       />
                       <span style={{ color: '#5d6778' }}>Оценка от 1 до 5</span>
+                      </div>
+
+                      {!showLessonNoteEditor && selectedLesson.tutor_note?.trim() && (
+                        <div style={{ padding: '12px 14px', borderRadius: 14, background: 'rgba(217,111,50,0.08)', border: '1px solid rgba(217,111,50,0.16)' }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#9b531f', marginBottom: 6 }}>Личная заметка</div>
+                          <div style={{ color: '#364152', whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{selectedLesson.tutor_note}</div>
+                        </div>
+                      )}
+
+                      {showLessonNoteEditor && (
+                        <label style={{ display: 'grid', gap: 6 }}>
+                          <span style={{ fontSize: 13, color: '#687486' }}>Личная заметка репетитора</span>
+                          <textarea
+                            value={tutorNoteDraft}
+                            onChange={(event) => setTutorNoteDraft(event.target.value)}
+                            rows={3}
+                            placeholder="Заметка видна только репетитору"
+                            style={{ resize: 'vertical' }}
+                          />
+                        </label>
+                      )}
+
+                      <label style={{ display: 'grid', gap: 6 }}>
+                        <span style={{ fontSize: 13, color: '#687486' }}>Комментарий к оценке за занятие</span>
+                        <textarea
+                          value={lessonGradeCommentDraft}
+                          onChange={(event) => setLessonGradeCommentDraft(event.target.value)}
+                          rows={2}
+                          placeholder="Короткий комментарий к оценке"
+                          style={{ resize: 'vertical' }}
+                        />
+                      </label>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                        <button
+                          type="button"
+                          onClick={handleLessonCommentsSave}
+                          disabled={
+                            lessonCommentSaving ||
+                            (
+                              (selectedLesson.tutor_note ?? '') === tutorNoteDraft.trim() &&
+                              (selectedLesson.grade_comment ?? '') === lessonGradeCommentDraft.trim()
+                            )
+                          }
+                          style={{ boxShadow: 'none' }}
+                        >
+                          {lessonCommentSaving ? 'Сохраняем...' : 'Сохранить заметки'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

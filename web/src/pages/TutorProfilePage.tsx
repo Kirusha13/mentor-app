@@ -291,6 +291,20 @@ export default function TutorProfilePage() {
 
             <button
               type="button"
+              onClick={() => navigate('/subjects')}
+              style={{
+                marginTop: 4,
+                background: '#fff',
+                color: '#1f2a3b',
+                border: '1px solid rgba(24,33,47,0.12)',
+                boxShadow: 'none',
+              }}
+            >
+              Открыть предметы
+            </button>
+
+            <button
+              type="button"
               onClick={handleLogout}
               style={{
                 marginTop: 4,
