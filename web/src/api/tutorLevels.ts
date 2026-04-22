@@ -4,18 +4,18 @@ export interface TutorLevel {
   id: number;
   tutor_id: number;
   name: string;
-  sort_order: number;
+  is_favourite: boolean;
   created_at: string;
 }
 
 export interface CreateTutorLevelPayload {
   name: string;
-  sort_order?: number;
+  is_favourite?: boolean;
 }
 
 export interface UpdateTutorLevelPayload {
   name?: string;
-  sort_order?: number;
+  is_favourite?: boolean;
 }
 
 export const getTutorLevels = async (): Promise<TutorLevel[]> => {

@@ -226,13 +226,13 @@ export default function SubjectsPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+              <button title="Создать предмет" type="button" onClick={() => setCreateModalOpen(true)} style={{ minWidth: 40, width: 40, height: 40, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center' }}>+</button>
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Поиск по названию"
                 style={{ maxWidth: 260 }}
               />
-              <button title="Создать предмет" type="button" onClick={() => setCreateModalOpen(true)} style={{ minWidth: 40, width: 40, height: 40, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center' }}>+</button>
             </div>
           </div>
 
@@ -345,17 +345,17 @@ export default function SubjectsPage() {
                             </div>
 
                             <p style={{ color: '#435066', marginBottom: 8 }}>
-                              <strong>Ставка:</strong> {subject.default_rate || '—'} ₽/ч
+                              <span style={{ fontWeight: 700 }}>Ставка:</span> {subject.default_rate || '—'} ₽/ч
                             </p>
                             <p
                               style={{
                                 color: '#687486',
                                 marginBottom: 0,
                                 wordBreak: 'break-all',
-                                fontSize: 14,
+                                fontSize: 16,
                               }}
                             >
-                              <strong>Token:</strong> {subject.invitation_token || '—'}
+                              <span style={{ fontWeight: 700, color: '#435066' }}>Token:</span> {subject.invitation_token || '—'}
                             </p>
                           </>
                         )}
@@ -385,18 +385,41 @@ export default function SubjectsPage() {
                         ) : (
                           <>
                             {subject.invitation_token && (
-                              <button onClick={() => handleCopyToken(subject.invitation_token)}>
-                                Скопировать token
+                              <button
+                                title="Скопировать token"
+                                onClick={() => handleCopyToken(subject.invitation_token)}
+                                style={{
+                                  minWidth: 42,
+                                  width: 42,
+                                  height: 42,
+                                  padding: 0,
+                                  borderRadius: 999,
+                                  boxShadow: 'none',
+                                  fontSize: 18,
+                                  display: 'inline-grid',
+                                  placeItems: 'center',
+                                }}
+                              >
+                                ⧉
                               </button>
                             )}
                             <button
+                              title="Редактировать предмет"
                               onClick={() => startEditing(subject)}
                               style={{
+                                minWidth: 42,
+                                width: 42,
+                                height: 42,
+                                padding: 0,
+                                borderRadius: 999,
                                 background: 'rgba(23,32,51,0.92)',
                                 boxShadow: 'none',
+                                fontSize: 18,
+                                display: 'inline-grid',
+                                placeItems: 'center',
                               }}
                             >
-                              Редактировать
+                              ✎
                             </button>
                             <button
                               title="Удалить предмет"

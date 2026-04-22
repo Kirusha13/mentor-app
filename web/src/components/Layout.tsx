@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getPendingCount } from '../api/lessons';
-import { useMediaQuery } from '../hooks/useMediaQuery';
 import { getTutorProfile } from '../api/tutor';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 interface LayoutProps {
   children: ReactNode;
@@ -26,11 +26,7 @@ const NAV_GROUPS = [
   },
   {
     title: 'Структура',
-    items: [
-      { to: '/subjects', label: 'Предметы' },
-      { to: '/levels', label: 'Уровни' },
-      { to: '/contacts', label: 'Контакты' },
-    ],
+    items: [{ to: '/contacts', label: 'Контакты' }],
   },
   {
     title: 'Финансы',
@@ -245,7 +241,6 @@ export default function Layout({ children }: LayoutProps) {
               <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13 }}>{tutorSubtitle}</div>
             </div>
           </div>
-
         </div>
 
         <nav style={{ display: 'grid', gap: 14, overflowY: 'auto', paddingRight: 2 }}>
