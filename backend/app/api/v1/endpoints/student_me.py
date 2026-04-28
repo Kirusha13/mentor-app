@@ -439,7 +439,7 @@ async def my_levels(
     result = await db.execute(
         select(TutorLevel)
         .where(TutorLevel.tutor_id.in_(tutor_ids))
-        .order_by(TutorLevel.sort_order, TutorLevel.name)
+        .order_by(TutorLevel.is_favourite.desc(), TutorLevel.name)
     )
     return list(result.scalars().all())
 
