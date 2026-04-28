@@ -75,6 +75,7 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editGrade, setEditGrade] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -84,15 +85,16 @@ export default function ProfileScreen() {
         setProfile(p);
         setEditName(p.full_name);
         setEditPhone(p.phone_number ?? '');
+        setEditGrade(p.grade != null ? String(p.grade) : '');
         setTutors(ts);
       }).finally(() => setLoading(false));
     }, []),
   );
 
   const handleEdit = () => {
-    // Reset edit fields to current profile values before entering edit mode
     setEditName(profile?.full_name ?? '');
     setEditPhone(profile?.phone_number ?? '');
+    setEditGrade(profile?.grade != null ? String(profile.grade) : '');
     setEditing(true);
   };
 
@@ -102,11 +104,19 @@ export default function ProfileScreen() {
 
   const handleSave = async () => {
     if (!editName.trim()) { Alert.alert('Ошибка', 'Имя не может быть пустым'); return; }
+    const gradeTrimmed = editGrade.trim();
+    let gradeValue: number | null = null;
+    if (gradeTrimmed) {
+      const n = parseInt(gradeTrimmed, 10);
+      if (isNaN(n) || n < 1 || n > 11) { Alert.alert('Ошибка', 'Класс должен быть числом от 1 до 11'); return; }
+      gradeValue = n;
+    }
     setSaving(true);
     try {
       const updated = await updateStudentMe({
         full_name: editName.trim(),
         phone_number: editPhone.trim() || null,
+        grade: gradeValue,
       });
       setProfile(updated);
       setEditing(false);
@@ -183,9 +193,16 @@ export default function ProfileScreen() {
               placeholderTextColor="#bbb"
               keyboardType="phone-pad"
             />
-            {profile?.grade != null && (
-              <Text style={styles.gradeInfo}>Класс: {profile.grade}</Text>
-            )}
+            <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Класс</Text>
+            <TextInput
+              style={styles.input}
+              value={editGrade}
+              onChangeText={setEditGrade}
+              placeholder="Например, 9"
+              placeholderTextColor="#bbb"
+              keyboardType="number-pad"
+              maxLength={2}
+            />
             <View style={styles.editActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} disabled={saving}>
                 <Text style={styles.cancelBtnText}>Отмена</Text>

@@ -47,7 +47,7 @@ export async function getLevels(): Promise<TutorLevel[]> {
   return res.data;
 }
 
-export async function updateStudentMe(data: { full_name?: string; phone_number?: string | null }): Promise<StudentProfile> {
+export async function updateStudentMe(data: { full_name?: string; phone_number?: string | null; grade?: number | null }): Promise<StudentProfile> {
   const res = await client.patch('/student/me', data);
   return res.data;
 }
