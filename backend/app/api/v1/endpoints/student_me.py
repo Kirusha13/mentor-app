@@ -613,14 +613,13 @@ async def my_materials(
     db: AsyncSession = Depends(get_db),
 ):
     ts_result = await db.execute(
-        select(TutorStudent.tutor_id).where(TutorStudent.student_id == student.id).limit(1)
+        select(TutorStudent.tutor_id).where(TutorStudent.student_id == student.id)
     )
-    row = ts_result.scalar_one_or_none()
-    if row is None:
+    tutor_ids = list(ts_result.scalars().all())
+    if not tutor_ids:
         return []
-    tutor_id = row
 
-    q = select(Material).where(Material.tutor_id == tutor_id)
+    q = select(Material).where(Material.tutor_id.in_(tutor_ids))
     if topic_id:
         q = q.where(Material.topic_id == topic_id)
     result = await db.execute(q.order_by(Material.created_at.desc()))
