@@ -220,33 +220,32 @@ export default function MaterialsScreen({ navigation }: Props) {
           const isOpen = expandedTopics.has(topic.id);
 
           return (
-            <TouchableOpacity
-              style={[styles.topicRow, depth === 1 && styles.topicRowIndented]}
-              activeOpacity={0.8}
-              onPress={() => {
-                if (hasChildren) {
-                  toggleTopic(topic.id);
-                } else {
-                  navigation.navigate('TopicDetail', { topic, allTopics });
-                }
-              }}
-            >
+            <View style={[styles.topicRow, depth === 1 && styles.topicRowIndented]}>
               {depth === 1 && <View style={styles.subtopicLine} />}
-              <View style={styles.topicContent}>
+              <TouchableOpacity
+                style={styles.topicContent}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('TopicDetail', { topic, allTopics })}
+              >
                 <Text style={styles.topicTitle}>{topic.title}</Text>
                 {topic.description ? (
                   <Text style={styles.topicDesc} numberOfLines={1}>{topic.description}</Text>
                 ) : null}
-              </View>
+              </TouchableOpacity>
               {hasChildren && (
-                <View style={styles.topicRight}>
+                <TouchableOpacity
+                  style={styles.topicRight}
+                  activeOpacity={0.7}
+                  onPress={() => toggleTopic(topic.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
                   <View style={styles.childBadge}>
                     <Text style={styles.childBadgeText}>{children.length}</Text>
                   </View>
                   <Text style={styles.topicChevron}>{isOpen ? '˅' : '›'}</Text>
-                </View>
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+            </View>
           );
         }}
       />
