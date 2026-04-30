@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_tutor
 from app.core.database import get_db
+from app.models.material import Material
 from app.models.theory_topic import TheoryTopic
 from app.models.tutor import Tutor
 from app.models.tutor_level import TopicLevel
@@ -20,6 +21,15 @@ async def _get_topic_for_tutor(db: AsyncSession, topic_id: int, tutor_id: int) -
     if topic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Тема не найдена")
     return topic
+
+
+async def _delete_topic_recursively(db: AsyncSession, topic: TheoryTopic) -> None:
+    await db.execute(delete(Material).where(Material.topic_id == topic.id))
+    children_result = await db.execute(select(TheoryTopic).where(TheoryTopic.parent_topic_id == topic.id))
+    children = children_result.scalars().all()
+    for child in children:
+        await _delete_topic_recursively(db, child)
+    await db.delete(topic)
 
 
 @router.get("", response_model=list[TheoryTopicOut], summary="Список тем теории")
@@ -95,5 +105,5 @@ async def delete_topic(
     db: AsyncSession = Depends(get_db),
 ):
     topic = await _get_topic_for_tutor(db, topic_id, tutor.id)
-    await db.delete(topic)
+    await _delete_topic_recursively(db, topic)
     await db.commit()

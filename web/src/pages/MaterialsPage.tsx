@@ -353,7 +353,21 @@ export default function MaterialsPage() {
   const handleDeleteTopic = async () => {
     if (!selectedTopic) return;
 
-    if (!window.confirm(`Удалить тему «${selectedTopic.title}»?`)) {
+    const childCount = childTopicCount.get(selectedTopic.id) ?? 0;
+    const materialCount = materials.filter((m) => m.topic_id === selectedTopic.id).length;
+    const hasChildren = childCount > 0;
+    const hasMaterials = materialCount > 0;
+
+    let message = `Удалить тему «${selectedTopic.title}»?`;
+    if (hasChildren && hasMaterials) {
+      message += `\n\nВместе с ней удалятся ${childCount} подтем(ы) и ${materialCount} материал(ов).`;
+    } else if (hasChildren) {
+      message += `\n\nВместе с ней удалятся ${childCount} подтем(ы).`;
+    } else if (hasMaterials) {
+      message += `\n\nВместе с ней удалятся ${materialCount} материал(ов).`;
+    }
+
+    if (!window.confirm(message)) {
       return;
     }
 
