@@ -18,6 +18,7 @@ import { getTopics, type TheoryTopic } from '../api/topics';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { getApiErrorCode, getApiErrorMessage } from '../utils/apiError';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
+import { lessonDate as toLessonDateStr, lessonStartTime as toStartTime, lessonEndTime as toEndTime, lessonStartMinutes, lessonEndMinutes, buildLocalIso } from '../utils/lessonTime';
 
 type CalendarMode = 'day' | 'week' | 'month';
 type SlotDayDraft = {
@@ -159,9 +160,9 @@ function isWindow(lesson: Lesson) {
 
 function overlaps(first: Lesson, second: Lesson) {
   return (
-    first.lesson_date === second.lesson_date &&
-    toMinutes(first.start_time) < toMinutes(second.end_time) &&
-    toMinutes(first.end_time) > toMinutes(second.start_time)
+    toLessonDateStr(first) === toLessonDateStr(second) &&
+    lessonStartMinutes(first) < lessonEndMinutes(second) &&
+    lessonEndMinutes(first) > lessonStartMinutes(second)
   );
 }
 
@@ -179,9 +180,9 @@ function monthGrid(date: Date) {
 
 function layoutTimelineLessons(items: Lesson[], startHour: number, hourHeight: number) {
   const sorted = [...items].sort((a, b) => {
-    const startDiff = toMinutes(a.start_time) - toMinutes(b.start_time);
+    const startDiff = lessonStartMinutes(a) - lessonStartMinutes(b);
     if (startDiff !== 0) return startDiff;
-    return toMinutes(b.end_time) - toMinutes(a.end_time);
+    return lessonEndMinutes(b) - lessonEndMinutes(a);
   });
 
   const positioned: Array<{
@@ -205,8 +206,8 @@ function layoutTimelineLessons(items: Lesson[], startHour: number, hourHeight: n
   };
 
   for (const lesson of sorted) {
-    const start = toMinutes(lesson.start_time) - startHour * 60;
-    const end = toMinutes(lesson.end_time) - startHour * 60;
+    const start = lessonStartMinutes(lesson) - startHour * 60;
+    const end = lessonEndMinutes(lesson) - startHour * 60;
 
     active = active.filter((item) => item.end > start);
 
@@ -387,21 +388,22 @@ export default function SchedulePage() {
   }, [students, subjects, tutorStudents]);
 
   const dayLessons = useMemo(
-    () => visibleLessons.filter((lesson) => lesson.lesson_date === formatDate(dayDate)),
+    () => visibleLessons.filter((lesson) => toLessonDateStr(lesson) === formatDate(dayDate)),
     [dayDate, visibleLessons]
   );
 
   const weekLessonsByDay = useMemo(
-    () => weekDays.map((day) => visibleLessons.filter((lesson) => lesson.lesson_date === formatDate(day))),
+    () => weekDays.map((day) => visibleLessons.filter((lesson) => toLessonDateStr(lesson) === formatDate(day))),
     [visibleLessons, weekDays]
   );
 
   const lessonsByDate = useMemo(() => {
     const map = new Map<string, Lesson[]>();
     for (const lesson of visibleLessons) {
-      const existing = map.get(lesson.lesson_date) ?? [];
+      const dateKey = toLessonDateStr(lesson);
+      const existing = map.get(dateKey) ?? [];
       existing.push(lesson);
-      map.set(lesson.lesson_date, existing);
+      map.set(dateKey, existing);
     }
     return map;
   }, [visibleLessons]);
@@ -409,7 +411,7 @@ export default function SchedulePage() {
   const selectedMonthDayLessons = useMemo(() => {
     if (!selectedMonthDay) return [];
     return [...(lessonsByDate.get(selectedMonthDay) ?? [])].sort(
-      (a, b) => toMinutes(a.start_time) - toMinutes(b.start_time)
+      (a, b) => lessonStartMinutes(a) - lessonStartMinutes(b)
     );
   }, [lessonsByDate, selectedMonthDay]);
   const selectedMonthDayDate = selectedMonthDay ? new Date(`${selectedMonthDay}T00:00:00`) : null;
@@ -426,8 +428,8 @@ export default function SchedulePage() {
       return { startHour: DEFAULT_GRID_START_HOUR, endHour: DEFAULT_GRID_END_HOUR };
     }
 
-    const minStart = Math.min(...timelineLessons.map((lesson) => toMinutes(lesson.start_time)));
-    const maxEnd = Math.max(...timelineLessons.map((lesson) => toMinutes(lesson.end_time)));
+    const minStart = Math.min(...timelineLessons.map((lesson) => lessonStartMinutes(lesson)));
+    const maxEnd = Math.max(...timelineLessons.map((lesson) => lessonEndMinutes(lesson)));
     const startHour = Math.max(0, Math.floor(minStart / 60) - 1);
     const endHour = Math.min(24, Math.ceil(maxEnd / 60) + 1);
 
@@ -474,14 +476,14 @@ export default function SchedulePage() {
 
     setIsEditingLesson(false);
     setIsReschedulingLesson(false);
-    setEditLessonDate(selectedLesson.lesson_date);
-    setEditStartTime(toTime(selectedLesson.start_time));
-    setEditEndTime(toTime(selectedLesson.end_time));
+    setEditLessonDate(toLessonDateStr(selectedLesson));
+    setEditStartTime(toTime(toStartTime(selectedLesson)));
+    setEditEndTime(toTime(toEndTime(selectedLesson)));
     setEditCost(selectedLesson.cost ? String(selectedLesson.cost) : '');
     setEditTopicId(selectedLesson.topic_id ? String(selectedLesson.topic_id) : '');
-    setRescheduleDate(selectedLesson.lesson_date);
-    setRescheduleStartTime(toTime(selectedLesson.start_time));
-    setRescheduleEndTime(toTime(selectedLesson.end_time));
+    setRescheduleDate(toLessonDateStr(selectedLesson));
+    setRescheduleStartTime(toTime(toStartTime(selectedLesson)));
+    setRescheduleEndTime(toTime(toEndTime(selectedLesson)));
     setTutorNoteDraft(selectedLesson.tutor_note ?? '');
     setLessonGradeCommentDraft(selectedLesson.grade_comment ?? '');
     setShowLessonNoteEditor(Boolean(selectedLesson.tutor_note?.trim()));
@@ -562,7 +564,7 @@ export default function SchedulePage() {
     setLessons((prev) =>
       prev
         .map((lesson) => (lesson.id === updated.id ? updated : lesson))
-        .sort((a, b) => `${a.lesson_date} ${a.start_time}`.localeCompare(`${b.lesson_date} ${b.start_time}`))
+        .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     );
   };
 
@@ -576,14 +578,13 @@ export default function SchedulePage() {
       setSaving(true);
       const created = await createLesson({
         tutor_student_id: Number(selectedTutorStudentId),
-        lesson_date: lessonDate,
-        start_time: `${startTime}:00`,
-        end_time: `${endTime}:00`,
+        starts_at: buildLocalIso(lessonDate, startTime),
+        ends_at: buildLocalIso(lessonDate, endTime),
         cost: Number(cost),
         topic_id: newTopicId ? Number(newTopicId) : undefined,
       });
       setLessons((prev) =>
-        [...prev, created].sort((a, b) => `${a.lesson_date} ${a.start_time}`.localeCompare(`${b.lesson_date} ${b.start_time}`))
+        [...prev, created].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
       );
       setSelectedLessonId(created.id);
       setIsCreateLessonOpen(false);
@@ -616,7 +617,7 @@ export default function SchedulePage() {
       return;
     }
 
-    const payloads: Array<{ lesson_date: string; start_time: string; end_time: string; label: string }> = [];
+    const payloads: Array<{ starts_at: string; ends_at: string; label: string }> = [];
     const now = new Date();
 
     for (const { draft, index } of enabledDays) {
@@ -648,9 +649,8 @@ export default function SchedulePage() {
         }
 
         payloads.push({
-          lesson_date: slotDate,
-          start_time: `${slotStartHours}:${slotStartMinutes}:00`,
-          end_time: `${slotEndHours}:${slotEndMinutes}:00`,
+          starts_at: buildLocalIso(slotDate, `${slotStartHours}:${slotStartMinutes}`),
+          ends_at: buildLocalIso(slotDate, `${slotEndHours}:${slotEndMinutes}`),
           label: `${WEEK_DAYS[index]} ${slotStartHours}:${slotStartMinutes}-${slotEndHours}:${slotEndMinutes}`,
         });
       }
@@ -666,9 +666,8 @@ export default function SchedulePage() {
       const results = await Promise.allSettled(
         payloads.map((payload) =>
           createLesson({
-            lesson_date: payload.lesson_date,
-            start_time: payload.start_time,
-            end_time: payload.end_time,
+            starts_at: payload.starts_at,
+            ends_at: payload.ends_at,
             tutor_student_id: null,
             cost: 0,
             is_window: true,
@@ -680,10 +679,10 @@ export default function SchedulePage() {
         .map((result) => result.value);
       const failed = results
         .map((result, index) => ({ result, payload: payloads[index] }))
-        .filter((item): item is { result: PromiseRejectedResult; payload: { lesson_date: string; start_time: string; end_time: string; label: string } } => item.result.status === 'rejected');
+        .filter((item): item is { result: PromiseRejectedResult; payload: { starts_at: string; ends_at: string; label: string } } => item.result.status === 'rejected');
 
       setLessons((prev) =>
-        [...prev, ...created].sort((a, b) => `${a.lesson_date} ${a.start_time}`.localeCompare(`${b.lesson_date} ${b.start_time}`))
+        [...prev, ...created].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
       );
 
       if (created.length > 0 && failed.length === 0) {
@@ -791,9 +790,8 @@ export default function SchedulePage() {
 
     try {
       const updated = await updateLesson(selectedLesson.id, {
-        lesson_date: editLessonDate,
-        start_time: `${editStartTime}:00`,
-        end_time: `${editEndTime}:00`,
+        starts_at: buildLocalIso(editLessonDate, editStartTime),
+        ends_at: buildLocalIso(editLessonDate, editEndTime),
         topic_id: isWindow(selectedLesson) ? null : editTopicId ? Number(editTopicId) : null,
         ...(isWindow(selectedLesson) ? {} : { cost: Number(editCost) }),
       });
@@ -819,9 +817,8 @@ export default function SchedulePage() {
 
     try {
       const movedLesson = await rescheduleLesson(selectedLesson.id, {
-        new_date: rescheduleDate,
-        new_start_time: `${rescheduleStartTime}:00`,
-        new_end_time: `${rescheduleEndTime}:00`,
+        new_starts_at: buildLocalIso(rescheduleDate, rescheduleStartTime),
+        new_ends_at: buildLocalIso(rescheduleDate, rescheduleEndTime),
       });
 
       const updatedOriginal = await updateLesson(selectedLesson.id, {
@@ -830,9 +827,7 @@ export default function SchedulePage() {
 
       setLessons((prev) =>
         [...prev.filter((lesson) => lesson.id !== movedLesson.id && lesson.id !== updatedOriginal.id), updatedOriginal, movedLesson]
-          .sort((a, b) =>
-            `${a.lesson_date} ${a.start_time}`.localeCompare(`${b.lesson_date} ${b.start_time}`)
-          )
+          .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
       );
 
       setSelectedLessonId(movedLesson.id);
@@ -876,7 +871,7 @@ export default function SchedulePage() {
       <div
         key={lesson.id}
         onClick={() => setSelectedLessonId(lesson.id)}
-        title={`${toTime(lesson.start_time)} - ${toTime(lesson.end_time)} • ${title}${windowCard ? '' : ` • ${subtitle}`}`}
+        title={`${toTime(toStartTime(lesson))} - ${toTime(toEndTime(lesson))} • ${title}${windowCard ? '' : ` • ${subtitle}`}`}
         style={{
           height: '100%',
           display: 'flex',
@@ -894,7 +889,7 @@ export default function SchedulePage() {
         }}
       >
         <div style={{ fontSize: tiny ? 10 : weekCard ? 11.5 : compact ? 11 : 12, fontWeight: 900, lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
-          {toTime(lesson.start_time)} - {toTime(lesson.end_time)}
+          {toTime(toStartTime(lesson))} - {toTime(toEndTime(lesson))}
         </div>
         <div
           style={{
@@ -1268,7 +1263,7 @@ export default function SchedulePage() {
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
-                        <strong>{toTime(lesson.start_time)} - {toTime(lesson.end_time)}</strong>
+                        <strong>{toTime(toStartTime(lesson))} - {toTime(toEndTime(lesson))}</strong>
                         <span style={{ color: color, fontSize: 12, fontWeight: 800 }}>{statusLabel(lesson.conduct_status)}</span>
                       </div>
                       <div style={{ fontWeight: 800, marginBottom: 4 }}>
@@ -1500,8 +1495,8 @@ export default function SchedulePage() {
                     <h3 style={{ fontSize: 28, lineHeight: 1.02, marginBottom: 8 }}>{selectedWindow ? 'Свободный слот' : student?.full_name ?? 'Ученик'}</h3>
                     <p style={{ color: '#5d6778', marginBottom: 0, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                       {selectedWindow
-                        ? `Окно репетитора • ${selectedLesson.lesson_date} • ${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`
-                        : `${subject?.name ?? 'Без предмета'} • ${selectedLesson.lesson_date} • ${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`}
+                        ? `Окно репетитора • ${toLessonDateStr(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`
+                        : `${subject?.name ?? 'Без предмета'} • ${toLessonDateStr(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`}
                     </p>
                   </div>
                   <button onClick={() => setSelectedLessonId(null)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>×</button>
@@ -1512,13 +1507,13 @@ export default function SchedulePage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, marginBottom: 20 }}>
                   {(selectedWindow
                     ? [
-                        ['Дата', selectedLesson.lesson_date],
-                        ['Время', `${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`],
+                        ['Дата', toLessonDateStr(selectedLesson)],
+                        ['Время', `${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`],
                         ['Тип записи', 'Свободный слот'],
                         ['Статус', 'Доступен для записи'],
                       ]
                     : [
-                        ['Занятие', `${selectedLesson.lesson_date} • ${toTime(selectedLesson.start_time)} - ${toTime(selectedLesson.end_time)}`],
+                        ['Занятие', `${toLessonDateStr(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`],
                         ['Тема занятия', topic?.title ?? 'Без темы'],
                         ['Стоимость', `${selectedLesson.cost ?? '—'} ₽`],
                         ['Оплата', paymentLabel(selectedLesson.payment_status)],
@@ -1645,9 +1640,9 @@ export default function SchedulePage() {
                       <button onClick={handleLessonDetailsSave}>Сохранить изменения</button>
                       <button
                         onClick={() => {
-                          setEditLessonDate(selectedLesson.lesson_date);
-                          setEditStartTime(toTime(selectedLesson.start_time));
-                          setEditEndTime(toTime(selectedLesson.end_time));
+                          setEditLessonDate(toLessonDateStr(selectedLesson));
+                          setEditStartTime(toTime(toStartTime(selectedLesson)));
+                          setEditEndTime(toTime(toEndTime(selectedLesson)));
                           setEditCost(selectedLesson.cost ? String(selectedLesson.cost) : '');
                           setEditTopicId(selectedLesson.topic_id ? String(selectedLesson.topic_id) : '');
                           setIsEditingLesson(false);
@@ -1675,9 +1670,9 @@ export default function SchedulePage() {
                       </button>
                       <button
                         onClick={() => {
-                          setRescheduleDate(selectedLesson.lesson_date);
-                          setRescheduleStartTime(toTime(selectedLesson.start_time));
-                          setRescheduleEndTime(toTime(selectedLesson.end_time));
+                          setRescheduleDate(toLessonDateStr(selectedLesson));
+                          setRescheduleStartTime(toTime(toStartTime(selectedLesson)));
+                          setRescheduleEndTime(toTime(toEndTime(selectedLesson)));
                           setIsReschedulingLesson(false);
                         }}
                         style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}

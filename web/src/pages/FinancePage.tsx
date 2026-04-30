@@ -9,6 +9,7 @@ import {
 } from '../api/tutorStudents';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { getApiErrorMessage } from '../utils/apiError';
+import { lessonDate } from '../utils/lessonTime';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -96,7 +97,7 @@ function filterLessonsByRange(lessons: Lesson[], from: string, to: string) {
   const toDate = endOfDay(new Date(`${to}T00:00:00`)).getTime();
 
   return lessons.filter((lesson) => {
-    const lessonTime = toLessonDate(lesson.lesson_date).getTime();
+    const lessonTime = toLessonDate(lessonDate(lesson)).getTime();
     return lessonTime >= fromDate && lessonTime <= toDate;
   });
 }
@@ -107,8 +108,8 @@ function lessonCost(lesson: Lesson) {
 }
 
 function getLessonDurationHours(lesson: Lesson) {
-  const start = new Date(`2000-01-01T${lesson.start_time}`);
-  const end = new Date(`2000-01-01T${lesson.end_time}`);
+  const start = new Date(lesson.starts_at);
+  const end = new Date(lesson.ends_at);
   return Math.max(0, end.getTime() - start.getTime()) / 3_600_000;
 }
 
@@ -158,7 +159,7 @@ function isRealFinancialLesson(lesson: Lesson) {
 }
 
 function getLessonStartDateTime(lesson: Lesson) {
-  return new Date(`${lesson.lesson_date}T${lesson.start_time}`);
+  return new Date(lesson.starts_at);
 }
 
 function formatReadableDate(date: string) {
@@ -429,9 +430,9 @@ export default function FinancePage() {
         id: lesson.id,
         studentName: student?.full_name ?? 'Без ученика',
         subjectName: relation?.subject_name ?? lesson.subject_name ?? subject?.name ?? 'Без предмета',
-        lessonDate: lesson.lesson_date,
+        lessonDate: lessonDate(lesson),
         cost: calculateLessonCostByRate(lesson, relation?.hourly_rate),
-        daysSince: getDaysSince(lesson.lesson_date),
+        daysSince: getDaysSince(lessonDate(lesson)),
         paymentStatus: lesson.payment_status,
         status:
           lesson.payment_status === 'payment_pending'
@@ -451,7 +452,7 @@ export default function FinancePage() {
 
       for (let index = 0; index < daysCount; index += 1) {
         const date = formatDate(addDays(start, index));
-        const dayLessons = chartPaidLessons.filter((lesson) => lesson.lesson_date === date);
+        const dayLessons = chartPaidLessons.filter((lesson) => lessonDate(lesson) === date);
         rows.push({
           key: date,
           label: formatReadableDate(date),
@@ -477,7 +478,7 @@ export default function FinancePage() {
     }
 
     chartPaidLessons.forEach((lesson) => {
-      const date = new Date(`${lesson.lesson_date}T00:00:00`);
+      const date = new Date(lesson.starts_at);
       const key =
         chartRange === 'month'
           ? `week-${getWeekOfMonth(date)}`
@@ -527,7 +528,7 @@ export default function FinancePage() {
       const monthLessons = lessons
         .filter(isRealFinancialLesson)
         .filter((lesson) => {
-          const date = new Date(`${lesson.lesson_date}T00:00:00`);
+          const date = new Date(lesson.starts_at);
           return (
             date >= monthStart &&
             date <= monthEnd &&

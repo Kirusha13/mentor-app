@@ -12,6 +12,7 @@ import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { getApiErrorMessage } from '../utils/apiError';
+import { lessonDate, lessonStartTime, lessonEndTime } from '../utils/lessonTime';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -141,7 +142,7 @@ export default function RequestsPage() {
                       {student?.full_name ?? 'Ученик'}
                     </div>
                     <div style={{ color: '#5d6778' }}>
-                      {subject?.name ?? 'Без предмета'} • {lesson.lesson_date} • {toTime(lesson.start_time)} - {toTime(lesson.end_time)}
+                      {subject?.name ?? 'Без предмета'} • {lessonDate(lesson)} • {toTime(lessonStartTime(lesson))} - {toTime(lessonEndTime(lesson))}
                     </div>
                   </div>
                   <div style={{ fontWeight: 700, color: '#1f2a3b' }}>{lesson.cost ?? '—'} ₽</div>

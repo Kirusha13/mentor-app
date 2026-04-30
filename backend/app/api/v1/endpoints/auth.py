@@ -18,7 +18,9 @@ async def telegram_login(
     data: TelegramAuthData,
     db: AsyncSession = Depends(get_db),
 ):
-    if not verify_telegram_data(data.model_dump()):
+    telegram_data = data.model_dump()
+    client_timezone = telegram_data.pop("client_timezone", None)
+    if not verify_telegram_data(telegram_data):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверная подпись Telegram")
 
     result = await db.execute(
@@ -39,6 +41,7 @@ async def telegram_login(
             avatar_url=data.photo_url,
             registered_at=now,
             last_visited_at=now,
+            timezone=client_timezone or "Europe/Moscow",
         )
         db.add(tutor)
         await db.commit()
@@ -46,6 +49,8 @@ async def telegram_login(
     else:
         tutor.avatar_url = data.photo_url or tutor.avatar_url
         tutor.last_visited_at = now
+        if client_timezone:
+            tutor.timezone = client_timezone
         await db.commit()
         await db.refresh(tutor)
 

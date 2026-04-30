@@ -2,9 +2,8 @@ import client from './client';
 
 export interface Lesson {
   id: number;
-  lesson_date: string;
-  start_time: string;
-  end_time: string;
+  starts_at: string;
+  ends_at: string;
   conduct_status: 'scheduled' | 'conducted' | 'cancelled' | 'rescheduled' | 'reschedule_pending' | 'reschedule_rejected' | 'booking_pending' | 'booking_rejected';
   payment_status: 'unpaid' | 'payment_pending' | 'paid';
   cost: number | null;
@@ -20,9 +19,8 @@ export interface Lesson {
 }
 
 export interface AvailableSlot {
-  lesson_date: string;
-  start_time: string;
-  end_time: string;
+  starts_at: string;
+  ends_at: string;
   tutor_id: number;
   tutor_name: string | null;
 }
@@ -42,9 +40,8 @@ export async function getAvailableWindows(): Promise<AvailableSlot[]> {
 
 export async function bookLesson(data: {
   tutor_student_id: number;
-  lesson_date: string;
-  start_time: string;
-  end_time: string;
+  starts_at: string;
+  ends_at: string;
 }): Promise<Lesson> {
   const res = await client.post('/student/lessons', data);
   return res.data;
@@ -52,7 +49,7 @@ export async function bookLesson(data: {
 
 export async function requestReschedule(
   lessonId: number,
-  data: { lesson_date: string; start_time: string; end_time: string }
+  data: { starts_at: string; ends_at: string }
 ): Promise<Lesson> {
   const res = await client.post(`/student/reschedule/${lessonId}`, data);
   return res.data;

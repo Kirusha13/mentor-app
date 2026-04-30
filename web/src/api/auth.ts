@@ -8,6 +8,7 @@ export interface TelegramAuthData {
   photo_url?: string;
   auth_date: number;
   hash: string;
+  client_timezone?: string;
 }
 
 export interface LoginResponse {
@@ -18,6 +19,7 @@ export interface LoginResponse {
 export const loginWithTelegram = async (
   data: TelegramAuthData
 ): Promise<LoginResponse> => {
-  const response = await apiClient.post('/auth/login', data);
+  const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const response = await apiClient.post('/auth/login', { ...data, client_timezone: detectedTz });
   return response.data;
 };

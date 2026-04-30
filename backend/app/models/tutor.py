@@ -17,6 +17,7 @@ class Tutor(TimestampMixin, Base):
     registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_visited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Europe/Moscow")
 
     subjects: Mapped[list["Subject"]] = relationship(
         back_populates="tutor",

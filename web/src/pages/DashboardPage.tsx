@@ -7,6 +7,7 @@ import { getSubjects, type Subject } from '../api/subjects';
 import { getTopics, type TheoryTopic } from '../api/topics';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { lessonDate, lessonStartTime } from '../utils/lessonTime';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -29,7 +30,7 @@ function formatDate(date: Date) {
 }
 
 function toDateTime(lesson: Lesson) {
-  return new Date(`${lesson.lesson_date}T${lesson.start_time}`);
+  return new Date(lesson.starts_at);
 }
 
 function toTime(value: string) {
@@ -156,7 +157,7 @@ export default function DashboardPage() {
       activeLessons
         .filter(
           (lesson) =>
-            lesson.lesson_date === today && ['scheduled', 'conducted'].includes(lesson.conduct_status)
+            lessonDate(lesson) === today && ['scheduled', 'conducted'].includes(lesson.conduct_status)
         )
         .sort((a, b) => toDateTime(a).getTime() - toDateTime(b).getTime())
         .map(enrichLesson),
@@ -181,7 +182,7 @@ export default function DashboardPage() {
     const date = formatDate(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + index));
     const dayLessons = weekLessons.filter(
       (lesson) =>
-        lesson.lesson_date === date &&
+        lessonDate(lesson) === date &&
         lesson.conduct_status === 'conducted' &&
         lesson.payment_status === 'paid'
     );
@@ -222,7 +223,7 @@ export default function DashboardPage() {
   const lessonsWithoutTopic = activeLessons.filter(
     (lesson) =>
       lesson.conduct_status === 'scheduled' &&
-      lesson.lesson_date === today &&
+      lessonDate(lesson) === today &&
       !lesson.topic_id
   );
 
@@ -378,7 +379,7 @@ export default function DashboardPage() {
                     border: '1px solid rgba(24,33,47,0.06)',
                   }}
                 >
-                  <div style={{ fontWeight: 900, color: '#1f2a3b' }}>{toTime(lesson.start_time)}</div>
+                  <div style={{ fontWeight: 900, color: '#1f2a3b' }}>{toTime(lessonStartTime(lesson))}</div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 4 }}>
                       {student?.full_name ?? 'Ученик'}

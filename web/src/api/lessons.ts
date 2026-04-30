@@ -14,9 +14,8 @@ export type PaymentStatus = 'unpaid' | 'payment_pending' | 'paid';
 
 export interface Lesson {
   id: number;
-  lesson_date: string;
-  start_time: string;
-  end_time: string;
+  starts_at: string;
+  ends_at: string;
   conduct_status: ConductStatus;
   payment_status: PaymentStatus;
   cost: number | null;
@@ -35,18 +34,16 @@ export interface Lesson {
 
 export interface CreateLessonPayload {
   tutor_student_id?: number | null;
-  lesson_date: string;
-  start_time: string;
-  end_time: string;
+  starts_at: string;
+  ends_at: string;
   cost?: number;
   is_window?: boolean;
   topic_id?: number;
 }
 
 export interface UpdateLessonPayload {
-  lesson_date?: string;
-  start_time?: string;
-  end_time?: string;
+  starts_at?: string;
+  ends_at?: string;
   conduct_status?: ConductStatus;
   payment_status?: PaymentStatus;
   cost?: number;
@@ -57,9 +54,8 @@ export interface UpdateLessonPayload {
 }
 
 export interface RescheduleLessonPayload {
-  new_date: string;
-  new_start_time: string;
-  new_end_time: string;
+  new_starts_at: string;
+  new_ends_at: string;
 }
 
 export interface ConfirmPaymentPayload {

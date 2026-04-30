@@ -18,6 +18,7 @@ class Student(TimestampMixin, Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_visited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Europe/Moscow")
 
     tutor_students: Mapped[list["TutorStudent"]] = relationship(back_populates="student")
     student_contacts: Mapped[list["StudentContact"]] = relationship(

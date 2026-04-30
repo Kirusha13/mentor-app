@@ -1,7 +1,7 @@
 import enum
-from datetime import date, time
+from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, ForeignKey, Numeric, SmallInteger, Text, Time
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Numeric, SmallInteger, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,13 +29,12 @@ class PaymentStatus(str, enum.Enum):
 class Lesson(TimestampMixin, Base):
     __tablename__ = "lessons"
     __table_args__ = (
-        CheckConstraint("end_time > start_time", name="chk_lesson_time"),
+        CheckConstraint("ends_at > starts_at", name="chk_lesson_time"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    lesson_date: Mapped[date] = mapped_column(Date, nullable=False)
-    start_time: Mapped[time] = mapped_column(Time, nullable=False)
-    end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     conduct_status: Mapped[ConductStatus] = mapped_column(
         SAEnum(ConductStatus, name="conduct_status_enum"),
         nullable=False,

@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getLessons, reportPayment, updateLessonNote, Lesson } from '../../api/lessons';
 import { getTopicContext, TheoryTopic } from '../../api/materials';
+import { lessonDate, lessonStartTime, lessonEndTime } from '../../utils/lessonTime';
 import TopicModal from '../../components/TopicModal';
 import RescheduleScreen from './RescheduleScreen';
 import BookingScreen from './BookingScreen';
@@ -224,8 +225,8 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
         </View>
 
         <View style={modal.section}>
-          <Row label="Дата" value={formatDate(String(localLesson.lesson_date))} />
-          <Row label="Время" value={`${localLesson.start_time.slice(0, 5)} – ${localLesson.end_time.slice(0, 5)}`} />
+          <Row label="Дата" value={formatDate(lessonDate(localLesson))} />
+          <Row label="Время" value={`${lessonStartTime(localLesson)} – ${lessonEndTime(localLesson)}`} />
           {localLesson.tutor_name ? <Row label="Репетитор" value={localLesson.tutor_name} /> : null}
           {localLesson.subject_name ? <Row label="Предмет" value={localLesson.subject_name} /> : null}
           {localLesson.topic_title ? (
@@ -371,9 +372,9 @@ export default function ScheduleScreen() {
     if (unpaid.length === 0) {
       setUnpaidInfo(null);
     } else {
-      unpaid.sort((a, b) => String(a.lesson_date).localeCompare(String(b.lesson_date)));
+      unpaid.sort((a, b) => a.starts_at.localeCompare(b.starts_at));
       const total = unpaid.reduce((sum, l) => sum + Number(l.cost ?? 0), 0);
-      setUnpaidInfo({ count: unpaid.length, total, nearestDate: String(unpaid[0].lesson_date) });
+      setUnpaidInfo({ count: unpaid.length, total, nearestDate: lessonDate(unpaid[0]) });
     }
   }, []);
 
@@ -387,7 +388,7 @@ export default function ScheduleScreen() {
 
   const todayStr = toISODate(new Date());
   const selectedDate = toISODate(addDays(weekStart, selectedDay));
-  const dayLessons = lessons.filter((l) => String(l.lesson_date).slice(0, 10) === selectedDate);
+  const dayLessons = lessons.filter((l) => lessonDate(l) === selectedDate);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -448,7 +449,7 @@ export default function ScheduleScreen() {
                 <View style={styles.cardTop}>
                   <Text style={[styles.cardStatus, { color }]}>{STATUS_LABEL[lesson.conduct_status]}</Text>
                   <Text style={styles.cardTime}>
-                    {lesson.start_time.slice(0, 5)} – {lesson.end_time.slice(0, 5)}
+                    {lessonStartTime(lesson)} – {lessonEndTime(lesson)}
                   </Text>
                 </View>
                 {lesson.tutor_name ? <Text style={styles.cardMeta}>{lesson.tutor_name}</Text> : null}

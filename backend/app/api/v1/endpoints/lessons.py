@@ -1,4 +1,5 @@
-from datetime import date, datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import and_, func, or_, select
@@ -28,6 +29,12 @@ ACTIVE_BOOKING_STATUSES = (
 )
 
 
+def _format_lesson_for_user(dt: datetime, user_tz: str | None) -> str:
+    tz = ZoneInfo(user_tz) if user_tz else ZoneInfo("Europe/Moscow")
+    local = dt.astimezone(tz)
+    return local.strftime("%d.%m.%Y в %H:%M")
+
+
 async def _get_lesson_for_tutor(db: AsyncSession, lesson_id: int, tutor_id: int) -> Lesson:
     result = await db.execute(
         select(Lesson)
@@ -53,8 +60,9 @@ async def _get_student_for_lesson(db: AsyncSession, lesson: Lesson) -> Student |
     return await db.get(Student, tutor_student.student_id)
 
 
-def _ensure_not_past(lesson_date: date, start_time) -> None:
-    if datetime.combine(lesson_date, start_time) <= datetime.now():
+def _ensure_not_past(starts_at: datetime) -> None:
+    now = datetime.now(timezone.utc)
+    if starts_at <= now:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Нельзя создавать слот или занятие в прошлом",
@@ -64,17 +72,15 @@ def _ensure_not_past(lesson_date: date, start_time) -> None:
 async def _ensure_window_has_no_overlap(
     db: AsyncSession,
     tutor_id: int,
-    lesson_date: date,
-    start_time,
-    end_time,
+    starts_at: datetime,
+    ends_at: datetime,
 ) -> None:
     window_conflict = await db.execute(
         select(Lesson.id).where(
             Lesson.tutor_id == tutor_id,
             Lesson.tutor_student_id.is_(None),
-            Lesson.lesson_date == lesson_date,
-            Lesson.start_time < end_time,
-            Lesson.end_time > start_time,
+            Lesson.starts_at < ends_at,
+            Lesson.ends_at > starts_at,
         )
     )
     if window_conflict.scalar_one_or_none() is not None:
@@ -88,10 +94,9 @@ async def _ensure_window_has_no_overlap(
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .where(
             TutorStudent.tutor_id == tutor_id,
-            Lesson.lesson_date == lesson_date,
             Lesson.conduct_status.in_(ACTIVE_BOOKING_STATUSES),
-            Lesson.start_time < end_time,
-            Lesson.end_time > start_time,
+            Lesson.starts_at < ends_at,
+            Lesson.ends_at > starts_at,
         )
     )
     if lesson_conflict.scalar_one_or_none() is not None:
@@ -104,19 +109,17 @@ async def _ensure_window_has_no_overlap(
 async def _ensure_lesson_has_no_overlap(
     db: AsyncSession,
     tutor_id: int,
-    lesson_date: date,
-    start_time,
-    end_time,
+    starts_at: datetime,
+    ends_at: datetime,
 ) -> None:
     conflict_result = await db.execute(
         select(Lesson.id)
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .where(
             TutorStudent.tutor_id == tutor_id,
-            Lesson.lesson_date == lesson_date,
             Lesson.conduct_status.in_(ACTIVE_BOOKING_STATUSES),
-            Lesson.start_time < end_time,
-            Lesson.end_time > start_time,
+            Lesson.starts_at < ends_at,
+            Lesson.ends_at > starts_at,
         )
     )
     if conflict_result.scalar_one_or_none() is not None:
@@ -128,8 +131,8 @@ async def _ensure_lesson_has_no_overlap(
 
 @router.get("", response_model=list[LessonOut], summary="Занятия и свободные слоты репетитора")
 async def list_lessons(
-    date_from: date | None = Query(None),
-    date_to: date | None = Query(None),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
     tutor_student_id: int | None = Query(None),
     tutor: Tutor = Depends(get_current_tutor),
     db: AsyncSession = Depends(get_db),
@@ -146,13 +149,13 @@ async def list_lessons(
     )
 
     if date_from:
-        q = q.where(Lesson.lesson_date >= date_from)
+        q = q.where(Lesson.starts_at >= date_from)
     if date_to:
-        q = q.where(Lesson.lesson_date <= date_to)
+        q = q.where(Lesson.starts_at <= date_to)
     if tutor_student_id:
         q = q.where(Lesson.tutor_student_id == tutor_student_id)
 
-    q = q.order_by(Lesson.lesson_date, Lesson.start_time)
+    q = q.order_by(Lesson.starts_at)
     result = await db.execute(q)
     return list(result.scalars().all())
 
@@ -184,17 +187,16 @@ async def create_lesson(
     tutor: Tutor = Depends(get_current_tutor),
     db: AsyncSession = Depends(get_db),
 ):
-    _ensure_not_past(data.lesson_date, data.start_time)
+    _ensure_not_past(data.starts_at)
 
     if data.is_window or data.tutor_student_id is None:
-        await _ensure_window_has_no_overlap(db, tutor.id, data.lesson_date, data.start_time, data.end_time)
+        await _ensure_window_has_no_overlap(db, tutor.id, data.starts_at, data.ends_at)
 
         lesson = Lesson(
             tutor_id=tutor.id,
             tutor_student_id=None,
-            lesson_date=data.lesson_date,
-            start_time=data.start_time,
-            end_time=data.end_time,
+            starts_at=data.starts_at,
+            ends_at=data.ends_at,
             cost=data.cost or 0,
             topic_id=data.topic_id,
             reminder_sent=False,
@@ -210,13 +212,12 @@ async def create_lesson(
         if tutor_student is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связка репетитор-ученик не найдена")
 
-        await _ensure_lesson_has_no_overlap(db, tutor.id, data.lesson_date, data.start_time, data.end_time)
+        await _ensure_lesson_has_no_overlap(db, tutor.id, data.starts_at, data.ends_at)
 
         lesson = Lesson(
             tutor_student_id=data.tutor_student_id,
-            lesson_date=data.lesson_date,
-            start_time=data.start_time,
-            end_time=data.end_time,
+            starts_at=data.starts_at,
+            ends_at=data.ends_at,
             cost=data.cost or 0,
             topic_id=data.topic_id,
             reminder_sent=False,
@@ -247,9 +248,9 @@ async def update_lesson(
     lesson = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
     payload = data.model_dump(exclude_none=True)
 
-    next_start_time = payload.get("start_time", lesson.start_time)
-    next_end_time = payload.get("end_time", lesson.end_time)
-    if next_end_time <= next_start_time:
+    next_starts_at = payload.get("starts_at", lesson.starts_at)
+    next_ends_at = payload.get("ends_at", lesson.ends_at)
+    if next_ends_at <= next_starts_at:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
@@ -271,7 +272,7 @@ async def update_lesson(
     except SubscriptionStateError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.to_detail()) from error
 
-    if "lesson_date" in payload or "start_time" in payload or "end_time" in payload:
+    if "starts_at" in payload or "ends_at" in payload:
         lesson.reminder_sent = False
 
     await db.commit()
@@ -288,14 +289,13 @@ async def reschedule_lesson(
 ):
     original = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
 
-    await _ensure_lesson_has_no_overlap(db, tutor.id, data.new_date, data.new_start_time, data.new_end_time)
+    await _ensure_lesson_has_no_overlap(db, tutor.id, data.new_starts_at, data.new_ends_at)
 
     original.conduct_status = ConductStatus.rescheduled
     new_lesson = Lesson(
         tutor_student_id=original.tutor_student_id,
-        lesson_date=data.new_date,
-        start_time=data.new_start_time,
-        end_time=data.new_end_time,
+        starts_at=data.new_starts_at,
+        ends_at=data.new_ends_at,
         cost=original.cost,
         topic_id=original.topic_id,
         original_lesson_id=original.id,
@@ -324,10 +324,9 @@ async def approve_booking(
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .where(
             TutorStudent.tutor_id == tutor_id,
-            Lesson.lesson_date == lesson.lesson_date,
             Lesson.conduct_status.in_(ACTIVE_BOOKING_STATUSES),
-            Lesson.start_time < lesson.end_time,
-            Lesson.end_time > lesson.start_time,
+            Lesson.starts_at < lesson.ends_at,
+            Lesson.ends_at > lesson.starts_at,
             Lesson.id != lesson.id,
         )
     )
@@ -340,7 +339,7 @@ async def approve_booking(
     student = await _get_student_for_lesson(db, lesson)
     await send_to_user(
         student.telegram_id if student else None,
-        f"Репетитор подтвердил запись на {lesson.lesson_date.strftime('%d.%m.%Y')} в {lesson.start_time.strftime('%H:%M')}",
+        f"Репетитор подтвердил запись на {_format_lesson_for_user(lesson.starts_at, student.timezone if student else None)}",
     )
     return lesson
 
@@ -361,7 +360,7 @@ async def reject_booking(
     student = await _get_student_for_lesson(db, lesson)
     await send_to_user(
         student.telegram_id if student else None,
-        f"Репетитор отклонил запрос на запись ({lesson.lesson_date.strftime('%d.%m.%Y')} {lesson.start_time.strftime('%H:%M')})",
+        f"Репетитор отклонил запрос на запись ({_format_lesson_for_user(lesson.starts_at, student.timezone if student else None)})",
     )
     return lesson
 
@@ -387,7 +386,7 @@ async def approve_reschedule(
     student = await _get_student_for_lesson(db, new_lesson)
     await send_to_user(
         student.telegram_id if student else None,
-        f"Перенос подтверждён — новое занятие {new_lesson.lesson_date.strftime('%d.%m.%Y')} в {new_lesson.start_time.strftime('%H:%M')}",
+        f"Перенос подтверждён — новое занятие {_format_lesson_for_user(new_lesson.starts_at, student.timezone if student else None)}",
     )
     return new_lesson
 
@@ -408,7 +407,7 @@ async def reject_reschedule(
     student = await _get_student_for_lesson(db, lesson)
     await send_to_user(
         student.telegram_id if student else None,
-        f"Репетитор отклонил запрос на перенос занятия {lesson.lesson_date.strftime('%d.%m.%Y')}",
+        f"Репетитор отклонил запрос на перенос занятия {_format_lesson_for_user(lesson.starts_at, student.timezone if student else None)}",
     )
     return lesson
 
@@ -436,7 +435,7 @@ async def cancel_lesson(
     student = await _get_student_for_lesson(db, lesson)
     await send_to_user(
         student.telegram_id if student else None,
-        f"Занятие {lesson.lesson_date.strftime('%d.%m.%Y')} в {lesson.start_time.strftime('%H:%M')} отменено репетитором",
+        f"Занятие {_format_lesson_for_user(lesson.starts_at, student.timezone if student else None)} отменено репетитором",
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -456,12 +455,13 @@ async def confirm_payment(
     await db.commit()
     await db.refresh(lesson)
     student = await _get_student_for_lesson(db, lesson)
+    student_tz = student.timezone if student else None
     await send_to_user(
         student.telegram_id if student else None,
         (
-            f"Оплата за занятие {lesson.lesson_date.strftime('%d.%m.%Y')} подтверждена"
+            f"Оплата за занятие {_format_lesson_for_user(lesson.starts_at, student_tz)} подтверждена"
             if data.confirm
-            else f"Репетитор не подтвердил оплату за занятие {lesson.lesson_date.strftime('%d.%m.%Y')}"
+            else f"Репетитор не подтвердил оплату за занятие {_format_lesson_for_user(lesson.starts_at, student_tz)}"
         ),
     )
     return lesson

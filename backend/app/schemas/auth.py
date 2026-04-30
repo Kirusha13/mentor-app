@@ -14,6 +14,7 @@ class TelegramAuthData(BaseModel):
     photo_url: str | None = None
     auth_date: int
     hash: str
+    client_timezone: str | None = None
 
 
 class TelegramRegisterData(TelegramAuthData):

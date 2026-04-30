@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AvailableSlot, bookLesson, getAvailableWindows } from '../../api/lessons';
 import { getTutors, TutorStudent } from '../../api/student';
+import { lessonDate, lessonStartTime, lessonEndTime, buildLocalIso } from '../../utils/lessonTime';
 
 // ─── Вспомогательные функции ──────────────────────────────────────────────────
 
@@ -112,21 +113,22 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
 
   function getSlotsForDate(date: string): AvailableSlot[] {
     return selectedTS
-      ? windows.filter(w => w.tutor_id === selectedTS.tutor_id && w.lesson_date === date)
+      ? windows.filter(w => w.tutor_id === selectedTS.tutor_id && lessonDate(w) === date)
       : [];
   }
 
   function getStartOptionsForSlots(slots: AvailableSlot[]): StartOption[] {
-    return slots.flatMap(slot =>
-      getStartOptions(slot.start_time, slot.end_time).map(t => ({ time: t, slotEnd: slot.end_time }))
-    );
+    return slots.flatMap(slot => {
+      const slotEnd = lessonEndTime(slot);
+      return getStartOptions(lessonStartTime(slot), slotEnd).map(t => ({ time: t, slotEnd }));
+    });
   }
 
   const availableDates = selectedTS
     ? [...new Set(
         windows
-          .filter(w => w.tutor_id === selectedTS.tutor_id && w.lesson_date >= todayStr)
-          .map(w => w.lesson_date)
+          .filter(w => w.tutor_id === selectedTS!.tutor_id && lessonDate(w) >= todayStr)
+          .map(w => lessonDate(w))
       )]
         .sort()
         .filter(date => getStartOptionsForSlots(getSlotsForDate(date)).length > 0)
@@ -207,9 +209,8 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
             try {
               await bookLesson({
                 tutor_student_id: selectedTS.id,
-                lesson_date: selectedDate,
-                start_time: selectedStart + ':00',
-                end_time: endTime + ':00',
+                starts_at: buildLocalIso(selectedDate, selectedStart),
+                ends_at: buildLocalIso(selectedDate, endTime),
               });
               Alert.alert('Запрос отправлен', 'Репетитор рассмотрит ваш запрос и подтвердит занятие.', [{ text: 'OK', onPress: onSuccess }]);
             } catch (e: any) {
@@ -370,7 +371,7 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
               {dateSlots.map((slot, i) => (
                 <View key={i} style={s.windowBadge}>
                   <Text style={s.windowBadgeText}>
-                    🕐 {fmt(slot.start_time)} – {fmt(slot.end_time)}
+                    🕐 {lessonStartTime(slot)} – {lessonEndTime(slot)}
                   </Text>
                 </View>
               ))}

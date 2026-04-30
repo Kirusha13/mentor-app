@@ -13,7 +13,7 @@ from app.services.student_service import get_student_by_telegram_id
 
 
 async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
-    tg_dict = data.model_dump(exclude={"invitation_token", "full_name", "phone_number"})
+    tg_dict = data.model_dump(exclude={"invitation_token", "full_name", "phone_number", "client_timezone"})
     if not verify_telegram_data(tg_dict):
         raise ValueError("invalid_telegram_hash")
 
@@ -27,6 +27,8 @@ async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
     existing_student = await get_student_by_telegram_id(db, data.id)
     if existing_student:
         existing_student.last_visited_at = datetime.now(timezone.utc)
+        if data.client_timezone:
+            existing_student.timezone = data.client_timezone
         student = existing_student
     else:
         now = datetime.now(timezone.utc)
@@ -37,6 +39,7 @@ async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
             avatar_url=data.photo_url,
             started_at=now,
             last_visited_at=now,
+            timezone=data.client_timezone or "Europe/Moscow",
         )
         db.add(student)
         await db.flush()
@@ -68,7 +71,8 @@ async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
 
 
 async def student_login(db: AsyncSession, data: StudentLoginData) -> str:
-    if not verify_telegram_data(data.model_dump()):
+    tg_dict = data.model_dump(exclude={"client_timezone"})
+    if not verify_telegram_data(tg_dict):
         raise ValueError("invalid_telegram_hash")
 
     student = await get_student_by_telegram_id(db, data.id)
@@ -76,5 +80,7 @@ async def student_login(db: AsyncSession, data: StudentLoginData) -> str:
         raise LookupError("student_not_found")
 
     student.last_visited_at = datetime.now(timezone.utc)
+    if data.client_timezone:
+        student.timezone = data.client_timezone
     await db.commit()
     return create_access_token(student.id, role="student")

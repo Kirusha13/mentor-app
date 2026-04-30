@@ -7,6 +7,7 @@ import { getSubjects, type Subject } from '../api/subjects';
 import { getTopics, type TheoryTopic } from '../api/topics';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { lessonDate } from '../utils/lessonTime';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -273,11 +274,11 @@ export default function PortfolioPage() {
     ? `portfolio_comment:${selectedStudentId}:${selectedSubjectFilter}:${selectedMonth}:${goalType}`
     : '';
   const monthLessons = useMemo(
-    () => studentLessons.filter((lesson) => inMonth(lesson.lesson_date, selectedMonth)),
+    () => studentLessons.filter((lesson) => inMonth(lessonDate(lesson), selectedMonth)),
     [selectedMonth, studentLessons]
   );
   const previousMonthLessons = useMemo(
-    () => studentLessons.filter((lesson) => inMonth(lesson.lesson_date, previousMonthValue)),
+    () => studentLessons.filter((lesson) => inMonth(lessonDate(lesson), previousMonthValue)),
     [previousMonthValue, studentLessons]
   );
   const monthAssignments = useMemo(
@@ -333,9 +334,9 @@ export default function PortfolioPage() {
   const previousStats = buildStats(previousMonthLessons, previousMonthAssignments, 0);
   const gradeRows = currentStats.conductedLessons
     .filter((lesson) => lesson.grade !== null)
-    .sort((a, b) => a.lesson_date.localeCompare(b.lesson_date))
+    .sort((a, b) => lessonDate(a).localeCompare(lessonDate(b)))
     .map((lesson) => ({
-      label: new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(`${lesson.lesson_date}T00:00:00`)),
+      label: new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(lesson.starts_at)),
       value: lesson.grade ?? 0,
     }));
   const competencyRows = [
@@ -561,7 +562,7 @@ export default function PortfolioPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
             {Array.from({ length: monthRange(selectedMonth).end.getDate() }, (_, index) => {
               const date = `${selectedMonth}-${String(index + 1).padStart(2, '0')}`;
-              const dayLessons = monthLessons.filter((lesson) => lesson.lesson_date === date);
+              const dayLessons = monthLessons.filter((lesson) => lessonDate(lesson) === date);
               const conducted = dayLessons.some((lesson) => lesson.conduct_status === 'conducted');
               const cancelled = dayLessons.some((lesson) => lesson.conduct_status === 'cancelled');
               const scheduled = dayLessons.some((lesson) => lesson.conduct_status === 'scheduled');

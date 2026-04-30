@@ -1,7 +1,7 @@
 import json
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
@@ -22,47 +22,58 @@ from app.services.subscription_service import apply_conduct_status_transition
 from app.services.telegram_service import send_to_user
 
 
-APP_TIMEZONE = ZoneInfo("Asia/Yekaterinburg")
+APP_TIMEZONE = ZoneInfo("Europe/Moscow")
 
 
 async def auto_conduct_lessons():
     """Обновляет статусы прошедших занятий."""
+    now = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Lesson)
             .options(selectinload(Lesson.tutor_student))
             .where(
-                Lesson.lesson_date < text("CURRENT_DATE"),
+                Lesson.ends_at <= now,
                 Lesson.conduct_status == ConductStatus.scheduled,
                 Lesson.tutor_student_id.is_not(None),
             )
         )
         for lesson in result.scalars().all():
             apply_conduct_status_transition(lesson, lesson.tutor_student, ConductStatus.conducted)
-        await db.execute(text("""
-            UPDATE lessons
-            SET conduct_status = 'reschedule_rejected'
-            WHERE lesson_date < CURRENT_DATE
-              AND conduct_status = 'reschedule_pending'
-        """))
-        await db.execute(text("""
-            UPDATE lessons
-            SET conduct_status = 'booking_rejected'
-            WHERE lesson_date < CURRENT_DATE
-              AND conduct_status = 'booking_pending'
-        """))
+
+        pending_reschedule = await db.execute(
+            select(Lesson).where(
+                Lesson.starts_at <= now,
+                Lesson.conduct_status == ConductStatus.reschedule_pending,
+            )
+        )
+        for lesson in pending_reschedule.scalars().all():
+            lesson.conduct_status = ConductStatus.reschedule_rejected
+
+        pending_booking = await db.execute(
+            select(Lesson).where(
+                Lesson.starts_at <= now,
+                Lesson.conduct_status == ConductStatus.booking_pending,
+            )
+        )
+        for lesson in pending_booking.scalars().all():
+            lesson.conduct_status = ConductStatus.booking_rejected
+
         await db.commit()
 
 
 async def send_reminders():
-    reminder_date = datetime.now(APP_TIMEZONE).date() + timedelta(days=1)
+    now = datetime.now(timezone.utc)
+    window_start = now + timedelta(hours=23)
+    window_end = now + timedelta(hours=25)
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Lesson)
             .options(selectinload(Lesson.tutor_student))
             .where(
-                Lesson.lesson_date == reminder_date,
+                Lesson.starts_at >= window_start,
+                Lesson.starts_at < window_end,
                 Lesson.conduct_status == ConductStatus.scheduled,
                 Lesson.reminder_sent.is_(False),
                 Lesson.tutor_student_id.is_not(None),
@@ -74,9 +85,11 @@ async def send_reminders():
                 continue
 
             student = await db.get(Student, lesson.tutor_student.student_id)
+            student_tz = ZoneInfo(student.timezone) if student and student.timezone else APP_TIMEZONE
+            local_time = lesson.starts_at.astimezone(student_tz)
             await send_to_user(
                 student.telegram_id if student else None,
-                f"Напоминание: завтра занятие в {lesson.start_time.strftime('%H:%M')}",
+                f"Напоминание: завтра занятие в {local_time.strftime('%H:%M')}",
             )
             lesson.reminder_sent = True
 

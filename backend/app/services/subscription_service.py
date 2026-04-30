@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from datetime import date as date_type, datetime
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,10 +80,7 @@ async def get_tutor_student_for_lesson(
 
 
 def _lesson_duration_hours(lesson: Lesson) -> Decimal:
-    seconds = (
-        datetime.combine(date_type.min, lesson.end_time) -
-        datetime.combine(date_type.min, lesson.start_time)
-    ).seconds
+    seconds = (lesson.ends_at - lesson.starts_at).total_seconds()
     return Decimal(seconds) / Decimal(3600)
 
 

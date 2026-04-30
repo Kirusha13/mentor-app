@@ -12,6 +12,7 @@ class StudentOut(BaseModel):
     started_at: datetime
     last_visited_at: datetime | None
     avatar_url: str | None
+    timezone: str
 
     model_config = {"from_attributes": True}
 
@@ -28,3 +29,4 @@ class StudentUpdate(BaseModel):
     grade: int | None = None
     phone_number: str | None = None
     avatar_url: str | None = None
+    timezone: str | None = None

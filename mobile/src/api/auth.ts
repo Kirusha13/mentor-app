@@ -10,8 +10,16 @@ export interface TelegramAuthData {
   hash: string;
 }
 
+function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+  } catch {
+    return 'Europe/Moscow';
+  }
+}
+
 export async function studentLogin(data: TelegramAuthData): Promise<string> {
-  const res = await client.post('/student/auth/login', data);
+  const res = await client.post('/student/auth/login', { ...data, client_timezone: detectTimezone() });
   return res.data.access_token;
 }
 
@@ -26,6 +34,7 @@ export async function studentRegister(
     invitation_token,
     full_name,
     phone_number,
+    client_timezone: detectTimezone(),
   });
   return res.data.access_token;
 }

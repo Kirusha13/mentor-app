@@ -1,7 +1,8 @@
 ﻿"""
 Эндпоинты для ученика: только свои данные.
 """
-from datetime import date, datetime, time
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import os
 import uuid
@@ -12,7 +13,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from pydantic import BaseModel
 from fastapi.responses import Response
 from telegram import Bot
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_student
@@ -37,6 +38,12 @@ from app.schemas.tutor_student import TutorStudentOut
 from app.services.telegram_service import send_to_user
 
 router = APIRouter()
+
+
+def _format_lesson_for_user(dt: datetime, user_tz: str | None) -> str:
+    tz = ZoneInfo(user_tz) if user_tz else ZoneInfo("Europe/Moscow")
+    local = dt.astimezone(tz)
+    return local.strftime("%d.%m.%Y в %H:%M")
 
 
 @router.get("/me", response_model=StudentOut, summary="Профиль ученика")
@@ -171,8 +178,8 @@ async def join_by_token(
 
 @router.get("/lessons", response_model=list[StudentLessonOut], summary="Мои занятия")
 async def my_lessons(
-    date_from: date | None = Query(None),
-    date_to: date | None = Query(None),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
@@ -184,10 +191,10 @@ async def my_lessons(
         .where(TutorStudent.student_id == student.id)
     )
     if date_from:
-        q = q.where(Lesson.lesson_date >= date_from)
+        q = q.where(Lesson.starts_at >= date_from)
     if date_to:
-        q = q.where(Lesson.lesson_date <= date_to)
-    result = await db.execute(q.distinct(Lesson.id).order_by(Lesson.id, Lesson.lesson_date, Lesson.start_time))
+        q = q.where(Lesson.starts_at <= date_to)
+    result = await db.execute(q.distinct(Lesson.id).order_by(Lesson.id, Lesson.starts_at))
     rows = result.all()
     seen = set()
     lessons = []
@@ -244,17 +251,15 @@ async def book_lesson(
     if ts.status != TutorStudentStatus.active:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Записаться можно только по активной связи")
 
-    requested_at = datetime.combine(data.lesson_date, data.start_time)
-    if requested_at <= datetime.now():
+    if data.starts_at <= datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Нельзя записаться на время в прошлом")
 
     window_result = await db.execute(
         select(Lesson).where(
             Lesson.tutor_id == ts.tutor_id,
             Lesson.tutor_student_id.is_(None),
-            Lesson.lesson_date == data.lesson_date,
-            Lesson.start_time <= data.start_time,
-            Lesson.end_time >= data.end_time,
+            Lesson.starts_at <= data.starts_at,
+            Lesson.ends_at >= data.ends_at,
         )
     )
     if window_result.scalar_one_or_none() is None:
@@ -265,26 +270,21 @@ async def book_lesson(
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .where(
             TutorStudent.tutor_id == ts.tutor_id,
-            Lesson.lesson_date == data.lesson_date,
             Lesson.conduct_status.in_(("scheduled", "booking_pending", "reschedule_pending")),
-            Lesson.start_time < data.end_time,
-            Lesson.end_time > data.start_time,
+            Lesson.starts_at < data.ends_at,
+            Lesson.ends_at > data.starts_at,
         )
     )
     if conflict_result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Этот слот уже занят")
 
-    duration_hours = (
-        (data.end_time.hour * 60 + data.end_time.minute)
-        - (data.start_time.hour * 60 + data.start_time.minute)
-    ) / 60
+    duration_hours = (data.ends_at - data.starts_at).total_seconds() / 3600
     cost = float(ts.hourly_rate) * duration_hours
 
     lesson = Lesson(
         tutor_student_id=data.tutor_student_id,
-        lesson_date=data.lesson_date,
-        start_time=data.start_time,
-        end_time=data.end_time,
+        starts_at=data.starts_at,
+        ends_at=data.ends_at,
         conduct_status="booking_pending",
         payment_status="unpaid",
         cost=cost,
@@ -296,7 +296,7 @@ async def book_lesson(
     tutor = await db.get(Tutor, ts.tutor_id)
     await send_to_user(
         tutor.telegram_id if tutor else None,
-        f"Ученик {student.full_name} запрашивает запись на {lesson.lesson_date.strftime('%d.%m.%Y')} в {lesson.start_time.strftime('%H:%M')}",
+        f"Ученик {student.full_name} запрашивает запись на {_format_lesson_for_user(lesson.starts_at, tutor.timezone if tutor else None)}",
     )
 
     d = StudentLessonOut.model_validate(lesson).model_dump()
@@ -477,7 +477,6 @@ async def get_available_windows(
 
 
 async def _get_available_windows(student, db):
-    # Получаем всех репетиторов ученика
     ts_result = await db.execute(
         select(TutorStudent.tutor_id).where(TutorStudent.student_id == student.id).distinct()
     )
@@ -485,68 +484,59 @@ async def _get_available_windows(student, db):
     if not tutor_ids:
         return []
 
-    # Получаем имена репетиторов
     tutors_result = await db.execute(select(Tutor).where(Tutor.id.in_(tutor_ids)))
     tutors_map = {t.id: t.full_name for t in tutors_result.scalars().all()}
 
-    # Получаем окна (tutor_student_id IS NULL)
     windows_result = await db.execute(
-        text("""
-            SELECT id, lesson_date, start_time, end_time, tutor_id
-            FROM lessons
-            WHERE tutor_student_id IS NULL AND tutor_id = ANY(:tutor_ids)
-            ORDER BY lesson_date, start_time
-        """),
-        {"tutor_ids": tutor_ids},
+        select(Lesson)
+        .where(Lesson.tutor_student_id.is_(None), Lesson.tutor_id.in_(tutor_ids))
+        .order_by(Lesson.starts_at)
     )
-    windows = windows_result.mappings().all()
+    windows = list(windows_result.scalars().all())
     if not windows:
         return []
 
-    # Получаем занятия со статусом scheduled для этих репетиторов
     scheduled_result = await db.execute(
-        text("""
-            SELECT l.lesson_date, l.start_time, l.end_time, l.tutor_student_id
-            FROM lessons l
-            JOIN tutor_student ts ON ts.id = l.tutor_student_id
-            WHERE ts.tutor_id = ANY(:tutor_ids)
-              AND l.conduct_status IN ('scheduled', 'booking_pending', 'reschedule_pending')
-        """),
-        {"tutor_ids": tutor_ids},
+        select(Lesson)
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(
+            TutorStudent.tutor_id.in_(tutor_ids),
+            Lesson.conduct_status.in_(("scheduled", "booking_pending", "reschedule_pending")),
+        )
     )
-    scheduled = scheduled_result.mappings().all()
+    scheduled = list(scheduled_result.scalars().all())
 
-    # Группируем занятия по дате для быстрого поиска
-    from collections import defaultdict
-    occupied: dict = defaultdict(list)
-    for lesson in scheduled:
-        occupied[lesson["lesson_date"]].append((lesson["start_time"], lesson["end_time"]))
-
-    # Для каждого окна вычитаем занятия и возвращаем свободные промежутки
     slots: list[AvailableSlot] = []
     for window in windows:
-        day_lessons = sorted(occupied.get(window["lesson_date"], []))
+        overlapping = sorted(
+            [
+                (l.starts_at, l.ends_at)
+                for l in scheduled
+                if l.starts_at < window.ends_at and l.ends_at > window.starts_at
+            ],
+            key=lambda x: x[0],
+        )
 
-        free_start = window["start_time"]
-        for lesson_start, lesson_end in day_lessons:
-            if lesson_start > free_start:
+        free_start = window.starts_at
+        for lesson_start, lesson_end in overlapping:
+            cut_start = max(lesson_start, window.starts_at)
+            cut_end = min(lesson_end, window.ends_at)
+            if cut_start > free_start:
                 slots.append(AvailableSlot(
-                    lesson_date=window["lesson_date"],
-                    start_time=free_start,
-                    end_time=lesson_start,
-                    tutor_id=window["tutor_id"],
-                    tutor_name=tutors_map.get(window["tutor_id"]),
+                    starts_at=free_start,
+                    ends_at=cut_start,
+                    tutor_id=window.tutor_id,
+                    tutor_name=tutors_map.get(window.tutor_id),
                 ))
-            if lesson_end > free_start:
-                free_start = lesson_end
+            if cut_end > free_start:
+                free_start = cut_end
 
-        if free_start < window["end_time"]:
+        if free_start < window.ends_at:
             slots.append(AvailableSlot(
-                lesson_date=window["lesson_date"],
-                start_time=free_start,
-                end_time=window["end_time"],
-                tutor_id=window["tutor_id"],
-                tutor_name=tutors_map.get(window["tutor_id"]),
+                starts_at=free_start,
+                ends_at=window.ends_at,
+                tutor_id=window.tutor_id,
+                tutor_name=tutors_map.get(window.tutor_id),
             ))
 
     return slots
@@ -583,9 +573,8 @@ async def request_reschedule(
 
     # Создаём новое занятие со статусом reschedule_pending
     new_lesson = Lesson(
-        lesson_date=data.lesson_date,
-        start_time=data.start_time,
-        end_time=data.end_time,
+        starts_at=data.starts_at,
+        ends_at=data.ends_at,
         conduct_status="reschedule_pending",
         payment_status=lesson.payment_status,
         cost=lesson.cost,
@@ -599,9 +588,10 @@ async def request_reschedule(
     await db.refresh(new_lesson)
     ts = await db.get(TutorStudent, lesson.tutor_student_id)
     tutor = await db.get(Tutor, ts.tutor_id) if ts else None
+    tutor_tz = tutor.timezone if tutor else None
     await send_to_user(
         tutor.telegram_id if tutor else None,
-        f"Ученик {student.full_name} запрашивает перенос занятия {lesson.lesson_date.strftime('%d.%m.%Y')} на {new_lesson.lesson_date.strftime('%d.%m.%Y')} в {new_lesson.start_time.strftime('%H:%M')}",
+        f"Ученик {student.full_name} запрашивает перенос занятия {_format_lesson_for_user(lesson.starts_at, tutor_tz)} на {_format_lesson_for_user(new_lesson.starts_at, tutor_tz)}",
     )
     return new_lesson
 
@@ -652,7 +642,7 @@ async def report_payment(
     tutor = await db.get(Tutor, ts.tutor_id) if ts else None
     await send_to_user(
         tutor.telegram_id if tutor else None,
-        f"Ученик {student.full_name} сообщил об оплате занятия {lesson.lesson_date.strftime('%d.%m.%Y')}",
+        f"Ученик {student.full_name} сообщил об оплате занятия {_format_lesson_for_user(lesson.starts_at, tutor.timezone if tutor else None)}",
     )
 
     d = StudentLessonOut.model_validate(lesson).model_dump()

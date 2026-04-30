@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, model_validator
@@ -9,9 +9,8 @@ from app.models.lesson import ConductStatus, PaymentStatus
 class LessonOut(BaseModel):
     """Занятие для репетитора — включает tutor_note и grade_comment, не включает student_note."""
     id: int
-    lesson_date: date
-    start_time: time
-    end_time: time
+    starts_at: datetime
+    ends_at: datetime
     conduct_status: ConductStatus
     payment_status: PaymentStatus
     cost: Decimal | None
@@ -33,9 +32,8 @@ class LessonOut(BaseModel):
 class StudentLessonOut(BaseModel):
     """Занятие для ученика — включает grade_comment и student_note, не включает tutor_note."""
     id: int
-    lesson_date: date
-    start_time: time
-    end_time: time
+    starts_at: datetime
+    ends_at: datetime
     conduct_status: ConductStatus
     payment_status: PaymentStatus
     cost: Decimal | None
@@ -55,46 +53,42 @@ class StudentLessonOut(BaseModel):
 
 class AvailableSlot(BaseModel):
     """Свободный временной промежуток в окне репетитора."""
-    lesson_date: date
-    start_time: time
-    end_time: time
+    starts_at: datetime
+    ends_at: datetime
     tutor_id: int
     tutor_name: str | None = None
 
 
 class RescheduleRequest(BaseModel):
     """Запрос на перенос занятия."""
-    lesson_date: date
-    start_time: time
-    end_time: time
+    starts_at: datetime
+    ends_at: datetime
 
     @model_validator(mode="after")
     def check_time(self):
-        if self.end_time <= self.start_time:
-            raise ValueError("end_time должно быть позже start_time")
+        if self.ends_at <= self.starts_at:
+            raise ValueError("ends_at должно быть позже starts_at")
         return self
 
 
 class LessonCreate(BaseModel):
     tutor_student_id: int | None = None
-    lesson_date: date
-    start_time: time
-    end_time: time
+    starts_at: datetime
+    ends_at: datetime
     cost: Decimal | None = None
     is_window: bool = False
     topic_id: int | None = None
 
     @model_validator(mode="after")
     def check_time(self):
-        if self.end_time <= self.start_time:
-            raise ValueError("end_time должно быть позже start_time")
+        if self.ends_at <= self.starts_at:
+            raise ValueError("ends_at должно быть позже starts_at")
         return self
 
 
 class LessonUpdate(BaseModel):
-    lesson_date: date | None = None
-    start_time: time | None = None
-    end_time: time | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
     conduct_status: ConductStatus | None = None
     payment_status: PaymentStatus | None = None
     cost: Decimal | None = None
@@ -112,27 +106,25 @@ class StudentLessonNoteUpdate(BaseModel):
 class StudentLessonCreate(BaseModel):
     """Самостоятельная запись ученика на занятие."""
     tutor_student_id: int
-    lesson_date: date
-    start_time: time
-    end_time: time
+    starts_at: datetime
+    ends_at: datetime
 
     @model_validator(mode="after")
     def check_time(self):
-        if self.end_time <= self.start_time:
-            raise ValueError("end_time должно быть позже start_time")
+        if self.ends_at <= self.starts_at:
+            raise ValueError("ends_at должно быть позже starts_at")
         return self
 
 
 class LessonReschedule(BaseModel):
     """Перенос занятия — создаёт новое, помечает исходное как rescheduled."""
-    new_date: date
-    new_start_time: time
-    new_end_time: time
+    new_starts_at: datetime
+    new_ends_at: datetime
 
     @model_validator(mode="after")
     def check_time(self):
-        if self.new_end_time <= self.new_start_time:
-            raise ValueError("new_end_time должно быть позже new_start_time")
+        if self.new_ends_at <= self.new_starts_at:
+            raise ValueError("new_ends_at должно быть позже new_starts_at")
         return self
 
 
