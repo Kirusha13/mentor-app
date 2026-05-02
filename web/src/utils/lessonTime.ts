@@ -36,3 +36,12 @@ export function buildLocalIso(date: string, time: string): string {
   const [hours, minutes] = time.split(':').map(Number);
   return new Date(year, (month ?? 1) - 1, day ?? 1, hours ?? 0, minutes ?? 0, 0).toISOString();
 }
+
+export function buildLocalDayStartIso(date: string): string {
+  return buildLocalIso(date, '00:00');
+}
+
+export function buildLocalDayEndIso(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, (month ?? 1) - 1, day ?? 1, 23, 59, 59, 999).toISOString();
+}
