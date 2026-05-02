@@ -18,7 +18,16 @@ import { getTopics, type TheoryTopic } from '../api/topics';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { getApiErrorCode, getApiErrorMessage } from '../utils/apiError';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
-import { lessonDate as toLessonDateStr, lessonStartTime as toStartTime, lessonEndTime as toEndTime, lessonStartMinutes, lessonEndMinutes, buildLocalIso } from '../utils/lessonTime';
+import {
+  lessonDate as toLessonDateStr,
+  lessonStartTime as toStartTime,
+  lessonEndTime as toEndTime,
+  lessonStartMinutes,
+  lessonEndMinutes,
+  buildLocalIso,
+  buildLocalDayStartIso,
+  buildLocalDayEndIso,
+} from '../utils/lessonTime';
 
 type CalendarMode = 'day' | 'week' | 'month';
 type SlotDayDraft = {
@@ -256,7 +265,7 @@ export default function SchedulePage() {
     typeof window === 'undefined' ? 900 : window.innerHeight
   );
   const [selectedTutorStudentId, setSelectedTutorStudentId] = useState('');
-  const [lessonDate, setLessonDate] = useState('');
+  const [lessonDate, setLessonDate] = useState(() => formatDate(new Date()));
   const [startTime, setStartTime] = useState('10:00');
   const [endTime, setEndTime] = useState('11:00');
   const [cost, setCost] = useState('');
@@ -502,8 +511,9 @@ export default function SchedulePage() {
   }, [tutorStudentOptions]);
 
   useEffect(() => {
-    setLessonDate(formatDate(range.from));
-  }, [range.from]);
+    if (!isCreateLessonOpen) return;
+    setLessonDate(formatDate(new Date()));
+  }, [isCreateLessonOpen]);
 
   useEffect(() => {
     const selected = tutorStudentOptions.find((item) => String(item.id) === selectedTutorStudentId);
@@ -538,8 +548,10 @@ export default function SchedulePage() {
     const loadData = async () => {
       try {
         setLoading(true);
+        const dateFrom = buildLocalDayStartIso(formatDate(range.from));
+        const dateTo = buildLocalDayEndIso(formatDate(range.to));
         const [lessonData, tutorStudentData, studentData, subjectData, topicData] = await Promise.all([
-          getLessons({ date_from: formatDate(range.from), date_to: formatDate(range.to) }),
+          getLessons({ date_from: dateFrom, date_to: dateTo }),
           getTutorStudents(),
           getStudents(),
           getSubjects(),
@@ -1471,6 +1483,10 @@ export default function SchedulePage() {
         const canRejectBooking = !selectedWindow && selectedLesson.conduct_status === 'booking_pending';
         const canApprovePayment = !selectedWindow && selectedLesson.payment_status === 'payment_pending';
         const canRejectPayment = !selectedWindow && selectedLesson.payment_status === 'payment_pending';
+        const canMarkPaid =
+          !selectedWindow &&
+          selectedLesson.conduct_status === 'conducted' &&
+          selectedLesson.payment_status === 'unpaid';
         const canCancelLesson =
           !selectedWindow &&
           selectedLesson.conduct_status !== 'cancelled' &&
@@ -1586,6 +1602,15 @@ export default function SchedulePage() {
                         style={{ background: '#a63f3b', boxShadow: 'none' }}
                       >
                         Отклонить оплату
+                      </button>
+                    )}
+                    {canMarkPaid && (
+                      <button
+                        title="Отметить оплаченным"
+                        onClick={() => handleLessonPatch(selectedLesson.id, { payment_status: 'paid' })}
+                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#2f7d63', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                      >
+                        ₽
                       </button>
                     )}
                     {selectedWindow && (

@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getAssignments, type Assignment } from '../api/assignments';
 import { getLessons, type Lesson } from '../api/lessons';
@@ -193,7 +195,9 @@ export default function PortfolioPage() {
   const [goalType, setGoalType] = useState('Общее обучение');
   const [reportComment, setReportComment] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
+  const [pdfSaving, setPdfSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const reportRef = useRef<HTMLDivElement | null>(null);
   const requestedStudentId = searchParams.get('student_id');
 
   useEffect(() => {
@@ -403,6 +407,44 @@ export default function PortfolioPage() {
     );
   }
 
+  const handleSaveReportPdf = async () => {
+    if (!reportRef.current || pdfSaving) return;
+
+    try {
+      setPdfSaving(true);
+      const canvas = await html2canvas(reportRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        ignoreElements: (element) => element.classList.contains('portfolio-pdf-hidden'),
+      });
+      const imageData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imageHeight = (canvas.height * pageWidth) / canvas.width;
+      let remainingHeight = imageHeight;
+      let position = 0;
+
+      pdf.addImage(imageData, 'PNG', 0, position, pageWidth, imageHeight);
+      remainingHeight -= pageHeight;
+
+      while (remainingHeight > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imageData, 'PNG', 0, position, pageWidth, imageHeight);
+        remainingHeight -= pageHeight;
+      }
+
+      const safeName = selectedStudent.full_name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'student';
+      pdf.save(`portfolio-${safeName}-${selectedMonth}.pdf`);
+    } catch {
+      alert('Не удалось сохранить PDF. Попробуйте ещё раз.');
+    } finally {
+      setPdfSaving(false);
+    }
+  };
+
   const comparisonRows = [
     {
       label: 'Общий прогресс',
@@ -432,6 +474,35 @@ export default function PortfolioPage() {
 
   return (
     <div>
+      <style>
+        {`
+          @media print {
+            body * {
+              visibility: hidden !important;
+            }
+
+            .portfolio-print-area,
+            .portfolio-print-area * {
+              visibility: visible !important;
+            }
+
+            .portfolio-print-area {
+              position: absolute !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              max-height: none !important;
+              overflow: visible !important;
+              border-radius: 0 !important;
+              box-shadow: none !important;
+            }
+
+            .portfolio-print-hidden {
+              display: none !important;
+            }
+          }
+        `}
+      </style>
       <section
         style={{
           ...panelStyle,
@@ -630,13 +701,16 @@ export default function PortfolioPage() {
 
       {reportOpen && (
         <div onClick={() => setReportOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.46)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 50 }}>
-          <div onClick={(event) => event.stopPropagation()} style={{ width: 'min(860px, 100%)', maxHeight: '90vh', overflow: 'auto', background: '#fff', borderRadius: 28, padding: isMobile ? 18 : 26, boxShadow: '0 30px 80px rgba(15,23,42,0.22)' }}>
+          <div ref={reportRef} className="portfolio-print-area" onClick={(event) => event.stopPropagation()} style={{ width: 'min(860px, 100%)', maxHeight: '90vh', overflow: 'auto', background: '#fff', borderRadius: 28, padding: isMobile ? 18 : 26, boxShadow: '0 30px 80px rgba(15,23,42,0.22)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, marginBottom: 18 }}>
               <div>
                 <h2 style={{ fontSize: 30, marginBottom: 6 }}>Отчёт для опекуна</h2>
                 <div style={mutedTextStyle}>{selectedStudent.full_name} • {formatMonthLabel(selectedMonth)} • {goalType}</div>
               </div>
-              <button type="button" title="Закрыть" onClick={() => setReportOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#172033', boxShadow: 'none', alignSelf: 'start' }}>×</button>
+              <div className="portfolio-print-hidden portfolio-pdf-hidden" style={{ display: 'flex', gap: 8, alignItems: 'start' }}>
+                <button type="button" title="Сохранить отчёт в PDF" onClick={handleSaveReportPdf} disabled={pdfSaving} style={{ minWidth: 52, height: 42, padding: '0 14px', borderRadius: 999, background: '#d96f32', boxShadow: 'none', alignSelf: 'start' }}>{pdfSaving ? '...' : 'PDF'}</button>
+                <button type="button" title="Закрыть" onClick={() => setReportOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#172033', boxShadow: 'none', alignSelf: 'start' }}>×</button>
+              </div>
             </div>
             <div style={{ display: 'grid', gap: 14 }}>
               <div style={{ ...panelStyle, boxShadow: 'none' }}>
