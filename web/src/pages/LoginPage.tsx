@@ -1,7 +1,35 @@
+import type { CSSProperties } from 'react';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
 const CALLBACK_URL = `${window.location.origin}/auth/callback`;
+
+const featureCards = [
+  {
+    title: 'Расписание',
+    text: 'Свободные слоты, переносы, отмены и подтверждённые занятия в одном календаре.',
+  },
+  {
+    title: 'Финансы',
+    text: 'Доход, долги, оплаты на проверке и прогноз недели без отдельной таблицы.',
+  },
+  {
+    title: 'Портфолио',
+    text: 'Прогресс ученика, темы, оценки и отчёт для опекуна в красивом виде.',
+  },
+];
+
+const workflowItems = [
+  ['Сегодня', '3 занятия'],
+  ['Оплаты', '2 ждут проверки'],
+  ['ДЗ', '5 активных'],
+];
+
+const smallTextStyle: CSSProperties = {
+  color: 'rgba(255,255,255,0.68)',
+  fontSize: 14,
+  lineHeight: 1.5,
+};
 
 export default function LoginPage() {
   const searchParams = new URLSearchParams(window.location.search);
@@ -15,111 +43,229 @@ export default function LoginPage() {
   };
 
   return (
-    <div
+    <main
       style={{
         minHeight: '100vh',
+        padding: isMobile ? 14 : 24,
         display: 'grid',
         placeItems: 'center',
-        padding: '24px',
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
       <div
+        aria-hidden="true"
         style={{
-          width: 'min(1120px, 100%)',
+          position: 'absolute',
+          width: 420,
+          height: 420,
+          borderRadius: '50%',
+          background: 'rgba(217,111,50,0.18)',
+          filter: 'blur(24px)',
+          left: -160,
+          top: -130,
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          width: 360,
+          height: 360,
+          borderRadius: '50%',
+          background: 'rgba(42,111,219,0.14)',
+          filter: 'blur(26px)',
+          right: -120,
+          bottom: -130,
+        }}
+      />
+
+      <div
+        style={{
+          width: 'min(1180px, 100%)',
           display: 'grid',
-          gridTemplateColumns: isTablet ? '1fr' : '1.1fr 0.9fr',
-          gap: 24,
+          gridTemplateColumns: isTablet ? '1fr' : 'minmax(0, 1.12fr) minmax(360px, 0.88fr)',
+          gap: isMobile ? 14 : 22,
           alignItems: 'stretch',
+          position: 'relative',
+          zIndex: 1,
         }}
       >
         <section
           style={{
-            padding: isMobile ? '24px' : isTablet ? '32px' : '42px',
-            borderRadius: 32,
+            minHeight: isTablet ? 'auto' : 'calc(100vh - 48px)',
+            maxHeight: isTablet ? 'none' : 'calc(100vh - 48px)',
+            padding: isMobile ? 20 : isTablet ? 28 : 34,
+            borderRadius: isMobile ? 26 : 36,
             background:
-              'linear-gradient(160deg, rgba(23,32,51,0.96) 0%, rgba(39,59,92,0.92) 100%)',
+              'linear-gradient(145deg, rgba(23,32,51,0.98) 0%, rgba(31,50,82,0.96) 58%, rgba(217,111,50,0.86) 140%)',
             color: '#fff',
-            boxShadow: '0 28px 65px rgba(20, 30, 44, 0.22)',
+            boxShadow: '0 34px 90px rgba(17, 25, 39, 0.28)',
+            display: 'grid',
+            alignContent: 'space-between',
+            gap: 22,
+            overflow: 'hidden',
+            position: 'relative',
           }}
         >
           <div
+            aria-hidden="true"
             style={{
-              display: 'inline-flex',
-              padding: '8px 14px',
-              borderRadius: 999,
+              position: 'absolute',
+              inset: 'auto -80px -120px auto',
+              width: 360,
+              height: 360,
+              borderRadius: '44% 56% 48% 52%',
               background: 'rgba(255,255,255,0.08)',
-              color: 'rgba(255,255,255,0.84)',
-              fontSize: 12,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              marginBottom: 22,
+              transform: 'rotate(-12deg)',
             }}
-          >
-            Mentor
+          />
+
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '8px 12px',
+                borderRadius: 999,
+                background: 'rgba(255,255,255,0.09)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                color: 'rgba(255,255,255,0.82)',
+                fontSize: 12,
+                fontWeight: 800,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                marginBottom: 16,
+              }}
+            >
+              Mentor App
+            </div>
+
+            <h1
+              style={{
+                fontSize: 'clamp(2.45rem, 5.4vw, 4.55rem)',
+                lineHeight: 0.94,
+                marginBottom: 14,
+                letterSpacing: '-0.065em',
+                maxWidth: 760,
+              }}
+            >
+              Рабочий день репетитора без хаоса
+            </h1>
+
+            <p
+              style={{
+                maxWidth: 660,
+                fontSize: isMobile ? 16 : 19,
+                lineHeight: 1.65,
+                color: 'rgba(255,255,255,0.74)',
+                marginBottom: 20,
+              }}
+            >
+              Веб-кабинет помогает вести учеников, расписание, домашние задания,
+              материалы, оплаты и прогресс в одном месте. То, что раньше жило в
+              блокнотах, Excel и заметках, теперь собрано в понятный рабочий инструмент.
+            </p>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
+                gap: 12,
+                maxWidth: 760,
+              }}
+            >
+              {featureCards.map((item) => (
+                <article
+                  key={item.title}
+                  style={{
+                    padding: 15,
+                    borderRadius: 22,
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    backdropFilter: 'blur(10px)',
+                  }}
+                >
+                  <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 6 }}>{item.title}</div>
+                  <div style={smallTextStyle}>{item.text}</div>
+                </article>
+              ))}
+            </div>
           </div>
-
-          <h1
-            style={{
-              fontSize: 'clamp(2.6rem, 5vw, 4.4rem)',
-              lineHeight: 0.95,
-              marginBottom: 18,
-              letterSpacing: '-0.05em',
-            }}
-          >
-            Всё обучение
-            <br />
-            в одном кабинете
-          </h1>
-
-          <p
-            style={{
-              maxWidth: 560,
-              fontSize: 18,
-              lineHeight: 1.65,
-              color: 'rgba(255,255,255,0.72)',
-              marginBottom: 32,
-            }}
-          >
-            Управляй учениками, занятиями, заданиями и материалами в одном интерфейсе
-            с быстрым входом через Telegram.
-          </p>
 
           <div
             style={{
+              position: 'relative',
+              zIndex: 1,
               display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, minmax(0, 1fr))' : 'repeat(3, minmax(0, 1fr))',
+              gridTemplateColumns: isMobile ? '1fr' : '1.05fr 0.95fr',
               gap: 14,
+              alignItems: 'end',
             }}
           >
-            {[
-              ['Ученики', 'Карточки, статусы и тарифы'],
-              ['Расписание', 'Планирование и переносы'],
-              ['Материалы', 'Темы, задания и прогресс'],
-            ].map(([title, text]) => (
-              <div
-                key={title}
-                style={{
-                  borderRadius: 20,
-                  padding: 18,
-                  background: 'rgba(255,255,255,0.07)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                }}
-              >
-                <div style={{ fontWeight: 800, marginBottom: 8 }}>{title}</div>
-                <div style={{ color: 'rgba(255,255,255,0.68)', fontSize: 14 }}>{text}</div>
+            <div
+              style={{
+                borderRadius: 22,
+                padding: 14,
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.1)',
+              }}
+            >
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginBottom: 12 }}>
+                Как выглядит рабочее утро
               </div>
-            ))}
+              <div style={{ display: 'grid', gap: 10 }}>
+                {workflowItems.map(([label, value]) => (
+                  <div
+                    key={label}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      alignItems: 'center',
+                      padding: '11px 12px',
+                      borderRadius: 16,
+                      background: 'rgba(255,255,255,0.08)',
+                    }}
+                  >
+                    <span style={{ color: 'rgba(255,255,255,0.72)' }}>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div
+              style={{
+                borderRadius: 22,
+                padding: 14,
+                background: 'rgba(255,255,255,0.92)',
+                color: '#18212f',
+                boxShadow: '0 18px 38px rgba(0,0,0,0.16)',
+              }}
+            >
+              <div style={{ color: '#697589', fontSize: 13, marginBottom: 8 }}>
+                Цель системы
+              </div>
+              <div style={{ fontSize: 20, lineHeight: 1.15, fontWeight: 900, marginBottom: 8 }}>
+                Репетитор видит главное сразу
+              </div>
+              <div style={{ color: '#596678', fontSize: 14, lineHeight: 1.5 }}>
+                Ближайшие занятия, оплаты, дедлайны и прогресс ученика не нужно собирать вручную.
+              </div>
+            </div>
           </div>
         </section>
 
         <section
           style={{
-            padding: isMobile ? '24px 20px' : '36px 32px',
-            borderRadius: 32,
-            background: 'rgba(255,255,255,0.82)',
-            border: '1px solid rgba(255,255,255,0.65)',
-            boxShadow: '0 24px 60px rgba(27, 39, 52, 0.08)',
-            backdropFilter: 'blur(16px)',
+            padding: isMobile ? '22px 18px' : '30px 28px',
+            borderRadius: isMobile ? 26 : 36,
+            background: 'rgba(255,255,255,0.84)',
+            border: '1px solid rgba(255,255,255,0.72)',
+            boxShadow: '0 28px 70px rgba(27, 39, 52, 0.1)',
+            backdropFilter: 'blur(18px)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
@@ -127,23 +273,38 @@ export default function LoginPage() {
         >
           <div
             style={{
-              width: 56,
-              height: 56,
-              borderRadius: 18,
-              background: 'rgba(217,111,50,0.14)',
+              width: 62,
+              height: 62,
+              borderRadius: 22,
+              background: 'linear-gradient(135deg, rgba(217,111,50,0.18), rgba(42,111,219,0.14))',
               color: '#c35f28',
               display: 'grid',
               placeItems: 'center',
-              fontWeight: 800,
+              fontWeight: 950,
+              fontSize: 24,
               marginBottom: 18,
+              border: '1px solid rgba(217,111,50,0.14)',
             }}
           >
             M
           </div>
 
-          <h2 style={{ fontSize: 34, lineHeight: 1.05, marginBottom: 10 }}>Вход для репетитора</h2>
-          <p style={{ color: '#5d6778', marginBottom: 22, fontSize: 16 }}>
-            Авторизация идёт через Telegram и возвращает тебя прямо в рабочий кабинет.
+          <div style={{ color: '#697589', fontWeight: 800, fontSize: 13, marginBottom: 10 }}>
+            Вход в кабинет
+          </div>
+          <h2
+            style={{
+              fontSize: 'clamp(2rem, 4vw, 3rem)',
+              lineHeight: 1.02,
+              marginBottom: 10,
+              letterSpacing: '-0.045em',
+            }}
+          >
+            Продолжим работу с учениками
+          </h2>
+          <p style={{ color: '#5d6778', marginBottom: 20, fontSize: 16, lineHeight: 1.55 }}>
+            Авторизация проходит через Telegram. После входа ты сразу попадёшь в рабочий кабинет,
+            а при истёкшей сессии система вернёт на нужную страницу.
           </p>
 
           {error && (
@@ -157,7 +318,7 @@ export default function LoginPage() {
                 color: '#9d2e2b',
               }}
             >
-              Ошибка: {decodeURIComponent(error)}
+              Ошибка входа: {decodeURIComponent(error)}
             </div>
           )}
 
@@ -179,18 +340,16 @@ export default function LoginPage() {
           <button
             onClick={handleLogin}
             style={{
-              minHeight: 54,
+              minHeight: 56,
               fontSize: 16,
+              borderRadius: 16,
+              boxShadow: '0 16px 34px rgba(217,111,50,0.24)',
             }}
           >
             Войти через Telegram
           </button>
-
-          <p style={{ marginTop: 18, color: '#7a8493', fontSize: 14 }}>
-            Если вход не сработал, проверь `VITE_API_BASE_URL` и Telegram callback.
-          </p>
         </section>
       </div>
-    </div>
+    </main>
   );
 }
