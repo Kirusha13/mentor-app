@@ -412,6 +412,7 @@ export default function PortfolioPage() {
 
     try {
       setPdfSaving(true);
+      reportRef.current.classList.add('portfolio-exporting-pdf');
       const canvas = await html2canvas(reportRef.current, {
         backgroundColor: '#ffffff',
         scale: 2,
@@ -441,6 +442,7 @@ export default function PortfolioPage() {
     } catch {
       alert('Не удалось сохранить PDF. Попробуйте ещё раз.');
     } finally {
+      reportRef.current?.classList.remove('portfolio-exporting-pdf');
       setPdfSaving(false);
     }
   };
@@ -476,6 +478,14 @@ export default function PortfolioPage() {
     <div>
       <style>
         {`
+          .portfolio-pdf-only {
+            display: none !important;
+          }
+
+          .portfolio-exporting-pdf .portfolio-pdf-only {
+            display: block !important;
+          }
+
           @media print {
             body * {
               visibility: hidden !important;
@@ -499,6 +509,10 @@ export default function PortfolioPage() {
 
             .portfolio-print-hidden {
               display: none !important;
+            }
+
+            .portfolio-pdf-only {
+              display: block !important;
             }
           }
         `}
@@ -572,8 +586,8 @@ export default function PortfolioPage() {
                 Сравнение {formatMonthLabel(previousMonthValue)} и {formatMonthLabel(selectedMonth)}.
               </div>
             </div>
-            <button type="button" onClick={() => setReportOpen(true)} style={{ background: '#d96f32', boxShadow: 'none' }}>
-              Сформировать отчёт
+            <button type="button" title="Сформировать отчёт" onClick={() => setReportOpen(true)} style={{ minWidth: 52, height: 42, padding: '0 14px', borderRadius: 999, background: '#d96f32', boxShadow: 'none' }}>
+              PDF
             </button>
           </div>
           <div style={{ display: 'grid', gap: 10 }}>
@@ -729,12 +743,12 @@ export default function PortfolioPage() {
                   {weaknesses.map((item) => <p key={item} style={{ color: '#435066', marginBottom: 8 }}>{item}</p>)}
                 </div>
               </div>
-              <label style={{ display: 'grid', gap: 8, color: '#556173', fontSize: 14 }}>
+              <label className="portfolio-pdf-hidden" style={{ display: 'grid', gap: 8, color: '#556173', fontSize: 14 }}>
                 Комментарий репетитора
                 <textarea value={reportComment} onChange={(event) => setReportComment(event.target.value)} placeholder="Например: ученик стал увереннее решать квадратные уравнения, но стоит закрепить задачи на проценты." rows={4} />
               </label>
               {reportComment && (
-                <div style={{ ...panelStyle, boxShadow: 'none', background: 'rgba(217,111,50,0.08)' }}>
+                <div className="portfolio-pdf-only" style={{ ...panelStyle, boxShadow: 'none', background: 'rgba(217,111,50,0.08)' }}>
                   <h3 style={{ fontSize: 18, marginBottom: 10 }}>Комментарий</h3>
                   <p style={{ color: '#435066', lineHeight: 1.55, marginBottom: 0 }}>{reportComment}</p>
                 </div>

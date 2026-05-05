@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getPendingCount } from '../api/lessons';
 import { getTutorProfile } from '../api/tutor';
+import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
 interface LayoutProps {
@@ -53,6 +54,7 @@ const sidebarButtonBase = {
 } as const;
 
 export default function Layout({ children }: LayoutProps) {
+  const { logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const isTablet = useMediaQuery('(max-width: 1100px)');
@@ -63,6 +65,14 @@ export default function Layout({ children }: LayoutProps) {
   const initials = useMemo(() => getInitials(tutorLabel), [tutorLabel]);
   const isRequestsActive = location.pathname.startsWith('/requests');
   const isProfileActive = location.pathname.startsWith('/profile');
+
+  const handleLogout = () => {
+    const confirmed = window.confirm('Вы действительно хотите выйти из кабинета?');
+    if (!confirmed) return;
+
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -309,6 +319,47 @@ export default function Layout({ children }: LayoutProps) {
             </div>
           ))}
         </nav>
+
+        <div
+          style={{
+            marginTop: 'auto',
+            padding: '12px 8px 0',
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            display: 'flex',
+            justifyContent: isMobile ? 'flex-start' : 'center',
+          }}
+        >
+          <button
+            type="button"
+            title="Выйти из кабинета"
+            onClick={handleLogout}
+            style={{
+              ...sidebarButtonBase,
+              width: 44,
+              height: 44,
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+              boxShadow: '0 8px 18px rgba(7, 11, 20, 0.18)',
+              fontSize: 20,
+            }}
+          >
+            <svg
+              aria-hidden="true"
+              width="21"
+              height="21"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M10 17l5-5-5-5" />
+              <path d="M15 12H3" />
+              <path d="M14 4h4a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-4" />
+            </svg>
+          </button>
+        </div>
       </aside>
 
       <main

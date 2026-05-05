@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { confirmPayment, getLessons, type Lesson } from '../api/lessons';
+import { confirmPayment, getLessons, updateLesson, type Lesson } from '../api/lessons';
 import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import {
@@ -114,11 +114,16 @@ function getLessonDurationHours(lesson: Lesson) {
 }
 
 function calculateLessonCostByRate(lesson: Lesson, hourlyRate: number | null | undefined) {
+  const explicitCost = lessonCost(lesson);
+  if (explicitCost > 0) {
+    return explicitCost;
+  }
+
   const rate = Number(hourlyRate ?? 0);
   if (Number.isFinite(rate) && rate > 0) {
     return Math.round(rate * getLessonDurationHours(lesson));
   }
-  return lessonCost(lesson);
+  return explicitCost;
 }
 
 function getCurrentRange(range: ForecastRange | ChartRange) {
@@ -599,6 +604,19 @@ export default function FinancePage() {
     } catch (error) {
       console.error('Ошибка подтверждения оплаты:', error);
       alert(getApiErrorMessage(error, 'Не удалось обработать оплату.'));
+    } finally {
+      setProcessingPaymentId(null);
+    }
+  };
+
+  const handleMarkLessonPaid = async (lessonId: number) => {
+    try {
+      setProcessingPaymentId(lessonId);
+      const updated = await updateLesson(lessonId, { payment_status: 'paid' });
+      setLessons((prev) => prev.map((lesson) => (lesson.id === updated.id ? updated : lesson)));
+    } catch (error) {
+      console.error('Ошибка отметки оплаты:', error);
+      alert(getApiErrorMessage(error, 'Не удалось отметить занятие оплаченным.'));
     } finally {
       setProcessingPaymentId(null);
     }
@@ -1086,7 +1104,7 @@ export default function FinancePage() {
                       {formatCurrency(row.cost)}
                     </div>
                     <div style={{ color: '#687486', fontSize: 12, marginTop: 3 }}>{row.status}</div>
-                    {row.paymentStatus === 'payment_pending' && (
+                    {(row.paymentStatus === 'payment_pending' || row.paymentStatus === 'unpaid') && (
                       <div
                         style={{
                           display: 'flex',
@@ -1096,34 +1114,66 @@ export default function FinancePage() {
                           marginTop: 8,
                         }}
                       >
-                        <button
-                          type="button"
-                          onClick={() => handlePaymentDecision(row.id, true)}
-                          disabled={processingPaymentId === row.id}
-                          style={{
-                            padding: '7px 10px',
-                            borderRadius: 999,
-                            background: '#2f7d5a',
-                            boxShadow: 'none',
-                            fontSize: 12,
-                          }}
-                        >
-                          Подтвердить
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePaymentDecision(row.id, false)}
-                          disabled={processingPaymentId === row.id}
-                          style={{
-                            padding: '7px 10px',
-                            borderRadius: 999,
-                            background: '#a63f3c',
-                            boxShadow: 'none',
-                            fontSize: 12,
-                          }}
-                        >
-                          Отклонить
-                        </button>
+                        {row.paymentStatus === 'unpaid' && (
+                          <button
+                            type="button"
+                            title="Отметить оплаченным"
+                            onClick={() => handleMarkLessonPaid(row.id)}
+                            disabled={processingPaymentId === row.id}
+                            style={{
+                              minWidth: 34,
+                              width: 34,
+                              height: 34,
+                              padding: 0,
+                              borderRadius: 999,
+                              background: '#2f7d5a',
+                              boxShadow: 'none',
+                              fontSize: 15,
+                            }}
+                          >
+                            ₽
+                          </button>
+                        )}
+                        {row.paymentStatus === 'payment_pending' && (
+                          <>
+                            <button
+                              type="button"
+                              title="Подтвердить оплату"
+                              onClick={() => handlePaymentDecision(row.id, true)}
+                              disabled={processingPaymentId === row.id}
+                              style={{
+                                minWidth: 34,
+                                width: 34,
+                                height: 34,
+                                padding: 0,
+                                borderRadius: 999,
+                                background: '#2f7d5a',
+                                boxShadow: 'none',
+                                fontSize: 15,
+                              }}
+                            >
+                              ✓
+                            </button>
+                            <button
+                              type="button"
+                              title="Отклонить оплату"
+                              onClick={() => handlePaymentDecision(row.id, false)}
+                              disabled={processingPaymentId === row.id}
+                              style={{
+                                minWidth: 34,
+                                width: 34,
+                                height: 34,
+                                padding: 0,
+                                borderRadius: 999,
+                                background: '#a63f3c',
+                                boxShadow: 'none',
+                                fontSize: 15,
+                              }}
+                            >
+                              ×
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
