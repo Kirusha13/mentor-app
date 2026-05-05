@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getTutorProfile, updateTutorProfile, type TutorProfile } from '../api/tutor';
-import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage } from '../utils/apiError';
 
 const panelStyle = {
@@ -37,7 +36,6 @@ function getInitials(name: string) {
 }
 
 export default function TutorProfilePage() {
-  const { logout } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<TutorProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,11 +101,6 @@ export default function TutorProfilePage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login', { replace: true });
   };
 
   if (loading) {
@@ -303,19 +296,6 @@ export default function TutorProfilePage() {
               Открыть предметы
             </button>
 
-            <button
-              type="button"
-              onClick={handleLogout}
-              style={{
-                marginTop: 4,
-                background: 'transparent',
-                color: '#1f2a3b',
-                border: '1px solid rgba(24,33,47,0.12)',
-                boxShadow: 'none',
-              }}
-            >
-              Выйти из кабинета
-            </button>
           </section>
         </div>
       </section>
