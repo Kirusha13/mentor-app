@@ -85,6 +85,10 @@ function isActiveFinancialLesson(lesson: Lesson) {
   );
 }
 
+function getSettledValue<T>(result: PromiseSettledResult<T>, fallback: T) {
+  return result.status === 'fulfilled' ? result.value : fallback;
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const isTablet = useMediaQuery('(max-width: 1100px)');
@@ -97,33 +101,30 @@ export default function DashboardPage() {
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [topics, setTopics] = useState<TheoryTopic[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadWarning, setLoadWarning] = useState(false);
 
   useEffect(() => {
     const loadDashboard = async () => {
-      try {
-        setLoading(true);
-        const [lessonData, assignmentData, studentData, subjectData, relationData, topicData] =
-          await Promise.all([
-            getLessons(),
-            getAssignments(),
-            getStudents(),
-            getSubjects(),
-            getTutorStudents(),
-            getTopics(),
-          ]);
+      setLoading(true);
+      setLoadWarning(false);
 
-        setLessons(lessonData);
-        setAssignments(assignmentData);
-        setStudents(studentData);
-        setSubjects(subjectData);
-        setTutorStudents(relationData);
-        setTopics(topicData);
-      } catch (error) {
-        console.error('Ошибка загрузки главной страницы:', error);
-        alert('Не удалось загрузить главную страницу');
-      } finally {
-        setLoading(false);
-      }
+      const results = await Promise.allSettled([
+        getLessons(),
+        getAssignments(),
+        getStudents(),
+        getSubjects(),
+        getTutorStudents(),
+        getTopics(),
+      ]);
+
+      setLessons(getSettledValue(results[0], []));
+      setAssignments(getSettledValue(results[1], []));
+      setStudents(getSettledValue(results[2], []));
+      setSubjects(getSettledValue(results[3], []));
+      setTutorStudents(getSettledValue(results[4], []));
+      setTopics(getSettledValue(results[5], []));
+      setLoadWarning(results.some((result) => result.status === 'rejected'));
+      setLoading(false);
     };
 
     void loadDashboard();
@@ -178,8 +179,14 @@ export default function DashboardPage() {
     .reduce((sum, { lesson }) => sum + lessonCost(lesson), 0);
   const todayForecast = todayLessons.reduce((sum, { lesson }) => sum + lessonCost(lesson), 0);
   const weekForecast = weekLessons.reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+  const weekPaid = weekLessons
+    .filter((lesson) => lesson.conduct_status === 'conducted' && lesson.payment_status === 'paid')
+    .reduce((sum, lesson) => sum + lessonCost(lesson), 0);
+
   const weekIncomeRows = Array.from({ length: 7 }, (_, index) => {
-    const date = formatDate(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + index));
+    const date = formatDate(
+      new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + index)
+    );
     const dayLessons = weekLessons.filter(
       (lesson) =>
         lessonDate(lesson) === date &&
@@ -268,6 +275,22 @@ export default function DashboardPage() {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
+      {loadWarning ? (
+        <div
+          style={{
+            padding: '12px 14px',
+            borderRadius: 16,
+            background: 'rgba(217,111,50,0.09)',
+            border: '1px solid rgba(217,111,50,0.16)',
+            color: '#9f4f1f',
+            fontSize: 14,
+            fontWeight: 700,
+          }}
+        >
+          Часть данных не загрузилась. Главная показывает доступную информацию.
+        </div>
+      ) : null}
+
       <section
         style={{
           display: 'grid',
@@ -285,9 +308,32 @@ export default function DashboardPage() {
           }}
         >
           {financeCards.map((card) => (
-            <article key={card.title} style={{ ...panelStyle, padding: '8px 11px', borderRadius: 14, minHeight: 0, width: 'max-content', minWidth: 146, maxWidth: 170 }}>
-              <div style={{ ...mutedTextStyle, marginBottom: 2, fontSize: 11, lineHeight: 1.15 }}>{card.title}</div>
-              <div style={{ color: '#1f2a3b', fontSize: 18, fontWeight: 900, lineHeight: 1.1, whiteSpace: 'nowrap' }}>{card.value}</div>
+            <article
+              key={card.title}
+              style={{
+                ...panelStyle,
+                padding: '8px 11px',
+                borderRadius: 14,
+                minHeight: 0,
+                width: 'max-content',
+                minWidth: 146,
+                maxWidth: 170,
+              }}
+            >
+              <div style={{ ...mutedTextStyle, marginBottom: 2, fontSize: 11, lineHeight: 1.15 }}>
+                {card.title}
+              </div>
+              <div
+                style={{
+                  color: '#1f2a3b',
+                  fontSize: 18,
+                  fontWeight: 900,
+                  lineHeight: 1.1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {card.value}
+              </div>
             </article>
           ))}
         </div>
@@ -302,10 +348,8 @@ export default function DashboardPage() {
               marginBottom: 12,
             }}
           >
-            <div>
-              <h3 style={{ fontSize: 18, marginBottom: 4 }}>Заработок за неделю</h3>
-            </div>
-            <strong style={{ color: '#1f2a3b' }}>{formatCurrency(todayPaid)}</strong>
+            <h3 style={{ fontSize: 18, marginBottom: 4 }}>Заработок за неделю</h3>
+            <strong style={{ color: '#1f2a3b' }}>{formatCurrency(weekPaid)}</strong>
           </div>
           <div
             style={{
@@ -317,7 +361,11 @@ export default function DashboardPage() {
             }}
           >
             {weekIncomeRows.map((row) => (
-              <div key={row.key} title={`${row.label}: ${formatCurrency(row.value)}`} style={{ display: 'grid', gap: 6 }}>
+              <div
+                key={row.key}
+                title={`${row.label}: ${formatCurrency(row.value)}`}
+                style={{ display: 'grid', gap: 6 }}
+              >
                 <div
                   style={{
                     height: `${Math.max(8, (row.value / maxWeekIncome) * 88)}px`,
@@ -328,7 +376,9 @@ export default function DashboardPage() {
                         : 'rgba(23,32,51,0.08)',
                   }}
                 />
-                <div style={{ color: '#687486', fontSize: 12, textAlign: 'center' }}>{row.label}</div>
+                <div style={{ color: '#687486', fontSize: 12, textAlign: 'center' }}>
+                  {row.label}
+                </div>
               </div>
             ))}
           </div>
@@ -344,122 +394,126 @@ export default function DashboardPage() {
         }}
       >
         <div style={{ display: 'grid', gap: 16 }}>
-        <article style={panelStyle}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: 12,
-              alignItems: 'center',
-              marginBottom: 14,
-            }}
-          >
-            <div>
+          <article style={panelStyle}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 12,
+                alignItems: 'center',
+                marginBottom: 14,
+              }}
+            >
               <h3 style={{ fontSize: 20, marginBottom: 6 }}>Сегодня</h3>
             </div>
-          </div>
 
-          {loading ? (
-            <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Загрузка...</p>
-          ) : todayLessons.length === 0 ? (
-            <p style={{ ...mutedTextStyle, marginBottom: 0 }}>На сегодня подтверждённых занятий нет.</p>
-          ) : (
-            <div style={{ display: 'grid', gap: 10 }}>
-              {todayLessons.map(({ lesson, student, subject }) => (
-                <div
-                  key={lesson.id}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: isMobile ? '1fr' : '76px minmax(0, 1fr) auto',
-                    gap: 12,
-                    alignItems: 'center',
-                    padding: 12,
-                    borderRadius: 16,
-                    background: 'rgba(23,32,51,0.03)',
-                    border: '1px solid rgba(24,33,47,0.06)',
-                  }}
-                >
-                  <div style={{ fontWeight: 900, color: '#1f2a3b' }}>{toTime(lessonStartTime(lesson))}</div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 4 }}>
-                      {student?.full_name ?? 'Ученик'}
+            {loading ? (
+              <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Загрузка...</p>
+            ) : todayLessons.length === 0 ? (
+              <p style={{ ...mutedTextStyle, marginBottom: 0 }}>
+                На сегодня подтверждённых занятий нет.
+              </p>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {todayLessons.map(({ lesson, student, subject }) => (
+                  <div
+                    key={lesson.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? '1fr' : '76px minmax(0, 1fr) auto',
+                      gap: 12,
+                      alignItems: 'center',
+                      padding: 12,
+                      borderRadius: 16,
+                      background: 'rgba(23,32,51,0.03)',
+                      border: '1px solid rgba(24,33,47,0.06)',
+                    }}
+                  >
+                    <div style={{ fontWeight: 900, color: '#1f2a3b' }}>
+                      {toTime(lessonStartTime(lesson))}
                     </div>
-                    <div style={{ color: '#687486', fontSize: 14 }}>
-                      {subject?.name ?? 'Без предмета'} •{' '}
-                      {lesson.payment_status === 'paid' ? 'оплачено' : 'не оплачено'}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 4 }}>
+                        {student?.full_name ?? 'Ученик'}
+                      </div>
+                      <div style={{ color: '#687486', fontSize: 14 }}>
+                        {subject?.name ?? 'Без предмета'} •{' '}
+                        {lesson.payment_status === 'paid' ? 'оплачено' : 'не оплачено'}
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: 900, color: '#1f2a3b' }}>
+                      {formatCurrency(lessonCost(lesson))}
                     </div>
                   </div>
-                  <div style={{ fontWeight: 900, color: '#1f2a3b' }}>
-                    {formatCurrency(lessonCost(lesson))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
+                ))}
+              </div>
+            )}
+          </article>
 
-        <article style={panelStyle}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: 12,
-              alignItems: 'center',
-              marginBottom: 14,
-            }}
-          >
-            <div>
-              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Ближайшие дедлайны</h3>
-              <div style={mutedTextStyle}>До пяти заданий, которые скоро нужно проверить.</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate('/assignments')}
-              style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+          <article style={panelStyle}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 12,
+                alignItems: 'center',
+                marginBottom: 14,
+              }}
             >
-              Все ДЗ
-            </button>
-          </div>
-
-          {loading ? (
-            <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Загрузка дедлайнов...</p>
-          ) : upcomingDeadlines.length === 0 ? (
-            <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Ближайших дедлайнов нет.</p>
-          ) : (
-            <div style={{ display: 'grid', gap: 10 }}>
-              {upcomingDeadlines.map(({ assignment, student, subject }) => (
-                <button
-                  key={assignment.id}
-                  type="button"
-                  onClick={() => navigate('/assignments')}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) auto',
-                    gap: 12,
-                    alignItems: 'center',
-                    textAlign: 'left',
-                    padding: 12,
-                    borderRadius: 16,
-                    background: 'rgba(23,32,51,0.03)',
-                    color: '#1f2a3b',
-                    border: '1px solid rgba(24,33,47,0.07)',
-                    boxShadow: 'none',
-                  }}
-                >
-                  <span>
-                    <span style={{ display: 'block', fontWeight: 800, marginBottom: 4 }}>
-                      {assignment.title || assignment.description.slice(0, 48)}
-                    </span>
-                    <span style={{ ...mutedTextStyle, display: 'block' }}>
-                      {student?.full_name ?? 'Ученик'} • {subject?.name ?? 'Без предмета'}
-                    </span>
-                  </span>
-                  <strong>{formatShortDate(assignment.deadline)}</strong>
-                </button>
-              ))}
+              <div>
+                <h3 style={{ fontSize: 20, marginBottom: 6 }}>Ближайшие дедлайны</h3>
+                <div style={mutedTextStyle}>
+                  До пяти заданий, которые скоро нужно проверить.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/assignments')}
+                style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+              >
+                Все ДЗ
+              </button>
             </div>
-          )}
-        </article>
+
+            {loading ? (
+              <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Загрузка дедлайнов...</p>
+            ) : upcomingDeadlines.length === 0 ? (
+              <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Ближайших дедлайнов нет.</p>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {upcomingDeadlines.map(({ assignment, student, subject }) => (
+                  <button
+                    key={assignment.id}
+                    type="button"
+                    onClick={() => navigate('/assignments')}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) auto',
+                      gap: 12,
+                      alignItems: 'center',
+                      textAlign: 'left',
+                      padding: 12,
+                      borderRadius: 16,
+                      background: 'rgba(23,32,51,0.03)',
+                      color: '#1f2a3b',
+                      border: '1px solid rgba(24,33,47,0.07)',
+                      boxShadow: 'none',
+                    }}
+                  >
+                    <span>
+                      <span style={{ display: 'block', fontWeight: 800, marginBottom: 4 }}>
+                        {assignment.title || assignment.description.slice(0, 48)}
+                      </span>
+                      <span style={{ ...mutedTextStyle, display: 'block' }}>
+                        {student?.full_name ?? 'Ученик'} • {subject?.name ?? 'Без предмета'}
+                      </span>
+                    </span>
+                    <strong>{formatShortDate(assignment.deadline)}</strong>
+                  </button>
+                ))}
+              </div>
+            )}
+          </article>
         </div>
 
         <article style={panelStyle}>
@@ -502,8 +556,12 @@ export default function DashboardPage() {
                     }}
                   />
                   <span>
-                    <span style={{ display: 'block', fontWeight: 800, marginBottom: 3 }}>{item.title}</span>
-                    <span style={{ ...mutedTextStyle, display: 'block', fontSize: 13 }}>{item.muted}</span>
+                    <span style={{ display: 'block', fontWeight: 800, marginBottom: 3 }}>
+                      {item.title}
+                    </span>
+                    <span style={{ ...mutedTextStyle, display: 'block', fontSize: 13 }}>
+                      {item.muted}
+                    </span>
                   </span>
                   <span style={{ fontSize: 20, fontWeight: 900 }}>{item.value}</span>
                 </button>
@@ -512,7 +570,6 @@ export default function DashboardPage() {
           </div>
         </article>
       </section>
-
     </div>
   );
 }
