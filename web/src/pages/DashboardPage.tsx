@@ -85,8 +85,22 @@ function isActiveFinancialLesson(lesson: Lesson) {
   );
 }
 
-function getSettledValue<T>(result: PromiseSettledResult<T>, fallback: T) {
-  return result.status === 'fulfilled' ? result.value : fallback;
+function getSettledArray<T>(result: PromiseSettledResult<T[]>) {
+  return result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : [];
+}
+
+function getAssignmentLabel(assignment: Assignment) {
+  const title = assignment.title?.trim();
+  if (title) return title;
+
+  const description = typeof assignment.description === 'string' ? assignment.description.trim() : '';
+  if (description) return description.slice(0, 48);
+
+  return 'Домашнее задание';
+}
+
+function getAssignmentDeadline(assignment: Assignment) {
+  return typeof assignment.deadline === 'string' ? assignment.deadline : '';
 }
 
 export default function DashboardPage() {
@@ -115,15 +129,27 @@ export default function DashboardPage() {
         getSubjects(),
         getTutorStudents(),
         getTopics(),
-      ]);
+      ] as const);
 
-      setLessons(getSettledValue(results[0], []));
-      setAssignments(getSettledValue(results[1], []));
-      setStudents(getSettledValue(results[2], []));
-      setSubjects(getSettledValue(results[3], []));
-      setTutorStudents(getSettledValue(results[4], []));
-      setTopics(getSettledValue(results[5], []));
-      setLoadWarning(results.some((result) => result.status === 'rejected'));
+      const lessonData = getSettledArray(results[0]);
+      const assignmentData = getSettledArray(results[1]);
+      const studentData = getSettledArray(results[2]);
+      const subjectData = getSettledArray(results[3]);
+      const relationData = getSettledArray(results[4]);
+      const topicData = getSettledArray(results[5]);
+
+      setLessons(lessonData);
+      setAssignments(assignmentData);
+      setStudents(studentData);
+      setSubjects(subjectData);
+      setTutorStudents(relationData);
+      setTopics(topicData);
+      setLoadWarning(
+        results.some((result) => result.status === 'rejected') ||
+          [lessonData, assignmentData, studentData, subjectData, relationData, topicData].some(
+            (_, index) => results[index].status === 'fulfilled' && !Array.isArray(results[index].value)
+          )
+      );
       setLoading(false);
     };
 
@@ -213,12 +239,16 @@ export default function DashboardPage() {
 
   const overdueAssignments = assignments.filter((assignment) => {
     if (assignment.completion_status === 'completed') return false;
-    return assignment.completion_status === 'overdue' || assignment.deadline < today;
+    const deadline = getAssignmentDeadline(assignment);
+    return assignment.completion_status === 'overdue' || Boolean(deadline && deadline < today);
   });
 
   const upcomingDeadlines = assignments
-    .filter((assignment) => assignment.completion_status !== 'completed' && assignment.deadline >= today)
-    .sort((a, b) => a.deadline.localeCompare(b.deadline))
+    .filter((assignment) => {
+      const deadline = getAssignmentDeadline(assignment);
+      return assignment.completion_status !== 'completed' && Boolean(deadline && deadline >= today);
+    })
+    .sort((a, b) => getAssignmentDeadline(a).localeCompare(getAssignmentDeadline(b)))
     .slice(0, 5)
     .map((assignment) => {
       const relation = relationMap.get(assignment.tutor_student_id);
@@ -502,7 +532,7 @@ export default function DashboardPage() {
                   >
                     <span>
                       <span style={{ display: 'block', fontWeight: 800, marginBottom: 4 }}>
-                        {assignment.title || assignment.description.slice(0, 48)}
+                        {getAssignmentLabel(assignment)}
                       </span>
                       <span style={{ ...mutedTextStyle, display: 'block' }}>
                         {student?.full_name ?? 'Ученик'} • {subject?.name ?? 'Без предмета'}
