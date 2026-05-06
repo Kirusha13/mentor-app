@@ -60,11 +60,26 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+function parseSafeDate(value: string | null | undefined) {
+  if (!value) return null;
+
+  const normalized = value.includes('T') ? value : `${value}T00:00:00`;
+  const date = new Date(normalized);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function formatShortDate(date: string) {
+  const parsedDate = parseSafeDate(date);
+
+  if (!parsedDate) {
+    return 'Без даты';
+  }
+
   return new Intl.DateTimeFormat('ru-RU', {
     day: 'numeric',
     month: 'short',
-  }).format(new Date(`${date}T00:00:00`));
+  }).format(parsedDate);
 }
 
 function lessonCost(lesson: Lesson) {
@@ -100,7 +115,9 @@ function getAssignmentLabel(assignment: Assignment) {
 }
 
 function getAssignmentDeadline(assignment: Assignment) {
-  return typeof assignment.deadline === 'string' ? assignment.deadline : '';
+  if (typeof assignment.deadline !== 'string') return '';
+
+  return parseSafeDate(assignment.deadline) ? assignment.deadline : '';
 }
 
 export default function DashboardPage() {
