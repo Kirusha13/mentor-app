@@ -79,10 +79,16 @@ function formatMonthLabel(month: string) {
   );
 }
 
+function parsePortfolioDate(date: string | null | undefined) {
+  if (!date) return null;
+  const value = date.includes('T') ? new Date(date) : new Date(`${date}T00:00:00`);
+  return Number.isNaN(value.getTime()) ? null : value;
+}
+
 function inMonth(date: string, month: string) {
   const { start, end } = monthRange(month);
-  const value = new Date(`${date}T00:00:00`);
-  return value >= start && value <= end;
+  const value = parsePortfolioDate(date);
+  return Boolean(value && value >= start && value <= end);
 }
 
 function buildStats(lessons: Lesson[], assignments: Assignment[], topicPercent: number) {
