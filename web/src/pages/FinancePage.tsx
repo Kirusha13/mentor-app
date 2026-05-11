@@ -65,16 +65,6 @@ function addDays(date: Date, days: number) {
   return copy;
 }
 
-function getDefaultHistoryRange() {
-  const today = new Date();
-  const end = endOfDay(today);
-
-  return {
-    from: formatDate(new Date(today.getFullYear(), today.getMonth(), 1)),
-    to: formatDate(end),
-  };
-}
-
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
@@ -126,8 +116,8 @@ function calculateLessonCostByRate(lesson: Lesson, hourlyRate: number | null | u
   return explicitCost;
 }
 
-function getCurrentRange(range: ForecastRange | ChartRange) {
-  const today = new Date();
+function getCurrentRange(range: ForecastRange | ChartRange, anchorDate = new Date()) {
+  const today = new Date(anchorDate);
 
   if (range === 'week') {
     const day = today.getDay();
@@ -152,6 +142,20 @@ function getCurrentRange(range: ForecastRange | ChartRange) {
     from: formatDate(new Date(today.getFullYear(), today.getMonth(), 1)),
     to: formatDate(endOfDay(new Date(today.getFullYear(), today.getMonth() + 1, 0))),
   };
+}
+
+function shiftFinancePeriod(anchorDate: Date, range: ForecastRange, direction: -1 | 1) {
+  const copy = new Date(anchorDate);
+  if (range === 'week') {
+    copy.setDate(copy.getDate() + direction * 7);
+  } else {
+    copy.setMonth(copy.getMonth() + direction);
+  }
+  return copy;
+}
+
+function formatFinancePeriodLabel(from: string, to: string) {
+  return `${formatReadableDate(from)} - ${formatReadableDate(to)}`;
 }
 
 function isRealFinancialLesson(lesson: Lesson) {
@@ -218,10 +222,9 @@ export default function FinancePage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FinanceTab>('income');
-  const [forecastRange, setForecastRange] = useState<ForecastRange>('week');
+  const [financePeriod, setFinancePeriod] = useState<ForecastRange>('week');
+  const [financeAnchorDate, setFinanceAnchorDate] = useState(() => new Date());
   const [chartRange, setChartRange] = useState<ChartRange>('week');
-  const [dateFrom] = useState(() => getDefaultHistoryRange().from);
-  const [dateTo] = useState(() => getDefaultHistoryRange().to);
   const [selectedTutorStudentId, setSelectedTutorStudentId] = useState('');
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -261,6 +264,13 @@ export default function FinancePage() {
     loadData();
   }, []);
 
+  const selectedDateRange = useMemo(
+    () => getCurrentRange(financePeriod, financeAnchorDate),
+    [financeAnchorDate, financePeriod]
+  );
+  const dateFrom = selectedDateRange.from;
+  const dateTo = selectedDateRange.to;
+
   const rangeError = useMemo(() => {
     if (!dateFrom || !dateTo) return 'Укажи обе даты периода.';
     if (new Date(`${dateFrom}T00:00:00`).getTime() > new Date(`${dateTo}T00:00:00`).getTime()) {
@@ -274,8 +284,14 @@ export default function FinancePage() {
     return filterLessonsByRange(lessons, dateFrom, dateTo);
   }, [dateFrom, dateTo, lessons, rangeError]);
 
-  const forecastDateRange = useMemo(() => getCurrentRange(forecastRange), [forecastRange]);
-  const chartDateRange = useMemo(() => getCurrentRange(chartRange), [chartRange]);
+  const forecastDateRange = useMemo(
+    () => getCurrentRange(financePeriod, financeAnchorDate),
+    [financeAnchorDate, financePeriod]
+  );
+  const chartDateRange = useMemo(
+    () => getCurrentRange(chartRange, financeAnchorDate),
+    [chartRange, financeAnchorDate]
+  );
   const forecastLessons = useMemo(
     () => filterLessonsByRange(lessons, forecastDateRange.from, forecastDateRange.to),
     [forecastDateRange.from, forecastDateRange.to, lessons]
@@ -575,11 +591,11 @@ export default function FinancePage() {
     { label: 'На проверке', value: forecastPendingConfirmation, color: '#2a6fdb' },
     { label: 'В расписании', value: forecastPlannedIncome, color: '#2f7d5a' },
   ];
-  const forecastRangeLabel = forecastRange === 'week' ? 'текущую неделю' : 'текущий месяц';
+  const forecastRangeLabel = financePeriod === 'week' ? 'выбранную неделю' : 'выбранный месяц';
   const chartRangeLabel = {
-    week: 'по дням текущей недели',
-    month: 'по неделям текущего месяца',
-    year: 'по месяцам текущего года',
+    week: 'по дням выбранной недели',
+    month: 'по неделям выбранного месяца',
+    year: 'по месяцам выбранного года',
   }[chartRange];
 
   const handleCreateNewAbonement = () => {
@@ -759,6 +775,108 @@ export default function FinancePage() {
 
       {activeTab === 'income' && (
         <>
+      <section
+        style={{
+          ...panelStyle,
+          padding: '12px 14px',
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <div style={{ color: '#687486', fontSize: 13 }}>Период финансов</div>
+          <div style={{ color: '#1f2a3b', fontSize: 18, fontWeight: 900 }}>
+            {formatFinancePeriodLabel(dateFrom, dateTo)}
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'nowrap',
+            minHeight: 42,
+          }}
+        >
+          <button
+            type="button"
+            title="Предыдущий период"
+            onClick={() =>
+              setFinanceAnchorDate((current) => shiftFinancePeriod(current, financePeriod, -1))
+            }
+            style={{
+              width: 42,
+              height: 42,
+              padding: 0,
+              borderRadius: '50%',
+              background: '#172033',
+              color: '#fff',
+              boxShadow: 'none',
+              fontSize: 24,
+              lineHeight: 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: '0 0 42px',
+            }}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            title="Следующий период"
+            onClick={() =>
+              setFinanceAnchorDate((current) => shiftFinancePeriod(current, financePeriod, 1))
+            }
+            style={{
+              width: 42,
+              height: 42,
+              padding: 0,
+              borderRadius: '50%',
+              background: '#172033',
+              color: '#fff',
+              boxShadow: 'none',
+              fontSize: 24,
+              lineHeight: 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: '0 0 42px',
+            }}
+          >
+            ›
+          </button>
+          <select
+            value={financePeriod}
+            onChange={(event) => {
+              const next = event.target.value as ForecastRange;
+              setFinancePeriod(next);
+              if (chartRange !== 'year') {
+                setChartRange(next);
+              }
+            }}
+            style={{
+              minWidth: 130,
+              height: 42,
+              borderRadius: 14,
+              border: '1px solid rgba(24,33,47,0.12)',
+              padding: '0 12px',
+              background: '#fff',
+              color: '#1f2a3b',
+              fontWeight: 700,
+              display: 'block',
+            }}
+          >
+            <option value="week">Неделя</option>
+            <option value="month">Месяц</option>
+          </select>
+        </div>
+      </section>
+
       <section style={{ marginBottom: 16 }}>
         <article style={panelStyle}>
           <div
@@ -784,32 +902,6 @@ export default function FinancePage() {
                 justifyItems: isMobile ? 'start' : 'end',
               }}
             >
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                {[
-                  ['week', 'Неделя'],
-                  ['month', 'Месяц'],
-                ].map(([value, label]) => {
-                  const active = forecastRange === value;
-
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setForecastRange(value as ForecastRange)}
-                      style={{
-                        padding: '8px 12px',
-                        borderRadius: 999,
-                        background: active ? '#172033' : 'rgba(23,32,51,0.07)',
-                        color: active ? '#fff' : '#243041',
-                        boxShadow: 'none',
-                        fontSize: 13,
-                      }}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
               <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
                 <div style={{ color: '#687486', fontSize: 13 }}>
                   {forecastDateRange.from} - {forecastDateRange.to}
