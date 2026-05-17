@@ -1,7 +1,7 @@
 ﻿"""
 Эндпоинты для ученика: только свои данные.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import os
@@ -193,7 +193,7 @@ async def my_lessons(
     if date_from:
         q = q.where(Lesson.starts_at >= date_from)
     if date_to:
-        q = q.where(Lesson.starts_at <= date_to)
+        q = q.where(Lesson.starts_at < date_to + timedelta(days=1))
     result = await db.execute(q.distinct(Lesson.id).order_by(Lesson.id, Lesson.starts_at))
     rows = result.all()
     seen = set()

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -151,7 +151,7 @@ async def list_lessons(
     if date_from:
         q = q.where(Lesson.starts_at >= date_from)
     if date_to:
-        q = q.where(Lesson.starts_at <= date_to)
+        q = q.where(Lesson.starts_at < date_to + timedelta(days=1))
     if tutor_student_id:
         q = q.where(Lesson.tutor_student_id == tutor_student_id)
 
