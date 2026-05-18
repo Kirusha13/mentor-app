@@ -140,24 +140,38 @@ function deltaText(current: number | null, previous: number | null, suffix = '')
   return `${diff > 0 ? '+' : ''}${diff.toFixed(1)}${suffix}`;
 }
 
+function wrapRadarLabel(label: string) {
+  if (label.length <= 13) return [label];
+  const words = label.split(' ');
+  if (words.length > 1) return words;
+  return [label.slice(0, 13), label.slice(13)];
+}
+
 function RadarChart({ values }: { values: Array<{ label: string; value: number }> }) {
-  const size = 300;
+  const size = 360;
   const center = size / 2;
-  const radius = 82;
+  const radius = 98;
+  const labelDistance = radius + 62;
   const points = values.map((item, index) => {
     const angle = (Math.PI * 2 * index) / values.length - Math.PI / 2;
     const distance = radius * (item.value / 100);
+    const rawLabelX = center + Math.cos(angle) * labelDistance;
+    const rawLabelY = center + Math.sin(angle) * labelDistance;
+    const labelAnchor: 'end' | 'start' | 'middle' =
+      rawLabelX < center - 8 ? 'start' : rawLabelX > center + 8 ? 'end' : 'middle';
     return {
       ...item,
       x: center + Math.cos(angle) * distance,
       y: center + Math.sin(angle) * distance,
-      labelX: center + Math.cos(angle) * (radius + 54),
-      labelY: center + Math.sin(angle) * (radius + 54),
+      labelX: Math.max(34, Math.min(size - 34, rawLabelX)),
+      labelY: Math.max(34, Math.min(size - 34, rawLabelY)),
+      labelLines: wrapRadarLabel(item.label),
+      labelAnchor,
     };
   });
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: '100%', maxWidth: 360, overflow: 'visible' }}>
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: '100%', maxWidth: 390, overflow: 'visible' }}>
       {[0.33, 0.66, 1].map((scale) => (
         <circle key={scale} cx={center} cy={center} r={radius * scale} fill="none" stroke="rgba(23,32,51,0.12)" />
       ))}
@@ -171,13 +185,17 @@ function RadarChart({ values }: { values: Array<{ label: string; value: number }
           <text
             x={point.labelX}
             y={point.labelY}
-            textAnchor={point.labelX < center ? 'end' : point.labelX > center ? 'start' : 'middle'}
+            textAnchor={point.labelAnchor}
             dominantBaseline="middle"
             fontSize="11"
             fontWeight="700"
             fill="#435066"
           >
-            {point.label}
+            {point.labelLines.map((line, lineIndex) => (
+              <tspan key={`${point.label}-${line}`} x={point.labelX} dy={lineIndex === 0 ? 0 : 13}>
+                {line}
+              </tspan>
+            ))}
           </text>
         </g>
       ))}
@@ -349,10 +367,14 @@ export default function PortfolioPage() {
       label: new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(lesson.starts_at)),
       value: lesson.grade ?? 0,
     }));
+  const onTimeHomeworkPercent =
+    currentStats.assignments.length > 0
+      ? ((currentStats.assignments.length - currentStats.overdueAssignments.length) / currentStats.assignments.length) * 100
+      : 0;
   const competencyRows = [
     { label: 'ДЗ', value: clampPercent(currentStats.homeworkPercent * 0.6 + (scoreToPercent(currentStats.averageAssignmentGrade) ?? 0) * 0.4) },
-    { label: 'Самостоятельность', value: clampPercent(currentStats.homeworkPercent * 0.7 + (currentStats.overdueAssignments.length ? 0 : 30)) },
-    { label: 'Скорость', value: clampPercent(currentStats.homeworkPercent * 0.55 + currentStats.attendancePercent * 0.45) },
+    { label: 'Сам.', value: clampPercent(currentStats.homeworkPercent * 0.7 + (currentStats.overdueAssignments.length ? 0 : 30)) },
+    { label: 'Скорость', value: clampPercent(onTimeHomeworkPercent * 0.7 + currentStats.homeworkPercent * 0.3) },
     { label: 'Теория', value: clampPercent(topicAverage * 0.7 + (scoreToPercent(currentStats.averageLessonGrade) ?? 0) * 0.3) },
   ];
 
@@ -419,6 +441,7 @@ export default function PortfolioPage() {
     try {
       setPdfSaving(true);
       reportRef.current.classList.add('portfolio-exporting-pdf');
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       const canvas = await html2canvas(reportRef.current, {
         backgroundColor: '#ffffff',
         scale: 2,
@@ -430,18 +453,11 @@ export default function PortfolioPage() {
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imageHeight = (canvas.height * pageWidth) / canvas.width;
-      let remainingHeight = imageHeight;
-      let position = 0;
+      const renderHeight = Math.min(imageHeight, pageHeight);
+      const renderWidth = imageHeight > pageHeight ? (canvas.width * pageHeight) / canvas.height : pageWidth;
+      const renderX = (pageWidth - renderWidth) / 2;
 
-      pdf.addImage(imageData, 'PNG', 0, position, pageWidth, imageHeight);
-      remainingHeight -= pageHeight;
-
-      while (remainingHeight > 0) {
-        position -= pageHeight;
-        pdf.addPage();
-        pdf.addImage(imageData, 'PNG', 0, position, pageWidth, imageHeight);
-        remainingHeight -= pageHeight;
-      }
+      pdf.addImage(imageData, 'PNG', renderX, 0, renderWidth, renderHeight);
 
       const safeName = selectedStudent.full_name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'student';
       pdf.save(`portfolio-${safeName}-${selectedMonth}.pdf`);
@@ -490,6 +506,24 @@ export default function PortfolioPage() {
 
           .portfolio-exporting-pdf .portfolio-pdf-only {
             display: block !important;
+          }
+
+          .portfolio-report-visuals + .portfolio-pdf-hidden,
+          .portfolio-report-visuals + .portfolio-pdf-hidden + .portfolio-pdf-only,
+          .portfolio-report-visuals ~ .portfolio-pdf-hidden,
+          .portfolio-report-visuals ~ .portfolio-pdf-only,
+          .portfolio-exporting-pdf .portfolio-report-visuals + .portfolio-pdf-hidden + .portfolio-pdf-only {
+            display: none !important;
+          }
+
+          .portfolio-exporting-pdf {
+            width: 820px !important;
+            max-height: none !important;
+            overflow: visible !important;
+          }
+
+          .portfolio-exporting-pdf .portfolio-report-visuals {
+            grid-template-columns: 1fr !important;
           }
 
           @media print {
@@ -720,11 +754,11 @@ export default function PortfolioPage() {
       </section>
 
       {reportOpen && (
-        <div onClick={() => setReportOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.46)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 50 }}>
-          <div ref={reportRef} className="portfolio-print-area" onClick={(event) => event.stopPropagation()} style={{ width: 'min(860px, 100%)', maxHeight: '90vh', overflow: 'auto', background: '#fff', borderRadius: 28, padding: isMobile ? 18 : 26, boxShadow: '0 30px 80px rgba(15,23,42,0.22)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, marginBottom: 18 }}>
+        <div onClick={() => setReportOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.46)', display: 'grid', placeItems: 'center', padding: 12, zIndex: 50 }}>
+          <div ref={reportRef} className="portfolio-print-area" onClick={(event) => event.stopPropagation()} style={{ width: 'min(1160px, 100%)', maxHeight: 'calc(100vh - 24px)', overflow: 'auto', background: '#fff', borderRadius: 24, padding: isMobile ? 14 : 18, boxShadow: '0 30px 80px rgba(15,23,42,0.22)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
               <div>
-                <h2 style={{ fontSize: 30, marginBottom: 6 }}>Отчёт для опекуна</h2>
+                <h2 style={{ fontSize: 26, marginBottom: 4 }}>Отчёт для опекуна</h2>
                 <div style={mutedTextStyle}>{selectedStudent.full_name} • {formatMonthLabel(selectedMonth)} • {goalType}</div>
               </div>
               <div className="portfolio-print-hidden portfolio-pdf-hidden" style={{ display: 'flex', gap: 8, alignItems: 'start' }}>
@@ -732,31 +766,107 @@ export default function PortfolioPage() {
                 <button type="button" title="Закрыть" onClick={() => setReportOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#172033', boxShadow: 'none', alignSelf: 'start' }}>×</button>
               </div>
             </div>
-            <div style={{ display: 'grid', gap: 14 }}>
-              <div style={{ ...panelStyle, boxShadow: 'none' }}>
-                <h3 style={{ fontSize: 20, marginBottom: 10 }}>Краткая сводка</h3>
-                <p style={{ color: '#435066', lineHeight: 1.55, marginBottom: 0 }}>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div style={{ ...panelStyle, padding: 14, borderRadius: 18, boxShadow: 'none' }}>
+                <h3 style={{ fontSize: 18, marginBottom: 8 }}>Краткая сводка</h3>
+                <p style={{ color: '#435066', lineHeight: 1.45, marginBottom: 0 }}>
                   Общий прогресс: <strong>{formatPercent(currentStats.overallProgress)}</strong>. Средняя оценка за занятия: <strong>{formatAverage(currentStats.averageLessonGrade)}</strong>. Средняя оценка за ДЗ: <strong>{formatAverage(currentStats.averageAssignmentGrade)}</strong>. Посещаемость: <strong>{formatPercent(currentStats.attendancePercent)}</strong>.
                 </p>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
-                <div style={{ ...panelStyle, boxShadow: 'none' }}>
-                  <h3 style={{ fontSize: 18, marginBottom: 10 }}>Сильные стороны</h3>
-                  {strengths.map((item) => <p key={item} style={{ color: '#435066', marginBottom: 8 }}>{item}</p>)}
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+                <div style={{ ...panelStyle, padding: 14, borderRadius: 18, boxShadow: 'none' }}>
+                  <h3 style={{ fontSize: 17, marginBottom: 8 }}>Сильные стороны</h3>
+                  {strengths.map((item) => <p key={item} style={{ color: '#435066', lineHeight: 1.35, marginBottom: 6 }}>{item}</p>)}
                 </div>
-                <div style={{ ...panelStyle, boxShadow: 'none' }}>
-                  <h3 style={{ fontSize: 18, marginBottom: 10 }}>Зоны роста</h3>
-                  {weaknesses.map((item) => <p key={item} style={{ color: '#435066', marginBottom: 8 }}>{item}</p>)}
+                <div style={{ ...panelStyle, padding: 14, borderRadius: 18, boxShadow: 'none' }}>
+                  <h3 style={{ fontSize: 17, marginBottom: 8 }}>Зоны роста</h3>
+                  {weaknesses.map((item) => <p key={item} style={{ color: '#435066', lineHeight: 1.35, marginBottom: 6 }}>{item}</p>)}
                 </div>
               </div>
-              <label className="portfolio-pdf-hidden" style={{ display: 'grid', gap: 8, color: '#556173', fontSize: 14 }}>
+              <label className="portfolio-pdf-hidden" style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
                 Комментарий репетитора
-                <textarea value={reportComment} onChange={(event) => setReportComment(event.target.value)} placeholder="Например: ученик стал увереннее решать квадратные уравнения, но стоит закрепить задачи на проценты." rows={4} />
+                <textarea value={reportComment} onChange={(event) => setReportComment(event.target.value)} placeholder="Например: ученик стал увереннее решать квадратные уравнения, но стоит закрепить задачи на проценты." rows={3} />
               </label>
               {reportComment && (
-                <div className="portfolio-pdf-only" style={{ ...panelStyle, boxShadow: 'none', background: 'rgba(217,111,50,0.08)' }}>
-                  <h3 style={{ fontSize: 18, marginBottom: 10 }}>Комментарий</h3>
-                  <p style={{ color: '#435066', lineHeight: 1.55, marginBottom: 0 }}>{reportComment}</p>
+                <div className="portfolio-pdf-only" style={{ ...panelStyle, padding: 14, borderRadius: 18, boxShadow: 'none', background: 'rgba(217,111,50,0.08)' }}>
+                  <h3 style={{ fontSize: 17, marginBottom: 8 }}>Комментарий</h3>
+                  <p style={{ color: '#435066', lineHeight: 1.4, marginBottom: 0 }}>{reportComment}</p>
+                </div>
+              )}
+              <div className="portfolio-report-visuals" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '0.9fr 1.1fr', gap: 10, alignItems: 'stretch' }}>
+                <div style={{ ...panelStyle, padding: 14, borderRadius: 18, boxShadow: 'none', display: 'grid', justifyItems: 'center', gap: 4 }}>
+                  <h3 style={{ fontSize: 17, marginBottom: 0, justifySelf: 'start' }}>Роза компетенций</h3>
+                  <RadarChart values={competencyRows} />
+                  <p style={{ display: 'none' }}>
+                    ДЗ, самостоятельность, скорость и теория рассчитаны по занятиям, домашним заданиям и освоенным темам.
+                  </p>
+                  <div style={{ width: '100%', display: 'grid', gap: 4, color: '#687486', fontSize: 11, lineHeight: 1.3 }}>
+                    <div><strong style={{ color: '#435066' }}>ДЗ</strong> — качество и регулярность домашних заданий.</div>
+                    <div><strong style={{ color: '#435066' }}>Сам.</strong> — насколько ученик справляется без постоянной помощи.</div>
+                    <div><strong style={{ color: '#435066' }}>Скорость</strong> — соблюдение дедлайнов и общий темп выполнения ДЗ.</div>
+                    <div><strong style={{ color: '#435066' }}>Теория</strong> — понимание тем и умение применять правила.</div>
+                  </div>
+                </div>
+
+                <div style={{ ...panelStyle, padding: 14, borderRadius: 18, boxShadow: 'none' }}>
+                  <h3 style={{ fontSize: 17, marginBottom: 8 }}>Календарь посещений</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 10 }}>
+                    {[
+                      ['Проведено', currentStats.conductedLessons.length, '#2f7d63'],
+                      ['План', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'scheduled').length, '#2a6fdb'],
+                      ['Отменено', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'cancelled').length, '#a63f3b'],
+                    ].map(([label, value, color]) => (
+                      <div key={label} style={{ padding: 8, borderRadius: 12, background: `${color}12` }}>
+                        <div style={{ color: String(color), fontWeight: 900, fontSize: 18 }}>{String(value)}</div>
+                        <div style={{ ...mutedTextStyle, fontSize: 12 }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5 }}>
+                    {Array.from({ length: monthRange(selectedMonth).end.getDate() }, (_, index) => {
+                      const date = `${selectedMonth}-${String(index + 1).padStart(2, '0')}`;
+                      const dayLessons = monthLessons.filter((lesson) => lessonDate(lesson) === date);
+                      const conducted = dayLessons.some((lesson) => lesson.conduct_status === 'conducted');
+                      const cancelled = dayLessons.some((lesson) => lesson.conduct_status === 'cancelled');
+                      const scheduled = dayLessons.some((lesson) => lesson.conduct_status === 'scheduled');
+                      const color = conducted
+                        ? '#2f7d63'
+                        : cancelled
+                          ? '#a63f3b'
+                          : scheduled
+                            ? '#2a6fdb'
+                            : 'rgba(23,32,51,0.08)';
+
+                      return (
+                        <span
+                          key={date}
+                          title={`${index + 1}: ${dayLessons.length} занятий`}
+                          style={{
+                            height: 24,
+                            borderRadius: 8,
+                            background: color,
+                            color: conducted || cancelled || scheduled ? '#fff' : '#687486',
+                            display: 'grid',
+                            placeItems: 'center',
+                            fontSize: 10,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {index + 1}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <label className="portfolio-pdf-hidden" style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+                Комментарий репетитора
+                <textarea value={reportComment} onChange={(event) => setReportComment(event.target.value)} placeholder="Например: ученик стал увереннее решать квадратные уравнения, но стоит закрепить задачи на проценты." rows={3} />
+              </label>
+              {reportComment && (
+                <div className="portfolio-pdf-only" style={{ ...panelStyle, padding: 14, borderRadius: 18, boxShadow: 'none', background: 'rgba(217,111,50,0.08)' }}>
+                  <h3 style={{ fontSize: 17, marginBottom: 8 }}>Комментарий</h3>
+                  <p style={{ color: '#435066', lineHeight: 1.4, marginBottom: 0 }}>{reportComment}</p>
                 </div>
               )}
             </div>
