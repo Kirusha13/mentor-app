@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+﻿import type { CSSProperties } from 'react';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
@@ -6,30 +6,38 @@ const CALLBACK_URL = `${window.location.origin}/auth/callback`;
 
 const featureCards = [
   {
+    icon: '▣',
+    color: '#2AABEE',
     title: 'Расписание',
     text: 'Занятия, свободные слоты, переносы и отмены в одном календаре.',
   },
   {
+    icon: '₽',
+    color: '#2AABEE',
     title: 'Финансы',
     text: 'Оплаты, долги, абонементы и прогноз дохода без ручных таблиц.',
   },
   {
+    icon: '↗',
+    color: '#4CAF50',
     title: 'Портфолио',
     text: 'Темы, оценки, динамика и понятный отчёт для опекуна.',
   },
 ];
 
-const quickStats = [
-  ['Сегодня', 'занятия и дедлайны'],
-  ['Запросы', 'запись, переносы, оплаты'],
-  ['Прогресс', 'сильные стороны и зоны роста'],
+const insideItems = [
+  { icon: '▣', title: 'Сегодня', text: 'занятия и дедлайны' },
+  { icon: '≡', title: 'Запросы', text: 'запись, переносы, оплаты' },
+  { icon: '▥', title: 'Прогресс', text: 'сильные стороны и зоны роста' },
 ];
 
-const glassCardStyle: CSSProperties = {
-  borderRadius: 22,
-  background: 'rgba(255,255,255,0.08)',
-  border: '1px solid rgba(255,255,255,0.12)',
-  backdropFilter: 'blur(14px)',
+const featureCardStyle: CSSProperties = {
+  minHeight: 172,
+  padding: 22,
+  borderRadius: 24,
+  background: '#fff',
+  border: '1px solid rgba(31, 42, 59, 0.08)',
+  boxShadow: '0 20px 46px rgba(15, 23, 42, 0.08)',
 };
 
 export default function LoginPage() {
@@ -47,246 +55,300 @@ export default function LoginPage() {
     <main
       style={{
         minHeight: '100vh',
-        padding: isMobile ? 12 : 24,
+        padding: isMobile ? 14 : 28,
         display: 'grid',
         placeItems: 'center',
-        position: 'relative',
         overflow: isTablet ? 'auto' : 'hidden',
+        background:
+          'radial-gradient(circle at 8% 10%, rgba(42,171,238,0.08), transparent 28%), radial-gradient(circle at 92% 12%, rgba(42,171,238,0.12), transparent 30%), #f5f7fa',
       }}
     >
       <section
         style={{
-          width: 'min(1180px, 100%)',
-          minHeight: isTablet ? 'auto' : 'calc(100vh - 48px)',
-          borderRadius: isMobile ? 26 : 38,
-          padding: isMobile ? 20 : isTablet ? 28 : 38,
-          color: '#fff',
+          width: 'min(1240px, 100%)',
+          minHeight: isTablet ? 'auto' : 'calc(100vh - 56px)',
+          display: 'grid',
+          gridTemplateColumns: isTablet ? '1fr' : 'minmax(0, 1.15fr) minmax(360px, 440px)',
+          gap: isMobile ? 24 : isTablet ? 32 : 48,
+          alignItems: 'center',
           position: 'relative',
           overflow: 'hidden',
-          display: 'grid',
-          gap: isMobile ? 22 : 28,
-          background:
-            'linear-gradient(145deg, rgba(23,32,51,0.98) 0%, rgba(31,50,82,0.96) 55%, rgba(217,111,50,0.9) 135%)',
-          boxShadow: '0 34px 90px rgba(17, 25, 39, 0.28)',
+          padding: isMobile ? 22 : isTablet ? 36 : 62,
+          borderRadius: isMobile ? 28 : 42,
+          background: '#fff',
+          border: '1px solid rgba(31, 42, 59, 0.07)',
+          boxShadow: '0 34px 90px rgba(15, 23, 42, 0.13)',
         }}
       >
         <div
           aria-hidden="true"
           style={{
             position: 'absolute',
-            width: 520,
-            height: 520,
+            width: 420,
+            height: 420,
+            right: isTablet ? -230 : 350,
+            top: 130,
             borderRadius: '50%',
-            background: 'rgba(255,255,255,0.08)',
-            right: -190,
-            top: -210,
+            background: 'rgba(42, 171, 238, 0.09)',
           }}
         />
         <div
           aria-hidden="true"
           style={{
             position: 'absolute',
-            width: 380,
-            height: 380,
-            borderRadius: '42% 58% 54% 46%',
-            background: 'rgba(217,111,50,0.22)',
-            left: -120,
-            bottom: -160,
-            filter: 'blur(8px)',
+            width: 160,
+            height: 160,
+            right: isTablet ? 24 : 470,
+            top: 88,
+            opacity: 0.45,
+            backgroundImage: 'radial-gradient(rgba(31,42,59,0.18) 1.5px, transparent 1.5px)',
+            backgroundSize: '22px 22px',
           }}
         />
 
-        <div
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '10px 18px',
+              borderRadius: 999,
+              background: 'linear-gradient(135deg, #2AABEE, #229ED9)',
+              color: '#fff',
+              fontSize: 13,
+              fontWeight: 950,
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              marginBottom: isMobile ? 22 : 30,
+              boxShadow: '0 14px 28px rgba(42,171,238,0.22)',
+            }}
+          >
+            MENTOR APP
+          </div>
+
+          <h1
+            style={{
+              maxWidth: 650,
+              color: '#172033',
+              fontSize: 'clamp(3rem, 6.5vw, 5.8rem)',
+              lineHeight: 0.95,
+              letterSpacing: '-0.07em',
+              marginBottom: 26,
+            }}
+          >
+            Рабочий день репетитора{' '}
+            <span style={{ display: 'block', color: '#2AABEE' }}>без хаоса</span>
+          </h1>
+
+          <p
+            style={{
+              maxWidth: 650,
+              color: '#5c687b',
+              fontSize: isMobile ? 17 : 20,
+              lineHeight: 1.55,
+              marginBottom: isMobile ? 26 : 42,
+            }}
+          >
+            Управляйте учениками, расписанием, заданиями, материалами и оплатами в одном месте.
+            Меньше рутины — больше времени на преподавание.
+          </p>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
+              gap: 16,
+              maxWidth: 760,
+            }}
+          >
+            {featureCards.map((item) => (
+              <article key={item.title} style={featureCardStyle}>
+                <div
+                  style={{
+                    width: 50,
+                    height: 50,
+                    display: 'grid',
+                    placeItems: 'center',
+                    borderRadius: 16,
+                    color: item.color,
+                    background: `${item.color}18`,
+                    fontSize: 24,
+                    fontWeight: 950,
+                    marginBottom: 20,
+                  }}
+                >
+                  {item.icon}
+                </div>
+                <h2 style={{ color: '#172033', fontSize: 20, marginBottom: 12, letterSpacing: '-0.03em' }}>
+                  {item.title}
+                </h2>
+                <p style={{ color: '#627086', fontSize: 15, lineHeight: 1.55, margin: 0 }}>
+                  {item.text}
+                </p>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <aside
           style={{
             position: 'relative',
             zIndex: 1,
+            justifySelf: isTablet ? 'center' : 'end',
+            width: 'min(440px, 100%)',
+            padding: isMobile ? 24 : 34,
+            borderRadius: 32,
+            background: '#fff',
+            border: '1px solid rgba(31, 42, 59, 0.08)',
+            boxShadow: '0 28px 70px rgba(15, 23, 42, 0.12)',
             display: 'grid',
-            gridTemplateColumns: isTablet ? '1fr' : 'minmax(0, 1fr) minmax(330px, 430px)',
-            gap: isMobile ? 22 : 30,
-            alignItems: 'center',
+            gap: 24,
+            color: '#172033',
           }}
         >
-          <div>
+          <div style={{ display: 'grid', justifyItems: 'center', textAlign: 'center' }}>
             <div
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '8px 12px',
-                borderRadius: 999,
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                color: 'rgba(255,255,255,0.82)',
-                fontSize: 12,
-                fontWeight: 900,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                marginBottom: 18,
-              }}
-            >
-              Mentor App
-            </div>
-
-            <h1
-              style={{
-                maxWidth: 720,
-                fontSize: 'clamp(2.55rem, 6vw, 5.2rem)',
-                lineHeight: 0.92,
-                marginBottom: 18,
-                letterSpacing: '-0.07em',
-              }}
-            >
-              Рабочий день репетитора без хаоса
-            </h1>
-
-            <p
-              style={{
-                maxWidth: 650,
-                marginBottom: isMobile ? 20 : 26,
-                color: 'rgba(255,255,255,0.74)',
-                fontSize: isMobile ? 16 : 19,
-                lineHeight: 1.62,
-              }}
-            >
-              Кабинет собирает учеников, расписание, домашние задания, материалы,
-              оплаты и прогресс в одном месте. Меньше блокнотов и Excel, больше
-              понятного контроля над учебным процессом.
-            </p>
-
-            <div
-              style={{
+                position: 'relative',
+                width: 104,
+                height: 104,
+                borderRadius: '50%',
                 display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
-                gap: 12,
-                maxWidth: 760,
+                placeItems: 'center',
+                background: 'linear-gradient(145deg, #eef2f7, #f8fafc)',
+                color: '#172033',
+                fontSize: 58,
+                fontWeight: 950,
+                marginBottom: 24,
               }}
             >
-              {featureCards.map((item) => (
-                <article key={item.title} style={{ ...glassCardStyle, padding: 15 }}>
-                  <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 6 }}>{item.title}</div>
-                  <div style={{ color: 'rgba(255,255,255,0.68)', fontSize: 14, lineHeight: 1.45 }}>
-                    {item.text}
-                  </div>
-                </article>
-              ))}
+              M
+              <span
+                style={{
+                  position: 'absolute',
+                  right: 18,
+                  top: 16,
+                  width: 18,
+                  height: 18,
+                  borderRadius: '50%',
+                  background: '#2AABEE',
+                  boxShadow: '0 6px 14px rgba(42,171,238,0.26)',
+                }}
+              />
             </div>
+
+            <h2 style={{ fontSize: 28, lineHeight: 1.05, marginBottom: 10, letterSpacing: '-0.04em' }}>
+              Вход в кабинет
+            </h2>
+            <p style={{ color: '#5c687b', fontSize: 17, lineHeight: 1.45, margin: 0 }}>
+              Ваше рабочее пространство всегда под рукой
+            </p>
           </div>
 
           <div
             style={{
-              justifySelf: isTablet ? 'center' : 'end',
-              width: 'min(430px, 100%)',
-              borderRadius: 30,
-              padding: isMobile ? 18 : 22,
-              background: 'rgba(255,255,255,0.92)',
-              border: '1px solid rgba(255,255,255,0.76)',
-              boxShadow: '0 28px 70px rgba(7, 11, 20, 0.22)',
-              color: '#18212f',
               display: 'grid',
-              gap: 16,
+              borderRadius: 22,
+              background: '#f8fafc',
+              border: '1px solid rgba(31,42,59,0.08)',
+              overflow: 'hidden',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {insideItems.map((item, index) => (
               <div
+                key={item.title}
                 style={{
-                  width: 58,
-                  height: 58,
-                  borderRadius: 20,
                   display: 'grid',
-                  placeItems: 'center',
-                  background:
-                    'linear-gradient(135deg, rgba(217,111,50,0.18), rgba(42,111,219,0.14))',
-                  color: '#c35f28',
-                  fontWeight: 950,
-                  fontSize: 24,
-                  border: '1px solid rgba(217,111,50,0.14)',
+                  gridTemplateColumns: '34px minmax(80px, 0.6fr) minmax(0, 1fr)',
+                  gap: 12,
+                  alignItems: 'center',
+                  padding: '15px 18px',
+                  borderBottom: index === insideItems.length - 1 ? 'none' : '1px solid rgba(31,42,59,0.06)',
                 }}
               >
-                M
-              </div>
-              <div>
-                <div style={{ color: '#697589', fontWeight: 800, fontSize: 13, marginBottom: 4 }}>
-                  Вход в кабинет
-                </div>
-                <h2 style={{ fontSize: 28, lineHeight: 1.05, marginBottom: 0, letterSpacing: '-0.04em' }}>
-                  Продолжим работу
-                </h2>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: 'grid',
-                gap: 8,
-                padding: 12,
-                borderRadius: 20,
-                background: 'rgba(23,32,51,0.04)',
-                border: '1px solid rgba(24,33,47,0.07)',
-              }}
-            >
-              {quickStats.map(([title, text]) => (
-                <div
-                  key={title}
+                <span
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    alignItems: 'center',
-                    minHeight: 32,
-                    color: '#526075',
-                    fontSize: 14,
+                    width: 34,
+                    height: 34,
+                    borderRadius: 12,
+                    display: 'grid',
+                    placeItems: 'center',
+                    background: '#eef2f7',
+                    color: '#536177',
+                    fontWeight: 900,
                   }}
                 >
-                  <span>{title}</span>
-                  <strong style={{ color: '#1f2a3b', textAlign: 'right' }}>{text}</strong>
-                </div>
-              ))}
-            </div>
-
-            {error && (
-              <div
-                style={{
-                  padding: '13px 14px',
-                  borderRadius: 16,
-                  border: '1px solid rgba(195, 61, 59, 0.18)',
-                  background: 'rgba(195, 61, 59, 0.08)',
-                  color: '#9d2e2b',
-                  fontSize: 14,
-                  fontWeight: 700,
-                }}
-              >
-                Ошибка входа: {decodeURIComponent(error)}
+                  {item.icon}
+                </span>
+                <span style={{ color: '#435066', fontSize: 14, fontWeight: 800 }}>{item.title}</span>
+                <strong style={{ color: '#172033', fontSize: 14, textAlign: 'right' }}>{item.text}</strong>
               </div>
-            )}
+            ))}
+          </div>
 
-            {!error && reason === 'session_expired' && (
-              <div
-                style={{
-                  padding: '13px 14px',
-                  borderRadius: 16,
-                  border: '1px solid rgba(217, 111, 50, 0.18)',
-                  background: 'rgba(217, 111, 50, 0.08)',
-                  color: '#b9551f',
-                  fontSize: 14,
-                  fontWeight: 700,
-                }}
-              >
-                Сессия истекла. Войди снова, и мы вернём тебя обратно в кабинет.
-              </div>
-            )}
-
-            <button
-              onClick={handleLogin}
+          {error && (
+            <div
               style={{
-                minHeight: 56,
-                fontSize: 16,
+                padding: '13px 14px',
                 borderRadius: 16,
-                boxShadow: '0 16px 34px rgba(217,111,50,0.24)',
+                border: '1px solid rgba(195, 61, 59, 0.18)',
+                background: 'rgba(195, 61, 59, 0.08)',
+                color: '#F44336',
+                fontSize: 14,
+                fontWeight: 800,
               }}
             >
-              Войти через Telegram
-            </button>
+              Ошибка входа: {decodeURIComponent(error)}
+            </div>
+          )}
+
+          {!error && reason === 'session_expired' && (
+            <div
+              style={{
+                padding: '13px 14px',
+                borderRadius: 16,
+                border: '1px solid rgba(255, 152, 0, 0.24)',
+                background: 'rgba(255, 152, 0, 0.1)',
+                color: '#FF9800',
+                fontSize: 14,
+                fontWeight: 800,
+              }}
+            >
+              Сессия истекла. Войди снова, и мы вернём тебя обратно в кабинет.
+            </div>
+          )}
+
+          <button
+            onClick={handleLogin}
+            style={{
+              width: '100%',
+              minHeight: 58,
+              borderRadius: 17,
+              fontSize: 17,
+              fontWeight: 900,
+              background: 'linear-gradient(135deg, #2AABEE, #229ED9)',
+              boxShadow: '0 18px 34px rgba(242,95,12,0.26)',
+            }}
+          >
+            ▸ Войти через Telegram
+          </button>
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: 10,
+              color: '#7a8798',
+              fontSize: 14,
+              lineHeight: 1.45,
+              textAlign: 'center',
+            }}
+          >
+            <span style={{ color: '#536177' }}>▧</span>
+            <span>Безопасный вход. Ваши данные надёжно защищены.</span>
           </div>
-        </div>
+        </aside>
       </section>
     </main>
   );

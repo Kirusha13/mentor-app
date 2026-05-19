@@ -148,26 +148,352 @@ async def telegram_login_page(request: Request):
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Войти через Telegram</title>
   <style>
-    body {{
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      min-height: 100vh; margin: 0;
-      background: #f5f5f5;
+    :root {{
+      color-scheme: light;
+      --navy: #142038;
+      --muted: #69758a;
+      --line: rgba(20, 32, 56, 0.1);
+      --blue: #2AABEE;
+      --blue-soft: #EFF9FF;
+      --orange: #2AABEE;
+      --surface: #ffffff;
+      --bg: #f6f8fc;
     }}
-    h1 {{ color: #333; margin-bottom: 32px; font-size: 24px; }}
+
+    * {{
+      box-sizing: border-box;
+    }}
+
+    body {{
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      color: var(--navy);
+      background:
+        radial-gradient(circle at 0% 100%, rgba(42, 171, 238, 0.22) 0 14%, transparent 15%),
+        radial-gradient(circle at 100% 0%, rgba(42, 171, 238, 0.34) 0 12%, transparent 13%),
+        linear-gradient(135deg, #f8fbff 0%, #f4f7fc 48%, #eef4ff 100%);
+      font-family: Inter, "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+
+    body::before,
+    body::after {{
+      content: "";
+      position: fixed;
+      pointer-events: none;
+      border-radius: 999px;
+    }}
+
+    body::before {{
+      width: 520px;
+      height: 520px;
+      right: -140px;
+      top: -180px;
+      border: 90px solid rgba(42, 171, 238, 0.2);
+    }}
+
+    body::after {{
+      width: 500px;
+      height: 500px;
+      left: -180px;
+      bottom: -260px;
+      background: radial-gradient(circle, rgba(42, 171, 238, 0.18), rgba(42, 171, 238, 0));
+    }}
+
+    .decor-line {{
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.4;
+      background:
+        radial-gradient(circle at 16% 34%, rgba(42, 171, 238, 0.12) 0 70px, transparent 71px),
+        radial-gradient(circle at 82% 88%, rgba(42, 171, 238, 0.1) 0 86px, transparent 87px);
+    }}
+
+    .decor-line::before,
+    .decor-line::after {{
+      content: "";
+      position: absolute;
+      width: 220px;
+      height: 180px;
+      background-image: radial-gradient(rgba(47, 141, 244, 0.14) 2px, transparent 2px);
+      background-size: 24px 24px;
+    }}
+
+    .decor-line::before {{
+      left: 5%;
+      bottom: 22%;
+    }}
+
+    .decor-line::after {{
+      right: 8%;
+      bottom: 22%;
+    }}
+
+    .auth-card {{
+      position: relative;
+      z-index: 1;
+      width: min(540px, calc(100vw - 32px));
+      padding: 42px 48px 38px;
+      border-radius: 30px;
+      border: 1px solid rgba(20, 32, 56, 0.08);
+      background: #ffffff;
+      box-shadow: 0 28px 90px rgba(20, 32, 56, 0.16);
+      text-align: center;
+    }}
+
+    .logo {{
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 12px;
+      position: relative;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #eef5ff, #ffffff);
+      border: 1px solid rgba(47, 141, 244, 0.2);
+      color: #2f7edc;
+      font-size: 30px;
+      font-weight: 900;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 12px 30px rgba(47, 141, 244, 0.12);
+    }}
+
+    .logo::after {{
+      content: "";
+      position: absolute;
+      right: 7px;
+      top: 9px;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: var(--orange);
+      box-shadow: 0 0 0 4px #fff;
+    }}
+
+    .brand {{
+      margin: 0 0 20px;
+      color: #2d4366;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+    }}
+
+    h1 {{
+      margin: 0;
+      color: var(--navy);
+      font-size: clamp(30px, 4vw, 40px);
+      line-height: 1.08;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+    }}
+
+    .subtitle {{
+      max-width: 390px;
+      margin: 14px auto 28px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.45;
+    }}
+
+    .account-preview {{
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(47, 141, 244, 0.18);
+      background: linear-gradient(135deg, #f9fbff, #f2f7ff);
+      text-align: left;
+    }}
+
+    .avatar {{
+      width: 54px;
+      height: 54px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: #2f7edc;
+      background: #e9f3ff;
+      font-size: 24px;
+      font-weight: 900;
+    }}
+
+    .account-title {{
+      font-size: 17px;
+      font-weight: 900;
+      color: var(--navy);
+    }}
+
+    .account-label {{
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+
+    .benefits {{
+      margin: 0 0 20px;
+      padding: 10px 18px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: #ffffff;
+      text-align: left;
+    }}
+
+    .benefit {{
+      display: grid;
+      grid-template-columns: 46px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 13px 0;
+    }}
+
+    .benefit + .benefit {{
+      border-top: 1px solid rgba(20, 32, 56, 0.08);
+    }}
+
+    .benefit-icon {{
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-size: 20px;
+      font-weight: 900;
+    }}
+
+    .benefit-title {{
+      color: var(--navy);
+      font-size: 15px;
+      font-weight: 900;
+    }}
+
+    .benefit-text {{
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }}
+
+    .telegram-widget {{
+      display: grid;
+      place-items: center;
+      min-height: 56px;
+      margin: 4px 0 18px;
+      padding: 12px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #2f8df4, #1f7fe5);
+      box-shadow: 0 14px 30px rgba(47, 141, 244, 0.28);
+    }}
+
+    .telegram-widget iframe {{
+      max-width: 100%;
+    }}
+
+    .secure {{
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      align-items: flex-start;
+      color: #7a8598;
+      font-size: 14px;
+      line-height: 1.45;
+    }}
+
+    .hint {{
+      margin: 24px 0 0;
+      padding-top: 20px;
+      border-top: 1px solid rgba(20, 32, 56, 0.08);
+      color: #8993a5;
+      font-size: 13px;
+      line-height: 1.45;
+    }}
+
+    @media (max-width: 640px) {{
+      body {{
+        overflow: auto;
+        padding: 16px;
+      }}
+
+      .auth-card {{
+        padding: 30px 22px 26px;
+        border-radius: 24px;
+      }}
+
+      .benefit {{
+        grid-template-columns: 38px 1fr;
+      }}
+
+      .benefit-icon {{
+        width: 36px;
+        height: 36px;
+        font-size: 17px;
+      }}
+    }}
   </style>
 </head>
 <body>
-  <h1>Mentor</h1>
-  <script
-    async
-    src="https://telegram.org/js/telegram-widget.js?22"
-    data-telegram-login="{settings.TELEGRAM_BOT_USERNAME}"
-    data-size="large"
-    data-auth-url="{callback_url}"
-    data-request-access="write"
-  ></script>
+  <div class="decor-line"></div>
+  <main class="auth-card" aria-label="Вход через Telegram">
+    <div class="logo">M</div>
+    <p class="brand">MENTOR APP</p>
+    <h1>Вход через Telegram</h1>
+    <p class="subtitle">Подтвердите вход в кабинет через ваш Telegram-аккаунт.</p>
+
+    <section class="account-preview" aria-label="Выбранный аккаунт">
+      <div class="avatar">T</div>
+      <div>
+        <div class="account-title">Telegram-аккаунт</div>
+        <div class="account-label">Выбранный аккаунт появится в виджете Telegram</div>
+      </div>
+    </section>
+
+    <section class="benefits" aria-label="Преимущества входа">
+      <div class="benefit">
+        <div class="benefit-icon">▣</div>
+        <div>
+          <div class="benefit-title">Безопасный вход</div>
+          <div class="benefit-text">Ваш аккаунт защищён Telegram.</div>
+        </div>
+      </div>
+      <div class="benefit">
+        <div class="benefit-icon">⌁</div>
+        <div>
+          <div class="benefit-title">Без пароля</div>
+          <div class="benefit-text">Вход без ввода пароля и логина.</div>
+        </div>
+      </div>
+      <div class="benefit">
+        <div class="benefit-icon">M</div>
+        <div>
+          <div class="benefit-title">Доступ к кабинету</div>
+          <div class="benefit-text">Вы получите доступ к возможностям Mentor App.</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="telegram-widget" aria-label="Кнопка входа через Telegram">
+      <script
+        async
+        src="https://telegram.org/js/telegram-widget.js?22"
+        data-telegram-login="{settings.TELEGRAM_BOT_USERNAME}"
+        data-size="large"
+        data-auth-url="{callback_url}"
+        data-request-access="write"
+      ></script>
+    </div>
+
+    <div class="secure">
+      <span>▣</span>
+      <span>Безопасная авторизация. Мы не передаём ваши данные третьим лицам.</span>
+    </div>
+    <p class="hint">Если аккаунт не подходит, закройте окно и выберите другой.</p>
+  </main>
 </body>
 </html>"""
     return HTMLResponse(content=html)
@@ -199,10 +525,84 @@ async def telegram_callback(request: Request):
     # JSON-кодирование гарантирует безопасную вставку строки в JS
     safe_link = json.dumps(deep_link)
     html = f"""<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Завершаем вход</title>
+  <style>
+    body {{
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 15% 85%, rgba(255, 107, 26, 0.2), transparent 26%),
+        radial-gradient(circle at 92% 8%, rgba(47, 141, 244, 0.24), transparent 24%),
+        #f6f8fc;
+      font-family: Inter, "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #142038;
+    }}
+
+    .redirect-card {{
+      width: min(420px, calc(100vw - 32px));
+      padding: 36px;
+      border-radius: 28px;
+      border: 1px solid rgba(20, 32, 56, 0.08);
+      background: #ffffff;
+      box-shadow: 0 28px 90px rgba(20, 32, 56, 0.16);
+      text-align: center;
+    }}
+
+    .logo {{
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 16px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #eaf3ff;
+      color: #2f8df4;
+      font-size: 28px;
+      font-weight: 900;
+    }}
+
+    h1 {{
+      margin: 0 0 10px;
+      font-size: 28px;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+    }}
+
+    p {{
+      margin: 0;
+      color: #69758a;
+      font-size: 16px;
+      line-height: 1.45;
+    }}
+
+    .loader {{
+      width: 44px;
+      height: 44px;
+      margin: 24px auto 0;
+      border-radius: 50%;
+      border: 4px solid #eaf3ff;
+      border-top-color: #2f8df4;
+      animation: spin 0.9s linear infinite;
+    }}
+
+    @keyframes spin {{
+      to {{ transform: rotate(360deg); }}
+    }}
+  </style>
+</head>
 <body>
-  <p>Перенаправление...</p>
+  <main class="redirect-card">
+    <div class="logo">M</div>
+    <h1>Завершаем вход</h1>
+    <p>Проверяем Telegram-авторизацию и открываем кабинет Mentor App.</p>
+    <div class="loader" aria-hidden="true"></div>
+  </main>
   <script>window.location.replace({safe_link});</script>
 </body>
 </html>"""

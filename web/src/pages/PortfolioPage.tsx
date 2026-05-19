@@ -1,4 +1,4 @@
-import html2canvas from 'html2canvas';
+﻿import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -13,7 +13,7 @@ import { lessonDate } from '../utils/lessonTime';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
-  padding: '20px',
+  padding: '16px',
   borderRadius: '22px',
   border: '1px solid rgba(24,33,47,0.08)',
   boxShadow: 'var(--shadow-card)',
@@ -148,10 +148,10 @@ function wrapRadarLabel(label: string) {
 }
 
 function RadarChart({ values }: { values: Array<{ label: string; value: number }> }) {
-  const size = 360;
+  const size = 320;
   const center = size / 2;
-  const radius = 98;
-  const labelDistance = radius + 62;
+  const radius = 86;
+  const labelDistance = radius + 54;
   const points = values.map((item, index) => {
     const angle = (Math.PI * 2 * index) / values.length - Math.PI / 2;
     const distance = radius * (item.value / 100);
@@ -171,17 +171,17 @@ function RadarChart({ values }: { values: Array<{ label: string; value: number }
   });
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: '100%', maxWidth: 390, overflow: 'visible' }}>
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: '100%', maxWidth: 340, overflow: 'visible' }}>
       {[0.33, 0.66, 1].map((scale) => (
         <circle key={scale} cx={center} cy={center} r={radius * scale} fill="none" stroke="rgba(23,32,51,0.12)" />
       ))}
       {points.map((point) => (
         <line key={point.label} x1={center} y1={center} x2={point.labelX} y2={point.labelY} stroke="rgba(23,32,51,0.1)" />
       ))}
-      <polygon points={points.map((point) => `${point.x},${point.y}`).join(' ')} fill="rgba(42,111,219,0.2)" stroke="#2a6fdb" strokeWidth="3" />
+      <polygon points={points.map((point) => `${point.x},${point.y}`).join(' ')} fill="rgba(42,171,238,0.2)" stroke="#2AABEE" strokeWidth="3" />
       {points.map((point) => (
         <g key={point.label}>
-          <circle cx={point.x} cy={point.y} r="4" fill="#2a6fdb" />
+          <circle cx={point.x} cy={point.y} r="4" fill="#2AABEE" />
           <text
             x={point.labelX}
             y={point.labelY}
@@ -196,6 +196,64 @@ function RadarChart({ values }: { values: Array<{ label: string; value: number }
                 {line}
               </tspan>
             ))}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function GradeLineChart({ rows }: { rows: Array<{ label: string; value: number }> }) {
+  const width = 520;
+  const height = 190;
+  const padding = { top: 16, right: 18, bottom: 34, left: 34 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const points = rows.map((row, index) => {
+    const x = padding.left + (rows.length <= 1 ? plotWidth / 2 : (plotWidth * index) / (rows.length - 1));
+    const y = padding.top + plotHeight - ((row.value - 1) / 4) * plotHeight;
+    return { ...row, x, y };
+  });
+  const areaPoints =
+    points.length > 0
+      ? `${padding.left},${padding.top + plotHeight} ${points.map((point) => `${point.x},${point.y}`).join(' ')} ${padding.left + plotWidth},${padding.top + plotHeight}`
+      : '';
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 174, display: 'block' }}>
+      <defs>
+        <linearGradient id="portfolioGradeFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="rgba(42,171,238,0.28)" />
+          <stop offset="100%" stopColor="rgba(42,171,238,0.04)" />
+        </linearGradient>
+      </defs>
+      {[1, 2, 3, 4, 5].map((tick) => {
+        const y = padding.top + plotHeight - ((tick - 1) / 4) * plotHeight;
+        return (
+          <g key={tick}>
+            <line x1={padding.left} x2={padding.left + plotWidth} y1={y} y2={y} stroke="rgba(23,32,51,0.09)" />
+            <text x={padding.left - 12} y={y + 4} textAnchor="end" fontSize="12" fill="#687486">
+              {tick}
+            </text>
+          </g>
+        );
+      })}
+      {areaPoints && <polygon points={areaPoints} fill="url(#portfolioGradeFill)" />}
+      {points.length > 0 && (
+        <polyline
+          points={points.map((point) => `${point.x},${point.y}`).join(' ')}
+          fill="none"
+          stroke="#2AABEE"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+      {points.map((point, index) => (
+        <g key={`${point.label}-${index}`}>
+          <circle cx={point.x} cy={point.y} r="4.5" fill="#2AABEE" />
+          <text x={point.x} y={height - 10} textAnchor="middle" fontSize="11" fill="#687486">
+            {point.label}
           </text>
         </g>
       ))}
@@ -495,6 +553,12 @@ export default function PortfolioPage() {
       delta: deltaText(currentStats.homeworkPercent, previousStats.homeworkPercent, '%'),
     },
   ];
+  const selectedMonthRange = monthRange(selectedMonth);
+  const firstMonthDayOffset = (selectedMonthRange.start.getDay() + 6) % 7;
+  const calendarDays = [
+    ...Array.from({ length: firstMonthDayOffset }, () => null),
+    ...Array.from({ length: selectedMonthRange.end.getDate() }, (_, index) => index + 1),
+  ];
 
   return (
     <div>
@@ -558,13 +622,230 @@ export default function PortfolioPage() {
         `}
       </style>
       <section
+        className="toolbar-panel mentor-panel"
         style={{
-          ...panelStyle,
-          padding: isMobile ? 14 : 16,
-          marginBottom: 16,
+          gridTemplateColumns: isTablet ? '1fr 1fr' : 'repeat(4, minmax(0, 1fr))',
+          gap: 14,
+          padding: '14px 18px',
+          marginBottom: 10,
+          borderRadius: 18,
         }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : 'repeat(4, minmax(170px, 1fr))', gap: 14, alignItems: 'end' }}>
+        <label style={{ display: 'grid', gap: 5 }}>
+          <span style={{ ...mutedTextStyle, fontSize: 13, fontWeight: 700 }}>Ученик</span>
+          <select value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
+            {activeStudents.map((student) => (
+              <option key={student.id} value={String(student.id)}>{student.full_name}</option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: 'grid', gap: 5 }}>
+          <span style={{ ...mutedTextStyle, fontSize: 13, fontWeight: 700 }}>Предмет</span>
+          <select value={selectedSubjectFilter} onChange={(event) => setSelectedSubjectFilter(event.target.value)}>
+            <option value="all">Все предметы</option>
+            {studentRelations.map((relation) => {
+              const subject = subjectMap.get(relation.subject_id);
+              return <option key={relation.id} value={String(relation.subject_id)}>{relation.subject_name ?? subject?.name ?? `Предмет #${relation.subject_id}`}</option>;
+            })}
+          </select>
+        </label>
+
+        <label style={{ display: 'grid', gap: 5 }}>
+          <span style={{ ...mutedTextStyle, fontSize: 13, fontWeight: 700 }}>Цель</span>
+          <select value={goalType} onChange={(event) => setGoalType(event.target.value)}>
+            <option value="Общее обучение">Общее обучение</option>
+            <option value="ОГЭ">ОГЭ</option>
+            <option value="ЕГЭ">ЕГЭ</option>
+            <option value="Повышение успеваемости">Повышение успеваемости</option>
+          </select>
+        </label>
+
+        <label style={{ display: 'grid', gap: 5 }}>
+          <span style={{ ...mutedTextStyle, fontSize: 13, fontWeight: 700 }}>Месяц</span>
+          <input type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
+        </label>
+      </section>
+
+      <section className="metric-grid" style={{ gridTemplateColumns: isTablet ? undefined : 'repeat(5, minmax(0, 1fr))', gap: 10, marginBottom: 10 }}>
+        {[
+          ['Общий прогресс', formatPercent(currentStats.overallProgress), '#2AABEE', '◔'],
+          ['Оценка занятий', formatAverage(currentStats.averageLessonGrade), '#e5a11f', '★'],
+          ['Оценка ДЗ', formatAverage(currentStats.averageAssignmentGrade), '#2AABEE', '▣'],
+          ['Выполнено ДЗ', `${currentStats.completedAssignments.length}/${currentStats.assignments.length}`, '#4CAF50', '☑'],
+          ['Посещаемость', formatPercent(currentStats.attendancePercent), '#9C27B0', '●'],
+        ].map(([label, value, color, icon]) => (
+          <article key={label} className="metric-card" style={{ minHeight: 68, padding: '12px 14px', borderRadius: 18, background: 'rgba(255,255,255,0.9)', borderColor: `${color}18` }}>
+            <span className="metric-icon" style={{ width: 38, height: 38, borderRadius: 14, background: `${color}14`, color, fontSize: 19 }}>{icon}</span>
+            <div>
+              <div className="metric-label" style={{ fontSize: 13 }}>{label}</div>
+              <div className="metric-value" style={{ fontSize: 26, lineHeight: 1.05 }}>{value}</div>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isTablet ? '1fr' : '1.34fr 0.86fr 1.1fr',
+          gap: 10,
+          marginBottom: 10,
+          alignItems: 'stretch',
+        }}
+      >
+        <article style={{ ...panelStyle, padding: 14, borderRadius: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', marginBottom: 8 }}>
+            <div>
+              <h3 style={{ fontSize: 19, marginBottom: 2 }}>Было / стало</h3>
+              <div style={{ ...mutedTextStyle, fontSize: 12 }}>
+                Сравнение {formatMonthLabel(previousMonthValue)} и {formatMonthLabel(selectedMonth)}.
+              </div>
+            </div>
+            <button type="button" title="Сформировать отчёт для опекуна" onClick={() => setReportOpen(true)} style={{ minWidth: 52, height: 36, padding: '0 14px', borderRadius: 999, background: '#2AABEE', boxShadow: 'none' }}>
+              PDF
+            </button>
+          </div>
+          <div style={{ border: '1px solid rgba(24,33,47,0.08)', borderRadius: 16, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.9fr 0.8fr 1fr', gap: 8, padding: '8px 12px', color: '#687486', fontSize: 12, fontWeight: 800 }}>
+              <span>Показатель</span>
+              <span>{formatMonthLabel(previousMonthValue).replace(' г.', '')}</span>
+              <span>{formatMonthLabel(selectedMonth).replace(' г.', '')}</span>
+              <span>Изменение</span>
+            </div>
+            {comparisonRows.map((row) => (
+              <div key={row.label} style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.9fr 0.8fr 1fr', gap: 8, alignItems: 'center', padding: '8px 12px', borderTop: '1px solid rgba(24,33,47,0.08)', background: 'rgba(255,255,255,0.72)', fontSize: 13 }}>
+                <strong style={{ color: '#1f2a3b' }}>{row.label}</strong>
+                <span style={{ color: '#687486' }}>{row.before}</span>
+                <strong style={{ color: '#1f2a3b' }}>{row.after}</strong>
+                <strong style={{ color: row.delta.startsWith('+') ? '#4CAF50' : '#435066', fontSize: 12 }}>{row.delta}</strong>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article style={{ ...panelStyle, padding: 14, borderRadius: 18, display: 'grid', justifyItems: 'center', gap: 4 }}>
+          <h3 style={{ fontSize: 19, marginBottom: 0, justifySelf: 'start' }}>Роза компетенций</h3>
+          <div style={{ width: '100%', maxWidth: 270 }}>
+            <RadarChart values={competencyRows} />
+          </div>
+          <div style={{ ...mutedTextStyle, fontSize: 12, textAlign: 'center' }}>
+            Компетенции рассчитаны по текущим учебным данным.
+          </div>
+        </article>
+
+        <article style={{ ...panelStyle, padding: 14, borderRadius: 18 }}>
+          <h3 style={{ fontSize: 19, marginBottom: 8 }}>Динамика оценок</h3>
+          {gradeRows.length === 0 ? (
+            <p style={{ ...mutedTextStyle, marginBottom: 0 }}>За выбранный месяц пока нет оценок за занятия.</p>
+          ) : (
+            <GradeLineChart rows={gradeRows} />
+          )}
+        </article>
+      </section>
+
+      <section
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isTablet ? '1fr' : '1.34fr 0.62fr 1.34fr',
+          gap: 10,
+          alignItems: 'stretch',
+        }}
+      >
+        <article style={{ ...panelStyle, padding: 14, borderRadius: 18 }}>
+          <h3 style={{ fontSize: 19, marginBottom: 10 }}>Посещаемость</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
+            {[
+              ['Проведено', currentStats.conductedLessons.length, '#4CAF50'],
+              ['Запланировано', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'scheduled').length, '#2AABEE'],
+              ['Отменено', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'cancelled').length, '#F44336'],
+            ].map(([label, value, color]) => (
+              <div key={label} style={{ padding: '8px 10px', borderRadius: 12, background: `${color}10` }}>
+                <strong style={{ color: String(color), fontSize: 20 }}>{String(value)}</strong>
+                <div style={{ ...mutedTextStyle, fontSize: 12 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, color: '#687486', fontSize: 12, fontWeight: 800, marginBottom: 6, textAlign: 'center' }}>
+            {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => <span key={day}>{day}</span>)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+            {calendarDays.map((day, index) => {
+              if (day === null) return <span key={`empty-${index}`} />;
+              const date = `${selectedMonth}-${String(day).padStart(2, '0')}`;
+              const dayLessons = monthLessons.filter((lesson) => lessonDate(lesson) === date);
+              const conducted = dayLessons.some((lesson) => lesson.conduct_status === 'conducted');
+              const cancelled = dayLessons.some((lesson) => lesson.conduct_status === 'cancelled');
+              const scheduled = dayLessons.some((lesson) => lesson.conduct_status === 'scheduled');
+              const color = conducted ? '#4CAF50' : cancelled ? '#F44336' : scheduled ? '#2AABEE' : 'rgba(23,32,51,0.06)';
+
+              return (
+                <span key={date} title={`${day}: ${dayLessons.length} занятий`} style={{ height: 30, borderRadius: 9, background: color, color: conducted || cancelled || scheduled ? '#fff' : '#435066', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 900 }}>
+                  {day}
+                </span>
+              );
+            })}
+          </div>
+        </article>
+
+        <article style={{ ...panelStyle, padding: 14, borderRadius: 18, display: 'grid', alignContent: 'start', gap: 10 }}>
+          <h3 style={{ fontSize: 19, marginBottom: 0 }}>Освоение тем</h3>
+          <p style={{ ...mutedTextStyle, fontSize: 13, lineHeight: 1.45, marginBottom: 0 }}>
+            Показываются только темы, которые реально использовались в занятиях или ДЗ за выбранный месяц.
+          </p>
+          {topicProgressRows.length === 0 ? (
+            <div style={{ display: 'grid', justifyItems: 'center', gap: 8, marginTop: 8, color: '#687486', textAlign: 'center' }}>
+              <span style={{ width: 58, height: 58, borderRadius: '50%', background: 'rgba(23,32,51,0.06)', display: 'grid', placeItems: 'center', fontSize: 28 }}>▤</span>
+              <p style={{ margin: 0, fontSize: 13 }}>За выбранный месяц пока нет тем с данными.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 8, maxHeight: 192, overflow: 'auto', paddingRight: 4 }}>
+              {topicProgressRows.map((row) => (
+                <div key={row.topic.id} style={{ display: 'grid', gap: 5, padding: 8, borderRadius: 12, background: 'rgba(23,32,51,0.035)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
+                    <strong>{row.topic.title}</strong>
+                    <strong style={{ color: '#2AABEE' }}>{formatPercent(row.progressPercent)}</strong>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 999, background: 'rgba(23,32,51,0.08)', overflow: 'hidden' }}>
+                    <div style={{ width: `${row.progressPercent}%`, height: '100%', borderRadius: 999, background: '#4CAF50' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article style={{ ...panelStyle, padding: 14, borderRadius: 18, display: 'grid', gap: 10 }}>
+          {[
+            { title: 'Сильные стороны', items: strengths, accent: '#4CAF50', icon: '✓' },
+            { title: 'Зоны роста', items: weaknesses, accent: '#F44336', icon: '↗' },
+            { title: 'Следующие шаги', items: nextSteps, accent: '#FF9800', icon: '◎' },
+          ].map((section) => (
+            <div key={section.title} style={{ display: 'grid', gridTemplateColumns: '30px 1fr', gap: 10, paddingBottom: 8, borderBottom: section.title === 'Следующие шаги' ? 'none' : '1px solid rgba(24,33,47,0.08)' }}>
+              <span style={{ width: 28, height: 28, borderRadius: '50%', background: `${section.accent}16`, color: section.accent, display: 'grid', placeItems: 'center', fontWeight: 900 }}>{section.icon}</span>
+              <div>
+                <h3 style={{ color: section.accent, fontSize: 17, marginBottom: 6 }}>{section.title}</h3>
+                <div style={{ display: 'grid', gap: 5 }}>
+                  {section.items.map((item) => (
+                    <div key={item} style={{ color: '#435066', lineHeight: 1.35, fontSize: 13 }}>• {item}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </article>
+      </section>
+
+      {false && (
+        <>
+      <h1 className="page-heading">Портфолио</h1>
+      <section
+        className="toolbar-panel mentor-panel"
+        style={{
+          gridTemplateColumns: isTablet ? '1fr 1fr' : '1.2fr 1fr 1fr 0.9fr auto',
+          marginBottom: 12,
+        }}
+      >
           <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ ...mutedTextStyle, fontSize: 14 }}>Ученик</span>
             <select value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
@@ -599,52 +880,54 @@ export default function PortfolioPage() {
             <span style={{ ...mutedTextStyle, fontSize: 14 }}>Месяц</span>
             <input type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
           </label>
-        </div>
+          <button type="button" title="Сформировать отчёт для опекуна" onClick={() => setReportOpen(true)} style={{ alignSelf: 'end', minWidth: 52, height: 44, padding: '0 16px', borderRadius: 14, background: '#2AABEE', boxShadow: 'none' }}>
+            PDF
+          </button>
       </section>
 
-      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : 'repeat(5, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
+      <section className="metric-grid" style={{ gridTemplateColumns: isTablet ? undefined : 'repeat(5, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
         {[
-          ['Общий прогресс', formatPercent(currentStats.overallProgress)],
-          ['Оценка занятий', formatAverage(currentStats.averageLessonGrade)],
-          ['Оценка ДЗ', formatAverage(currentStats.averageAssignmentGrade)],
-          ['Выполнено ДЗ', `${currentStats.completedAssignments.length}/${currentStats.assignments.length}`],
-          ['Посещаемость', formatPercent(currentStats.attendancePercent)],
-        ].map(([label, value]) => (
-          <article key={label} style={{ ...panelStyle, padding: 16 }}>
-            <div style={{ ...mutedTextStyle, marginBottom: 8 }}>{label}</div>
-            <div style={{ color: '#1f2a3b', fontSize: 28, fontWeight: 900 }}>{value}</div>
+          ['Общий прогресс', formatPercent(currentStats.overallProgress), '#2AABEE', '↗'],
+          ['Оценка занятий', formatAverage(currentStats.averageLessonGrade), '#4CAF50', '★'],
+          ['Оценка ДЗ', formatAverage(currentStats.averageAssignmentGrade), '#2AABEE', '✓'],
+          ['Выполнено ДЗ', `${currentStats.completedAssignments.length}/${currentStats.assignments.length}`, '#9C27B0', '▣'],
+          ['Посещаемость', formatPercent(currentStats.attendancePercent), '#2AABEE', '●'],
+        ].map(([label, value, color, icon]) => (
+          <article key={label} className="metric-card" style={{ minHeight: 82, padding: '14px 16px', background: `linear-gradient(135deg, ${color}10, rgba(255,255,255,0.92))`, borderColor: `${color}24` }}>
+            <span className="metric-icon" style={{ width: 44, height: 44, borderRadius: 16, background: `${color}14`, color }}>{icon}</span>
+            <div>
+              <div className="metric-label">{label}</div>
+              <div className="metric-value">{value}</div>
+            </div>
           </article>
         ))}
       </section>
 
-      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '1fr 0.9fr', gap: 16, marginBottom: 16 }}>
+      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '1fr 0.92fr', gap: 12, marginBottom: 12 }}>
         <article style={panelStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
             <div>
-              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Было / стало</h3>
+              <h3 style={{ fontSize: 19, marginBottom: 4 }}>Было / стало</h3>
               <div style={mutedTextStyle}>
                 Сравнение {formatMonthLabel(previousMonthValue)} и {formatMonthLabel(selectedMonth)}.
               </div>
             </div>
-            <button type="button" title="Сформировать отчёт" onClick={() => setReportOpen(true)} style={{ minWidth: 52, height: 42, padding: '0 14px', borderRadius: 999, background: '#d96f32', boxShadow: 'none' }}>
-              PDF
-            </button>
           </div>
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'grid', gap: 8 }}>
             {comparisonRows.map((row) => (
-              <div key={row.label} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 100px 100px 130px', gap: 10, alignItems: 'center', padding: 12, borderRadius: 16, background: 'rgba(23,32,51,0.03)', border: '1px solid rgba(24,33,47,0.06)' }}>
+              <div key={row.label} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 88px 88px 120px', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 14, background: 'rgba(23,32,51,0.03)', border: '1px solid rgba(24,33,47,0.06)' }}>
                 <strong style={{ color: '#1f2a3b' }}>{row.label}</strong>
                 <span style={mutedTextStyle}>{row.before}</span>
                 <span style={{ color: '#1f2a3b', fontWeight: 800 }}>{row.after}</span>
-                <span style={{ color: row.delta.startsWith('+') ? '#2f7d63' : '#687486', fontWeight: 800 }}>{row.delta}</span>
+                <span style={{ color: row.delta.startsWith('+') ? '#4CAF50' : '#687486', fontWeight: 800 }}>{row.delta}</span>
               </div>
             ))}
           </div>
         </article>
 
-        <article style={{ ...panelStyle, display: 'grid', placeItems: 'center' }}>
+        <article style={{ ...panelStyle, display: 'grid', placeItems: 'center', padding: 14 }}>
           <div style={{ width: '100%', display: 'grid', justifyItems: 'center', gap: 8 }}>
-            <h3 style={{ fontSize: 20, marginBottom: 0, justifySelf: 'start' }}>Роза компетенций</h3>
+            <h3 style={{ fontSize: 19, marginBottom: 0, justifySelf: 'start' }}>Роза компетенций</h3>
             <RadarChart values={competencyRows} />
             <div style={{ ...mutedTextStyle, textAlign: 'center' }}>
               ДЗ, самостоятельность, скорость и теория считаются по текущим учебным данным.
@@ -653,16 +936,16 @@ export default function PortfolioPage() {
         </article>
       </section>
 
-      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '0.95fr 1.05fr', gap: 16, marginBottom: 16 }}>
+      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '0.95fr 1.05fr', gap: 12, marginBottom: 12 }}>
         <article style={panelStyle}>
-          <h3 style={{ fontSize: 20, marginBottom: 12 }}>Динамика оценок</h3>
+          <h3 style={{ fontSize: 19, marginBottom: 10 }}>Динамика оценок</h3>
           {gradeRows.length === 0 ? (
             <p style={{ ...mutedTextStyle, marginBottom: 0 }}>За выбранный месяц пока нет оценок за занятия.</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gradeRows.length}, minmax(22px, 1fr))`, gap: 8, alignItems: 'end', minHeight: 140 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gradeRows.length}, minmax(22px, 1fr))`, gap: 8, alignItems: 'end', minHeight: 122 }}>
               {gradeRows.map((row, index) => (
                 <div key={`${row.label}-${index}`} title={`${row.label}: ${row.value}`} style={{ display: 'grid', gap: 6 }}>
-                  <div style={{ height: `${Math.max(10, (row.value / 5) * 112)}px`, borderRadius: '12px 12px 6px 6px', background: 'linear-gradient(180deg, #2a6fdb 0%, #74a9ff 100%)' }} />
+                  <div style={{ height: `${Math.max(10, (row.value / 5) * 96)}px`, borderRadius: '12px 12px 6px 6px', background: 'linear-gradient(180deg, #2AABEE 0%, #2AABEE 100%)' }} />
                   <div style={{ color: '#687486', fontSize: 11, textAlign: 'center' }}>{row.label}</div>
                 </div>
               ))}
@@ -671,15 +954,15 @@ export default function PortfolioPage() {
         </article>
 
         <article style={panelStyle}>
-          <h3 style={{ fontSize: 20, marginBottom: 12 }}>Посещаемость</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+          <h3 style={{ fontSize: 19, marginBottom: 10 }}>Посещаемость</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
             {[
-              ['Проведено', currentStats.conductedLessons.length, '#2f7d63'],
-              ['Запланировано', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'scheduled').length, '#2a6fdb'],
-              ['Отменено', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'cancelled').length, '#a63f3b'],
+              ['Проведено', currentStats.conductedLessons.length, '#4CAF50'],
+              ['Запланировано', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'scheduled').length, '#2AABEE'],
+              ['Отменено', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'cancelled').length, '#F44336'],
             ].map(([label, value, color]) => (
-              <div key={label} style={{ padding: 12, borderRadius: 16, background: `${color}12` }}>
-                <div style={{ color: String(color), fontWeight: 900, fontSize: 22 }}>{String(value)}</div>
+              <div key={label} style={{ padding: 10, borderRadius: 14, background: `${color}12` }}>
+                <div style={{ color: String(color), fontWeight: 900, fontSize: 20 }}>{String(value)}</div>
                 <div style={{ ...mutedTextStyle, fontSize: 13 }}>{label}</div>
               </div>
             ))}
@@ -691,7 +974,7 @@ export default function PortfolioPage() {
               const conducted = dayLessons.some((lesson) => lesson.conduct_status === 'conducted');
               const cancelled = dayLessons.some((lesson) => lesson.conduct_status === 'cancelled');
               const scheduled = dayLessons.some((lesson) => lesson.conduct_status === 'scheduled');
-              const color = conducted ? '#2f7d63' : cancelled ? '#a63f3b' : scheduled ? '#2a6fdb' : 'rgba(23,32,51,0.08)';
+              const color = conducted ? '#4CAF50' : cancelled ? '#F44336' : scheduled ? '#2AABEE' : 'rgba(23,32,51,0.08)';
 
               return (
                 <span key={date} title={`${index + 1}: ${dayLessons.length} зан.`} style={{ height: 28, borderRadius: 9, background: color, color: conducted || cancelled || scheduled ? '#fff' : '#687486', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800 }}>
@@ -703,9 +986,9 @@ export default function PortfolioPage() {
         </article>
       </section>
 
-      <section style={{ ...panelStyle, marginBottom: 16 }}>
-        <div style={{ marginBottom: 14 }}>
-          <h3 style={{ fontSize: 20, marginBottom: 6 }}>Освоение тем</h3>
+      <section style={{ ...panelStyle, marginBottom: 12 }}>
+        <div style={{ marginBottom: 12 }}>
+          <h3 style={{ fontSize: 19, marginBottom: 4 }}>Освоение тем</h3>
           <div style={mutedTextStyle}>
             Показываются только темы, которые реально использовались в занятиях или ДЗ за выбранный месяц.
           </div>
@@ -714,18 +997,18 @@ export default function PortfolioPage() {
         {topicProgressRows.length === 0 ? (
           <p style={{ ...mutedTextStyle, marginBottom: 0 }}>За выбранный месяц пока нет тем с данными.</p>
         ) : (
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
             {topicProgressRows.map((row) => (
-              <div key={row.topic.id} style={{ padding: 14, borderRadius: 18, border: '1px solid rgba(24,33,47,0.08)', background: 'rgba(23,32,51,0.03)', display: 'grid', gap: 10 }}>
+              <div key={row.topic.id} style={{ padding: 12, borderRadius: 16, border: '1px solid rgba(24,33,47,0.08)', background: 'rgba(23,32,51,0.03)', display: 'grid', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                   <div>
                     <div style={{ fontWeight: 800, color: '#1f2a3b' }}>{row.topic.title}</div>
                     <div style={{ ...mutedTextStyle, marginTop: 4 }}>{row.topic.description || 'Описание темы не заполнено'}</div>
                   </div>
-                  <strong style={{ color: '#2a6fdb' }}>{formatPercent(row.progressPercent)}</strong>
+                  <strong style={{ color: '#2AABEE' }}>{formatPercent(row.progressPercent)}</strong>
                 </div>
-                <div style={{ height: 10, borderRadius: 999, background: 'rgba(23,32,51,0.08)', overflow: 'hidden' }}>
-                  <div style={{ width: `${row.progressPercent}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #2f7d63 0%, #58a889 100%)' }} />
+                <div style={{ height: 8, borderRadius: 999, background: 'rgba(23,32,51,0.08)', overflow: 'hidden' }}>
+                  <div style={{ width: `${row.progressPercent}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #4CAF50 0%, #4CAF50 100%)' }} />
                 </div>
                 <div style={{ color: '#435066', fontSize: 13 }}>
                   Занятий: {row.lessonCount} • ДЗ: {row.completedAssignments}/{row.assignmentCount} • Средняя: {formatAverage(row.averageGrade)}
@@ -736,22 +1019,25 @@ export default function PortfolioPage() {
         )}
       </section>
 
-      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '1fr 1fr 1fr', gap: 16 }}>
+      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
         {[
-          { title: 'Сильные стороны', items: strengths, accent: '#2f7d63' },
-          { title: 'Зоны роста', items: weaknesses, accent: '#a63f3b' },
-          { title: 'Следующие шаги', items: nextSteps, accent: '#d96f32' },
+          { title: 'Сильные стороны', items: strengths, accent: '#4CAF50' },
+          { title: 'Зоны роста', items: weaknesses, accent: '#F44336' },
+          { title: 'Следующие шаги', items: nextSteps, accent: '#FF9800' },
         ].map((section) => (
           <article key={section.title} style={panelStyle}>
-            <h3 style={{ color: section.accent, fontSize: 20, marginBottom: 12 }}>{section.title}</h3>
-            <div style={{ display: 'grid', gap: 10 }}>
+            <h3 style={{ color: section.accent, fontSize: 19, marginBottom: 10 }}>{section.title}</h3>
+            <div style={{ display: 'grid', gap: 8 }}>
               {section.items.map((item) => (
-                <div key={item} style={{ color: '#435066', lineHeight: 1.45 }}>{item}</div>
+                <div key={item} style={{ color: '#435066', lineHeight: 1.4, fontSize: 14 }}>{item}</div>
               ))}
             </div>
           </article>
         ))}
       </section>
+
+        </>
+      )}
 
       {reportOpen && (
         <div onClick={() => setReportOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.46)', display: 'grid', placeItems: 'center', padding: 12, zIndex: 50 }}>
@@ -762,7 +1048,7 @@ export default function PortfolioPage() {
                 <div style={mutedTextStyle}>{selectedStudent.full_name} • {formatMonthLabel(selectedMonth)} • {goalType}</div>
               </div>
               <div className="portfolio-print-hidden portfolio-pdf-hidden" style={{ display: 'flex', gap: 8, alignItems: 'start' }}>
-                <button type="button" title="Сохранить отчёт в PDF" onClick={handleSaveReportPdf} disabled={pdfSaving} style={{ minWidth: 52, height: 42, padding: '0 14px', borderRadius: 999, background: '#d96f32', boxShadow: 'none', alignSelf: 'start' }}>{pdfSaving ? '...' : 'PDF'}</button>
+                <button type="button" title="Сохранить отчёт в PDF" onClick={handleSaveReportPdf} disabled={pdfSaving} style={{ minWidth: 52, height: 42, padding: '0 14px', borderRadius: 999, background: '#2AABEE', boxShadow: 'none', alignSelf: 'start' }}>{pdfSaving ? '...' : 'PDF'}</button>
                 <button type="button" title="Закрыть" onClick={() => setReportOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#172033', boxShadow: 'none', alignSelf: 'start' }}>×</button>
               </div>
             </div>
@@ -788,7 +1074,7 @@ export default function PortfolioPage() {
                 <textarea value={reportComment} onChange={(event) => setReportComment(event.target.value)} placeholder="Например: ученик стал увереннее решать квадратные уравнения, но стоит закрепить задачи на проценты." rows={3} />
               </label>
               {reportComment && (
-                <div className="portfolio-pdf-only" style={{ ...panelStyle, padding: 14, borderRadius: 18, boxShadow: 'none', background: 'rgba(217,111,50,0.08)' }}>
+                <div className="portfolio-pdf-only" style={{ ...panelStyle, padding: 14, borderRadius: 18, boxShadow: 'none', background: 'rgba(42,171,238,0.08)' }}>
                   <h3 style={{ fontSize: 17, marginBottom: 8 }}>Комментарий</h3>
                   <p style={{ color: '#435066', lineHeight: 1.4, marginBottom: 0 }}>{reportComment}</p>
                 </div>
@@ -812,9 +1098,9 @@ export default function PortfolioPage() {
                   <h3 style={{ fontSize: 17, marginBottom: 8 }}>Календарь посещений</h3>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 10 }}>
                     {[
-                      ['Проведено', currentStats.conductedLessons.length, '#2f7d63'],
-                      ['План', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'scheduled').length, '#2a6fdb'],
-                      ['Отменено', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'cancelled').length, '#a63f3b'],
+                      ['Проведено', currentStats.conductedLessons.length, '#4CAF50'],
+                      ['План', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'scheduled').length, '#2AABEE'],
+                      ['Отменено', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'cancelled').length, '#F44336'],
                     ].map(([label, value, color]) => (
                       <div key={label} style={{ padding: 8, borderRadius: 12, background: `${color}12` }}>
                         <div style={{ color: String(color), fontWeight: 900, fontSize: 18 }}>{String(value)}</div>
@@ -830,11 +1116,11 @@ export default function PortfolioPage() {
                       const cancelled = dayLessons.some((lesson) => lesson.conduct_status === 'cancelled');
                       const scheduled = dayLessons.some((lesson) => lesson.conduct_status === 'scheduled');
                       const color = conducted
-                        ? '#2f7d63'
+                        ? '#4CAF50'
                         : cancelled
-                          ? '#a63f3b'
+                          ? '#F44336'
                           : scheduled
-                            ? '#2a6fdb'
+                            ? '#2AABEE'
                             : 'rgba(23,32,51,0.08)';
 
                       return (
@@ -859,16 +1145,6 @@ export default function PortfolioPage() {
                   </div>
                 </div>
               </div>
-              <label className="portfolio-pdf-hidden" style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-                Комментарий репетитора
-                <textarea value={reportComment} onChange={(event) => setReportComment(event.target.value)} placeholder="Например: ученик стал увереннее решать квадратные уравнения, но стоит закрепить задачи на проценты." rows={3} />
-              </label>
-              {reportComment && (
-                <div className="portfolio-pdf-only" style={{ ...panelStyle, padding: 14, borderRadius: 18, boxShadow: 'none', background: 'rgba(217,111,50,0.08)' }}>
-                  <h3 style={{ fontSize: 17, marginBottom: 8 }}>Комментарий</h3>
-                  <p style={{ color: '#435066', lineHeight: 1.4, marginBottom: 0 }}>{reportComment}</p>
-                </div>
-              )}
             </div>
           </div>
         </div>

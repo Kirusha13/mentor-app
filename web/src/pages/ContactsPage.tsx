@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   addStudentContact,
   createContact,
@@ -51,6 +51,9 @@ export default function ContactsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [contactsByStudent, setContactsByStudent] = useState<Record<number, StudentContact[]>>({});
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<RelationshipType | 'all'>('all');
+  const [studentFilter, setStudentFilter] = useState<string>('all');
+  const [channelFilter, setChannelFilter] = useState<'all' | 'telegram' | 'phone'>('all');
   const [loading, setLoading] = useState(true);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -131,9 +134,6 @@ export default function ContactsPage() {
 
   const filteredRecords = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) {
-      return records;
-    }
 
     return records.filter((record) => {
       const text = `${record.student.full_name} ${record.subject?.name ?? ''} ${
@@ -142,9 +142,17 @@ export default function ContactsPage() {
         record.studentContact.contact.telegram_id ?? ''
       } ${relationshipLabels[record.studentContact.relationship_type]}`.toLowerCase();
 
-      return text.includes(query);
+      const bySearch = !query || text.includes(query);
+      const byRole = roleFilter === 'all' || record.studentContact.relationship_type === roleFilter;
+      const byStudent = studentFilter === 'all' || String(record.student.id) === studentFilter;
+      const byChannel =
+        channelFilter === 'all' ||
+        (channelFilter === 'telegram' && Boolean(record.studentContact.contact.telegram_id)) ||
+        (channelFilter === 'phone' && Boolean(record.studentContact.contact.phone_number));
+
+      return bySearch && byRole && byStudent && byChannel;
     });
-  }, [records, search]);
+  }, [channelFilter, records, roleFilter, search, studentFilter]);
 
   const selectedRecord = useMemo(
     () => records.find((record) => record.studentContact.id === selectedRecordId) ?? null,
@@ -273,146 +281,165 @@ export default function ContactsPage() {
     }
   };
 
+  const getInitials = (name: string) =>
+    name
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join('');
+
+  const parentCount = records.filter((record) => record.studentContact.relationship_type === 'parent').length;
+  const guardianCount = records.filter((record) => record.studentContact.relationship_type === 'guardian').length;
+  const telegramCount = records.filter((record) => Boolean(record.studentContact.contact.telegram_id)).length;
+
   return (
-    <div>
-      <section style={{ ...panelStyle, marginBottom: 16 }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 12,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-          }}
+    <div style={{ display: 'grid', gap: 16 }}>
+      <h1 className="page-heading">Контакты</h1>
+
+      <section className="mentor-panel toolbar-panel" style={{ gridTemplateColumns: 'minmax(280px, 1.25fr) minmax(150px, 0.45fr) minmax(190px, 0.55fr) minmax(170px, 0.5fr) auto' }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Поиск по имени, ученику, телефону или Telegram..."
+        />
+        <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as RelationshipType | 'all')}>
+          <option value="all">Все роли</option>
+          <option value="parent">Родитель</option>
+          <option value="guardian">Опекун</option>
+          <option value="other">Другое</option>
+        </select>
+        <select value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)}>
+          <option value="all">Все ученики</option>
+          {students.map((student) => (
+            <option key={student.id} value={student.id}>
+              {student.full_name}
+            </option>
+          ))}
+        </select>
+        <select value={channelFilter} onChange={(event) => setChannelFilter(event.target.value as 'all' | 'telegram' | 'phone')}>
+          <option value="all">Способ связи: все</option>
+          <option value="telegram">Telegram</option>
+          <option value="phone">Телефон</option>
+        </select>
+        <button
+          type="button"
+          title="Добавить контакт"
+          onClick={() => setCreateModalOpen(true)}
+          className="add-trigger"
         >
-          <div style={{ flex: '1 1 320px' }}>
-            <div style={{ fontSize: 19, fontWeight: 800, color: '#1f2a3b', marginBottom: 6 }}>
-              Список контактов
-            </div>
-            <div style={{ color: '#687486', fontSize: 14 }}>
-              Поиск ищет по имени контактного лица, ученику, предмету, телефону и Telegram ID.
-            </div>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              gap: 10,
-              flexWrap: 'wrap',
-              justifyContent: 'flex-end',
-              width: 'min(100%, 640px)',
-            }}
-          >
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Например: мама, Иван, математика"
-              style={{ flex: '1 1 280px' }}
-            />
-            <button
-              type="button"
-              title="Добавить контакт"
-              onClick={() => setCreateModalOpen(true)}
-              style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center' }}
-            >
-              +
-            </button>
-          </div>
+          +
+        </button>
+      </section>
+
+      <section className="metric-grid">
+        <div className="metric-card">
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>☷</span>
+          <div><div className="metric-value">{records.length} контактов</div><div className="metric-label">Всего в базе</div></div>
+        </div>
+        <div className="metric-card">
+          <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.12)', color: '#4CAF50' }}>○</span>
+          <div><div className="metric-value">{parentCount} родителей</div><div className="metric-label">Мамы и папы учеников</div></div>
+        </div>
+        <div className="metric-card">
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>◇</span>
+          <div><div className="metric-value">{guardianCount} опекунов</div><div className="metric-label">Ответственные лица</div></div>
+        </div>
+        <div className="metric-card">
+          <span className="metric-icon" style={{ background: 'rgba(123,97,200,0.12)', color: '#9C27B0' }}>✉</span>
+          <div><div className="metric-value">{telegramCount} Telegram</div><div className="metric-label">Есть Telegram ID</div></div>
         </div>
       </section>
 
-      <section style={panelStyle}>
+      <section className="mentor-panel" style={{ padding: 16 }}>
         {loading ? (
           <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка...</p>
         ) : filteredRecords.length === 0 ? (
           <p style={{ color: '#687486', marginBottom: 0 }}>Контактные лица не найдены</p>
         ) : (
-          <div
-            style={{
-              display: 'grid',
-              gap: 12,
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            }}
-          >
+          <div style={{ display: 'grid', border: '1px solid rgba(24,33,47,0.08)', borderRadius: 20, overflow: 'hidden' }}>
             {filteredRecords.map((record) => (
-              <button
+              <article
                 key={record.studentContact.id}
-                type="button"
                 onClick={() => {
                   setSelectedRecordId(record.studentContact.id);
                   setDetailsOpen(true);
                 }}
                 style={{
                   display: 'grid',
-                  gap: 10,
-                  padding: 16,
+                  gridTemplateColumns: 'minmax(260px, 1.05fr) minmax(190px, 0.7fr) minmax(180px, 0.6fr) auto',
+                  gap: 16,
+                  alignItems: 'center',
+                  padding: '18px 16px',
                   textAlign: 'left',
-                  borderRadius: 18,
-                  background: 'rgba(23,32,51,0.03)',
+                  background: '#fff',
                   color: '#1f2a3b',
-                  border: '1px solid rgba(24,33,47,0.08)',
-                  boxShadow: 'none',
+                  borderBottom: '1px solid rgba(24,33,47,0.06)',
+                  cursor: 'pointer',
                 }}
               >
-                <div>
-                  <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 6 }}>
-                    {record.studentContact.contact.full_name}
-                  </div>
-                  <div style={{ color: '#687486', fontSize: 14, marginBottom: 4 }}>
-                    {relationshipLabels[record.studentContact.relationship_type]}
-                  </div>
-                  <div style={{ color: '#687486', fontSize: 14 }}>
-                    Ученик: {record.student.full_name}
+                <div style={{ display: 'flex', gap: 14, alignItems: 'center', minWidth: 0 }}>
+                  <span style={{ width: 58, height: 58, borderRadius: 22, background: 'rgba(42,171,238,0.13)', color: '#2AABEE', display: 'inline-grid', placeItems: 'center', fontSize: 17, fontWeight: 900, flex: '0 0 auto' }}>
+                    {getInitials(record.studentContact.contact.full_name) || 'К'}
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 17, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {record.studentContact.contact.full_name}
+                    </div>
                   </div>
                 </div>
-                <div style={{ display: 'grid', gap: 6, color: '#435066', fontSize: 14 }}>
-                  <span>Предмет: {record.subject?.name ?? '—'}</span>
-                  <span>Телефон: {record.studentContact.contact.phone_number || '—'}</span>
+
+                <div style={{ display: 'grid', gap: 7, color: '#435066', fontSize: 14 }}>
+                  <span>☎ {record.studentContact.contact.phone_number || '—'}</span>
                   <span>Telegram ID: {record.studentContact.contact.telegram_id || '—'}</span>
                 </div>
-              </button>
+
+                <div>
+                  <div style={{ color: '#768294', fontSize: 13, marginBottom: 6 }}>Связан с учеником</div>
+                  <div style={{ color: '#1f2a3b', fontWeight: 800 }}>{record.student.full_name}</div>
+                  <div style={{ color: '#687486', fontSize: 13 }}>{record.subject?.name ?? 'Без предмета'}</div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    title="Отвязать контакт"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRemoveContact(record);
+                    }}
+                    className="icon-button ghost-button"
+                    style={{ color: '#F44336' }}
+                  >
+                    🗑
+                  </button>
+                </div>
+              </article>
             ))}
           </div>
         )}
       </section>
 
+      <div className="mentor-panel" style={{ padding: '12px 16px', color: '#687486', fontSize: 13, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <span>Показано {filteredRecords.length} из {records.length} контактов.</span>
+        <span>Контактные данные используются только для учебного взаимодействия.</span>
+      </div>
+
       {createModalOpen && (
-        <div
-          onClick={() => setCreateModalOpen(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.48)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 20,
-            zIndex: 40,
-          }}
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: 'min(560px, 100%)',
-              background: '#fff',
-              borderRadius: 24,
-              border: '1px solid rgba(24,33,47,0.08)',
-              boxShadow: '0 30px 80px rgba(15,23,42,0.18)',
-              padding: 24,
-              display: 'grid',
-              gap: 12,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+        <div onClick={() => setCreateModalOpen(false)} className="modal-overlay">
+          <div onClick={(event) => event.stopPropagation()} className="app-modal">
+            <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: 22, marginBottom: 6 }}>Добавить контактное лицо</h3>
-                <div style={{ color: '#687486', fontSize: 14 }}>
+                <h3 className="modal-title">Добавить контактное лицо</h3>
+                <p className="modal-subtitle">
                   Выбери ученика и создай для него контактное лицо.
-                </div>
+                </p>
               </div>
               <button
                 type="button"
                 title="Закрыть"
                 onClick={() => setCreateModalOpen(false)}
-                style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 22 }}
+                className="modal-close"
               >
                 ×
               </button>
@@ -430,51 +457,59 @@ export default function ContactsPage() {
                 Сначала создай ученика.
               </div>
             ) : (
-              <>
-                <select value={contactStudentId} onChange={(e) => setContactStudentId(e.target.value)}>
-                  {students.map((student) => (
-                    <option key={student.id} value={student.id}>
-                      {student.full_name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={contactRelationship}
-                  onChange={(e) => setContactRelationship(e.target.value as RelationshipType)}
-                >
-                  <option value="parent">Родитель</option>
-                  <option value="guardian">Опекун</option>
-                  <option value="other">Другое</option>
-                </select>
-                <input
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                  placeholder="ФИО контактного лица"
-                />
-                <input
-                  value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
-                  placeholder="Телефон"
-                />
-                <input
-                  value={contactTelegramId}
-                  onChange={(e) => setContactTelegramId(e.target.value)}
-                  placeholder="Telegram ID"
-                  type="number"
-                />
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <button type="button" onClick={handleCreateContact} disabled={creatingContact}>
+              <div className="modal-form-grid">
+                <label className="modal-field">
+                  Ученик
+                  <select value={contactStudentId} onChange={(e) => setContactStudentId(e.target.value)}>
+                    {students.map((student) => (
+                      <option key={student.id} value={student.id}>
+                        {student.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="modal-field">
+                  Тип контакта
+                  <select
+                    value={contactRelationship}
+                    onChange={(e) => setContactRelationship(e.target.value as RelationshipType)}
+                  >
+                    <option value="parent">Родитель</option>
+                    <option value="guardian">Опекун</option>
+                    <option value="other">Другое</option>
+                  </select>
+                </label>
+                <label className="modal-field">
+                  ФИО контактного лица
+                  <input
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    placeholder="ФИО контактного лица"
+                  />
+                </label>
+                <label className="modal-field">
+                  Телефон
+                  <input
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    placeholder="Телефон"
+                  />
+                </label>
+                <label className="modal-field">
+                  Telegram ID
+                  <input
+                    value={contactTelegramId}
+                    onChange={(e) => setContactTelegramId(e.target.value)}
+                    placeholder="Telegram ID"
+                    type="number"
+                  />
+                </label>
+                <div className="modal-actions">
+                  <button type="button" onClick={handleCreateContact} disabled={creatingContact} className="modal-primary">
                     {creatingContact ? 'Сохраняем...' : 'Создать контакт'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setCreateModalOpen(false)}
-                    style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
-                  >
-                    Отмена
-                  </button>
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>
