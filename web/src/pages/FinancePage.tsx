@@ -13,7 +13,7 @@ import { lessonDate } from '../utils/lessonTime';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
-  padding: '20px',
+  padding: '16px',
   borderRadius: '22px',
   border: '1px solid rgba(24,33,47,0.08)',
   boxShadow: 'var(--shadow-card)',
@@ -71,6 +71,18 @@ function formatCurrency(value: number) {
     currency: 'RUB',
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function formatSignedCurrency(value: number) {
+  if (value === 0) return 'Без изменений';
+  const prefix = value > 0 ? '+' : '−';
+  return `${prefix}${formatCurrency(Math.abs(value))}`;
+}
+
+function formatSignedNumber(value: number, unit: string) {
+  if (value === 0) return 'Без изменений';
+  const prefix = value > 0 ? '+' : '−';
+  return `${prefix}${Math.abs(value)} ${unit}`;
 }
 
 function clampPercent(value: number) {
@@ -176,6 +188,12 @@ function formatReadableDate(date: string) {
     day: 'numeric',
     month: 'short',
   }).format(new Date(`${date}T00:00:00`));
+}
+
+function formatWeekdayLabel(date: string) {
+  const value = new Date(`${date}T00:00:00`);
+  const weekday = new Intl.DateTimeFormat('ru-RU', { weekday: 'short' }).format(value);
+  return `${weekday}\n${formatReadableDate(date)}`;
 }
 
 function getDaysSince(date: string) {
@@ -321,13 +339,7 @@ export default function FinancePage() {
   const chartFinancialLessons = chartLessons.filter(isRealFinancialLesson);
   const currentConducted = currentFinancialLessons.filter((lesson) => lesson.conduct_status === 'conducted');
   const forecastConducted = forecastFinancialLessons.filter((lesson) => lesson.conduct_status === 'conducted');
-  const chartConducted = chartFinancialLessons.filter((lesson) => lesson.conduct_status === 'conducted');
-  const chartPaidLessons = chartConducted.filter((lesson) => lesson.payment_status === 'paid');
   const forecastPaidLessons = forecastConducted.filter((lesson) => lesson.payment_status === 'paid');
-  const forecastPaymentPendingLessons = forecastConducted.filter(
-    (lesson) => lesson.payment_status === 'payment_pending'
-  );
-  const forecastUnpaidLessons = forecastConducted.filter((lesson) => lesson.payment_status === 'unpaid');
   const paymentPendingLessons = currentConducted.filter(
     (lesson) => lesson.payment_status === 'payment_pending'
   );
@@ -348,22 +360,66 @@ export default function FinancePage() {
     (sum, lesson) => sum + calculateLessonCostByRate(lesson, lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null),
     0
   );
-  const forecastDebt = forecastUnpaidLessons.reduce(
-    (sum, lesson) => sum + calculateLessonCostByRate(lesson, lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null),
-    0
-  );
-  const forecastPendingConfirmation = forecastPaymentPendingLessons.reduce(
-    (sum, lesson) => sum + calculateLessonCostByRate(lesson, lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null),
-    0
-  );
   const forecastPlannedIncome = forecastFutureScheduledLessons.reduce(
     (sum, lesson) => sum + calculateLessonCostByRate(lesson, lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null),
     0
   );
-  const forecastIncome =
-    forecastPaidIncome + forecastDebt + forecastPendingConfirmation + forecastPlannedIncome;
-  const forecastFactIncome = forecastPaidIncome + forecastPendingConfirmation + forecastDebt;
-  const forecastProgress = forecastIncome > 0 ? clampPercent((forecastFactIncome / forecastIncome) * 100) : 0;
+  const visiblePendingConfirmation = pendingConfirmation;
+  const forecastIncome = forecastPaidIncome + visiblePendingConfirmation + forecastPlannedIncome;
+  const forecastFactIncome = forecastPaidIncome + visiblePendingConfirmation;
+
+  const previousFinanceRange = useMemo(
+    () => getCurrentRange(financePeriod, shiftFinancePeriod(financeAnchorDate, financePeriod, -1)),
+    [financeAnchorDate, financePeriod]
+  );
+  const previousFinancialLessons = useMemo(
+    () =>
+      filterLessonsByRange(lessons, previousFinanceRange.from, previousFinanceRange.to).filter(
+        isRealFinancialLesson
+      ),
+    [lessons, previousFinanceRange.from, previousFinanceRange.to]
+  );
+  const previousConducted = previousFinancialLessons.filter(
+    (lesson) => lesson.conduct_status === 'conducted'
+  );
+  const previousPaidIncome = previousConducted
+    .filter((lesson) => lesson.payment_status === 'paid')
+    .reduce(
+      (sum, lesson) =>
+        sum +
+        calculateLessonCostByRate(
+          lesson,
+          lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null
+        ),
+      0
+    );
+  const previousPendingIncome = previousConducted
+    .filter((lesson) => lesson.payment_status === 'payment_pending')
+    .reduce(
+      (sum, lesson) =>
+        sum +
+        calculateLessonCostByRate(
+          lesson,
+          lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null
+        ),
+      0
+    );
+  const previousPlannedIncome = previousFinancialLessons
+    .filter((lesson) => lesson.conduct_status === 'scheduled')
+    .reduce(
+      (sum, lesson) =>
+        sum +
+        calculateLessonCostByRate(
+          lesson,
+          lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null
+        ),
+      0
+    );
+  const previousExpectedIncome =
+    previousPaidIncome + previousPendingIncome + previousPlannedIncome;
+  const previousScheduledCount = previousFinancialLessons.filter(
+    (lesson) => lesson.conduct_status === 'scheduled'
+  ).length;
 
   const relationOptions = useMemo<RelationOption[]>(() => {
     return tutorStudents
@@ -464,33 +520,74 @@ export default function FinancePage() {
     .sort((a, b) => b.daysSince - a.daysSince);
 
   const dailyIncomeRows = useMemo(() => {
-    const grouped = new Map<string, { label: string; fullLabel: string; value: number; lessons: number }>();
+    const emptyRow = (label: string, fullLabel: string) => ({
+      label,
+      fullLabel,
+      value: 0,
+      paid: 0,
+      pending: 0,
+      expected: 0,
+      lessons: 0,
+    });
+    const amount = (lesson: Lesson) =>
+      calculateLessonCostByRate(
+        lesson,
+        lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null
+      );
+    const grouped = new Map<
+      string,
+      {
+        label: string;
+        fullLabel: string;
+        value: number;
+        paid: number;
+        pending: number;
+        expected: number;
+        lessons: number;
+      }
+    >();
 
     if (chartRange === 'week') {
-      const rows: { key: string; label: string; fullLabel: string; value: number; lessons: number }[] = [];
+      const rows: {
+        key: string;
+        label: string;
+        fullLabel: string;
+        value: number;
+        paid: number;
+        pending: number;
+        expected: number;
+        lessons: number;
+      }[] = [];
       const start = startOfDay(new Date(`${chartDateRange.from}T00:00:00`));
       const daysCount = getDateRangeLength(chartDateRange.from, chartDateRange.to);
 
       for (let index = 0; index < daysCount; index += 1) {
         const date = formatDate(addDays(start, index));
-        const dayLessons = chartPaidLessons.filter((lesson) => lessonDate(lesson) === date);
+        const dayLessons = chartFinancialLessons.filter((lesson) => lessonDate(lesson) === date);
+        const paid = dayLessons
+          .filter((lesson) => lesson.conduct_status === 'conducted' && lesson.payment_status === 'paid')
+          .reduce((sum, lesson) => sum + amount(lesson), 0);
+        const pending = dayLessons
+          .filter(
+            (lesson) =>
+              lesson.conduct_status === 'conducted' && lesson.payment_status === 'payment_pending'
+          )
+          .reduce((sum, lesson) => sum + amount(lesson), 0);
+        const expected = dayLessons
+          .filter((lesson) => lesson.conduct_status === 'scheduled')
+          .reduce((sum, lesson) => sum + amount(lesson), 0);
         rows.push({
           key: date,
-          label: formatReadableDate(date),
+          label: formatWeekdayLabel(date),
           fullLabel: new Intl.DateTimeFormat('ru-RU', {
             day: 'numeric',
             month: 'long',
             year: 'numeric',
           }).format(new Date(`${date}T00:00:00`)),
-          value: dayLessons.reduce(
-            (sum, lesson) =>
-              sum +
-              calculateLessonCostByRate(
-                lesson,
-                lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null
-              ),
-            0
-          ),
+          value: paid + pending + expected,
+          paid,
+          pending,
+          expected,
           lessons: dayLessons.length,
         });
       }
@@ -498,7 +595,7 @@ export default function FinancePage() {
       return rows;
     }
 
-    chartPaidLessons.forEach((lesson) => {
+    chartFinancialLessons.forEach((lesson) => {
       const date = new Date(lesson.starts_at);
       const key =
         chartRange === 'month'
@@ -515,15 +612,23 @@ export default function FinancePage() {
               month: 'long',
               year: 'numeric',
             }).format(date);
-      const current = grouped.get(key) ?? { label, value: 0, lessons: 0, fullLabel };
+      const current = grouped.get(key) ?? emptyRow(label, fullLabel);
+      const lessonAmount = amount(lesson);
+      const paid =
+        lesson.conduct_status === 'conducted' && lesson.payment_status === 'paid'
+          ? lessonAmount
+          : 0;
+      const pending =
+        lesson.conduct_status === 'conducted' && lesson.payment_status === 'payment_pending'
+          ? lessonAmount
+          : 0;
+      const expected = lesson.conduct_status === 'scheduled' ? lessonAmount : 0;
       grouped.set(key, {
         label,
-        value:
-          current.value +
-          calculateLessonCostByRate(
-            lesson,
-            lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null
-          ),
+        value: current.value + paid + pending + expected,
+        paid: current.paid + paid,
+        pending: current.pending + pending,
+        expected: current.expected + expected,
         lessons: current.lessons + 1,
         fullLabel,
       });
@@ -534,9 +639,12 @@ export default function FinancePage() {
       label: row.label,
       fullLabel: row.fullLabel,
       value: row.value,
+      paid: row.paid,
+      pending: row.pending,
+      expected: row.expected,
       lessons: row.lessons,
     }));
-  }, [chartDateRange.from, chartDateRange.to, chartPaidLessons, chartRange]);
+  }, [chartDateRange.from, chartDateRange.to, chartFinancialLessons, chartRange, relationMap]);
 
   const averageWeekRows = useMemo(() => {
     const year = new Date().getFullYear();
@@ -586,10 +694,21 @@ export default function FinancePage() {
 
   const maxDailyIncome = Math.max(...dailyIncomeRows.map((row) => row.value), 1);
   const maxAverageWeekIncome = Math.max(...averageWeekRows.map((row) => row.value), 1);
+  const lastAverageWeek = averageWeekRows[averageWeekRows.length - 1] ?? null;
+  const previousAverageWeek =
+    averageWeekRows.length > 1 ? averageWeekRows[averageWeekRows.length - 2] : null;
+  const averageWeekDelta =
+    lastAverageWeek && previousAverageWeek ? lastAverageWeek.value - previousAverageWeek.value : 0;
+  const scheduledLessonCount = forecastFutureScheduledLessons.length;
+  const paidPercent = forecastIncome > 0 ? clampPercent((forecastPaidIncome / forecastIncome) * 100) : 0;
+  const expectedDelta = forecastIncome - previousExpectedIncome;
+  const paidDelta = forecastPaidIncome - previousPaidIncome;
+  const scheduledDelta = scheduledLessonCount - previousScheduledCount;
+  const periodLabelShort = financePeriod === 'week' ? 'прошлой неделе' : 'прошлому месяцу';
   const forecastParts = [
-    { label: 'Оплачено', value: forecastPaidIncome, color: '#d96f32' },
-    { label: 'На проверке', value: forecastPendingConfirmation, color: '#2a6fdb' },
-    { label: 'В расписании', value: forecastPlannedIncome, color: '#2f7d5a' },
+    { label: 'Оплачено', value: forecastPaidIncome, color: '#4CAF50' },
+    { label: 'На проверке', value: visiblePendingConfirmation, color: '#FF9800' },
+    { label: 'В расписании', value: forecastPlannedIncome, color: '#2AABEE' },
   ];
   const forecastRangeLabel = financePeriod === 'week' ? 'выбранную неделю' : 'выбранный месяц';
   const chartRangeLabel = {
@@ -748,8 +867,9 @@ export default function FinancePage() {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+    <div style={{ display: 'grid', gap: 12 }}>
+      <h1 className="page-heading">Финансы</h1>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         {[
           ['income', 'Доходы'],
           ['subscriptions', 'Абонементы'],
@@ -765,6 +885,7 @@ export default function FinancePage() {
                 background: active ? '#172033' : 'rgba(23,32,51,0.07)',
                 color: active ? '#fff' : '#243041',
                 boxShadow: 'none',
+                borderColor: 'rgba(31,42,59,0.08)',
               }}
             >
               {label}
@@ -776,10 +897,9 @@ export default function FinancePage() {
       {activeTab === 'income' && (
         <>
       <section
+        className="mentor-panel"
         style={{
-          ...panelStyle,
-          padding: '12px 14px',
-          marginBottom: 16,
+          padding: '12px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -787,12 +907,6 @@ export default function FinancePage() {
           flexWrap: 'wrap',
         }}
       >
-        <div>
-          <div style={{ color: '#687486', fontSize: 13 }}>Период финансов</div>
-          <div style={{ color: '#1f2a3b', fontSize: 18, fontWeight: 900 }}>
-            {formatFinancePeriodLabel(dateFrom, dateTo)}
-          </div>
-        </div>
         <div
           style={{
             display: 'flex',
@@ -812,9 +926,10 @@ export default function FinancePage() {
               width: 42,
               height: 42,
               padding: 0,
-              borderRadius: '50%',
-              background: '#172033',
-              color: '#fff',
+              borderRadius: 14,
+              background: '#fff',
+              color: '#172033',
+              border: '1px solid rgba(31,42,59,0.1)',
               boxShadow: 'none',
               fontSize: 24,
               lineHeight: 1,
@@ -836,9 +951,10 @@ export default function FinancePage() {
               width: 42,
               height: 42,
               padding: 0,
-              borderRadius: '50%',
-              background: '#172033',
-              color: '#fff',
+              borderRadius: 14,
+              background: '#fff',
+              color: '#172033',
+              border: '1px solid rgba(31,42,59,0.1)',
               boxShadow: 'none',
               fontSize: 24,
               lineHeight: 1,
@@ -850,6 +966,25 @@ export default function FinancePage() {
           >
             ›
           </button>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 9,
+              minHeight: 42,
+              padding: '0 16px',
+              borderRadius: 14,
+              background: '#fff',
+              border: '1px solid rgba(31,42,59,0.08)',
+              color: '#1f2a3b',
+              fontWeight: 900,
+            }}
+          >
+            <span aria-hidden="true">▣</span>
+            {formatFinancePeriodLabel(dateFrom, dateTo)}
+          </div>
+        </div>
+        <div style={{ width: isMobile ? '100%' : 150 }}>
           <select
             value={financePeriod}
             onChange={(event) => {
@@ -860,7 +995,6 @@ export default function FinancePage() {
               }
             }}
             style={{
-              minWidth: 130,
               height: 42,
               borderRadius: 14,
               border: '1px solid rgba(24,33,47,0.12)',
@@ -877,7 +1011,57 @@ export default function FinancePage() {
         </div>
       </section>
 
-      <section style={{ marginBottom: 16 }}>
+      <section className="metric-grid" style={{ gridTemplateColumns: isTablet ? undefined : 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+        <article className="metric-card" style={{ minHeight: 84, padding: '14px 16px', borderColor: 'rgba(42,171,238,0.16)', background: 'linear-gradient(135deg, rgba(42,171,238,0.08), rgba(255,255,255,0.92))' }}>
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>▣</span>
+          <div>
+            <div className="metric-label">Ожидаемый доход</div>
+            <div className="metric-value">{loading ? '—' : formatCurrency(forecastIncome)}</div>
+            <div style={{ marginTop: 8, color: expectedDelta >= 0 ? '#4CAF50' : '#F44336', fontSize: 13, fontWeight: 800 }}>
+              {formatSignedCurrency(expectedDelta)} к {periodLabelShort}
+            </div>
+          </div>
+        </article>
+        <article className="metric-card" style={{ minHeight: 84, padding: '14px 16px', borderColor: 'rgba(47,125,90,0.16)', background: 'linear-gradient(135deg, rgba(47,125,90,0.08), rgba(255,255,255,0.92))' }}>
+          <span className="metric-icon" style={{ background: 'rgba(47,125,90,0.12)', color: '#4CAF50' }}>✓</span>
+          <div>
+            <div className="metric-label">Оплачено</div>
+            <div className="metric-value">{loading ? '—' : formatCurrency(forecastPaidIncome)}</div>
+            <div style={{ marginTop: 8, color: paidDelta >= 0 ? '#4CAF50' : '#F44336', fontSize: 13, fontWeight: 800 }}>
+              {Math.round(paidPercent)}% · {formatSignedCurrency(paidDelta)}
+            </div>
+          </div>
+        </article>
+        <article className="metric-card" style={{ minHeight: 84, padding: '14px 16px', borderColor: 'rgba(240,138,36,0.18)', background: 'linear-gradient(135deg, rgba(240,138,36,0.1), rgba(255,255,255,0.92))' }}>
+          <span className="metric-icon" style={{ background: 'rgba(255,152,0,0.14)', color: '#FF9800' }}>◷</span>
+          <div>
+            <div className="metric-label">На проверке</div>
+            <div className="metric-value">{loading ? '—' : formatCurrency(visiblePendingConfirmation)}</div>
+            <div style={{ marginTop: 8, color: '#FF9800', fontSize: 13, fontWeight: 800 }}>
+              Ожидает подтверждения
+            </div>
+          </div>
+        </article>
+        <article className="metric-card" style={{ minHeight: 84, padding: '14px 16px', borderColor: 'rgba(42,171,238,0.16)', background: 'linear-gradient(135deg, rgba(42,171,238,0.08), rgba(255,255,255,0.92))' }}>
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>□</span>
+          <div>
+            <div className="metric-label">В расписании</div>
+            <div className="metric-value">{loading ? '—' : formatCurrency(forecastPlannedIncome)}</div>
+            <div style={{ marginTop: 8, color: scheduledDelta >= 0 ? '#2AABEE' : '#F44336', fontSize: 13, fontWeight: 800 }}>
+              {formatSignedNumber(scheduledDelta, 'зан.')} к {periodLabelShort}
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isTablet ? '1fr' : '0.9fr 1.4fr',
+          gap: 12,
+          alignItems: 'stretch',
+        }}
+      >
         <article style={panelStyle}>
           <div
             style={{
@@ -886,13 +1070,13 @@ export default function FinancePage() {
               gap: 12,
               alignItems: 'flex-start',
               flexWrap: 'wrap',
-              marginBottom: 16,
+              marginBottom: 12,
             }}
           >
             <div>
-              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Прогноз дохода</h3>
+              <h3 style={{ fontSize: 19, marginBottom: 4 }}>Прогноз дохода</h3>
               <div style={{ color: '#687486', fontSize: 14 }}>
-                Ожидаемый доход за {forecastRangeLabel} по ставке за час и длительности занятий.
+                Ожидаемый доход за {forecastRangeLabel}
               </div>
             </div>
             <div
@@ -906,7 +1090,7 @@ export default function FinancePage() {
                 <div style={{ color: '#687486', fontSize: 13 }}>
                   {forecastDateRange.from} - {forecastDateRange.to}
                 </div>
-                <div style={{ color: '#1f2a3b', fontSize: 28, fontWeight: 900 }}>
+                <div style={{ color: '#1f2a3b', fontSize: 24, fontWeight: 900 }}>
                   {loading ? '—' : formatCurrency(forecastIncome)}
                 </div>
                 <div style={{ color: '#687486', fontSize: 13 }}>
@@ -918,22 +1102,35 @@ export default function FinancePage() {
 
           <div
             style={{
-              height: 14,
+              height: 12,
               borderRadius: 999,
               background: 'rgba(23,32,51,0.08)',
               overflow: 'hidden',
-              marginBottom: 14,
+              marginBottom: 12,
+              display: 'flex',
+              gap: 0,
             }}
           >
-            <div
-              style={{
-                width: `${forecastProgress}%`,
-                height: '100%',
-                borderRadius: 999,
-                background: 'linear-gradient(90deg, #d96f32 0%, #2f7d5a 100%)',
-                transition: 'width 260ms ease',
-              }}
-            />
+            {forecastParts.map((part) => {
+              const width = forecastIncome > 0 ? clampPercent((part.value / forecastIncome) * 100) : 0;
+              if (width <= 0) return null;
+
+              return (
+                <span
+                  key={part.label}
+                  title={`${part.label}: ${formatCurrency(part.value)}`}
+                  style={{
+                    width: `${width}%`,
+                    height: '100%',
+                    background:
+                      part.label === 'На проверке'
+                        ? 'repeating-linear-gradient(135deg, rgba(255,152,0,0.55) 0 3px, rgba(255,152,0,0.18) 3px 6px)'
+                        : part.color,
+                    transition: 'width 260ms ease',
+                  }}
+                />
+              );
+            })}
           </div>
 
           <div
@@ -947,7 +1144,7 @@ export default function FinancePage() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, minmax(0, 1fr))',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
                 gap: 10,
               }}
             >
@@ -955,8 +1152,8 @@ export default function FinancePage() {
                 <div
                   key={part.label}
                   style={{
-                    padding: 12,
-                    borderRadius: 16,
+                    padding: 10,
+                    borderRadius: 14,
                     background: `${part.color}10`,
                     border: `1px solid ${part.color}22`,
                   }}
@@ -972,11 +1169,11 @@ export default function FinancePage() {
 
           <div
             style={{
-              marginTop: 14,
-              padding: 12,
-              borderRadius: 16,
+              marginTop: 12,
+              padding: '10px 12px',
+              borderRadius: 14,
               background: 'rgba(47,125,90,0.08)',
-              color: '#2f6f51',
+              color: '#4CAF50',
               fontWeight: 700,
               fontSize: 14,
             }}
@@ -985,18 +1182,7 @@ export default function FinancePage() {
             {loading ? '—' : formatCurrency(forecastIncome)}.
           </div>
         </article>
-      </section>
 
-      <section
-        style={{
-          display: 'grid',
-          gridTemplateColumns: isTablet ? '1fr' : '1.15fr 0.85fr',
-          gap: 16,
-          alignItems: 'start',
-          marginBottom: 16,
-        }}
-      >
-        <div style={{ display: 'grid', gap: 16 }}>
         <article style={{ ...panelStyle, position: 'relative', overflow: 'hidden' }}>
           <div
             style={{
@@ -1005,14 +1191,12 @@ export default function FinancePage() {
               gap: 12,
               alignItems: 'flex-start',
               flexWrap: 'wrap',
-              marginBottom: 14,
+              marginBottom: 10,
             }}
           >
             <div>
-              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Динамика дохода</h3>
-              <div style={{ color: '#687486', fontSize: 14 }}>
-                {chartRangeLabel}. Наведи на столбец, чтобы увидеть сумму.
-              </div>
+              <h3 style={{ fontSize: 19, marginBottom: 4 }}>Динамика дохода</h3>
+              <div style={{ color: '#687486', fontSize: 14 }}>{chartRangeLabel}</div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {[
@@ -1032,10 +1216,11 @@ export default function FinancePage() {
                       setSubjectTooltip(null);
                     }}
                     style={{
-                      padding: '8px 12px',
-                      borderRadius: 999,
+                      padding: '8px 13px',
+                      borderRadius: 12,
                       background: active ? '#172033' : 'rgba(23,32,51,0.07)',
                       color: active ? '#fff' : '#243041',
+                      borderColor: 'rgba(31,42,59,0.08)',
                       boxShadow: 'none',
                       fontSize: 13,
                     }}
@@ -1049,11 +1234,11 @@ export default function FinancePage() {
 
           <div style={chartTooltipStyle(Boolean(dailyTooltip))}>
             <div style={{ color: 'rgba(255,255,255,0.68)', fontSize: 12, marginBottom: 4 }}>
-              {dailyTooltip?.title ?? 'Дата'}
+              {dailyTooltip?.title ?? 'Период'}
             </div>
             <div style={{ fontSize: 18, fontWeight: 900 }}>{dailyTooltip?.value ?? formatCurrency(0)}</div>
             <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 12, marginTop: 3 }}>
-              {dailyTooltip?.note ?? 'Наведи на столбец'}
+              {dailyTooltip?.note ?? 'Оплачено, на проверке и ожидается'}
             </div>
           </div>
 
@@ -1061,81 +1246,127 @@ export default function FinancePage() {
             <p style={{ color: '#687486', marginBottom: 0 }}>Ждём данные для графика.</p>
           ) : dailyIncomeRows.every((row) => row.value === 0) ? (
             <p style={{ color: '#687486', marginBottom: 0 }}>
-              В выбранном периоде пока нет оплаченных занятий.
+              В выбранном периоде пока нет финансовых данных.
             </p>
           ) : (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${Math.max(dailyIncomeRows.length, 1)}, minmax(18px, 1fr))`,
-                gap: 8,
-                alignItems: 'end',
-                minHeight: 120,
-                paddingTop: 4,
-              }}
-            >
-              {dailyIncomeRows.map((row) => (
-                <div
-                  key={row.key}
-                  onMouseEnter={() =>
-                    setDailyTooltip({
-                      key: row.key,
-                      title: row.fullLabel,
-                      value: formatCurrency(row.value),
-                      note:
-                        row.lessons > 0
-                          ? `${row.lessons} оплач. зан.`
-                          : 'Оплат в этот день не было',
-                    })
-                  }
-                  onMouseLeave={() => setDailyTooltip(null)}
-                  onFocus={() =>
-                    setDailyTooltip({
-                      key: row.key,
-                      title: row.fullLabel,
-                      value: formatCurrency(row.value),
-                      note:
-                        row.lessons > 0
-                          ? `${row.lessons} оплач. зан.`
-                          : 'Оплат в этот день не было',
-                    })
-                  }
-                  onBlur={() => setDailyTooltip(null)}
-                  tabIndex={0}
-                  style={{ display: 'grid', gap: 8, alignItems: 'end' }}
-                >
-                  <div
-                    style={{
-                      height: `${Math.max(8, (row.value / maxDailyIncome) * 96)}px`,
-                      borderRadius: '12px 12px 6px 6px',
-                      outline:
-                        dailyTooltip?.key === row.key
-                          ? '3px solid rgba(217,111,50,0.22)'
-                          : '1px solid transparent',
-                      transform: dailyTooltip?.key === row.key ? 'translateY(-2px)' : 'translateY(0)',
-                      transition: 'transform 220ms ease, outline-color 220ms ease, background 220ms ease',
-                      background:
-                        row.value > 0
-                          ? 'linear-gradient(180deg, #d96f32 0%, #f0a45f 100%)'
-                          : 'rgba(23,32,51,0.08)',
-                    }}
-                  />
-                  <div
-                    style={{
-                      color: '#687486',
-                      fontSize: 11,
-                      textAlign: 'center',
-                      writingMode: dailyIncomeRows.length > 14 ? 'vertical-rl' : 'horizontal-tb',
-                    }}
-                  >
-                    {row.label}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${Math.max(dailyIncomeRows.length, 1)}, minmax(18px, 1fr))`,
+                  gap: 10,
+                  alignItems: 'end',
+                  minHeight: 150,
+                  paddingTop: 6,
+                }}
+              >
+                {dailyIncomeRows.map((row) => {
+                  const paidHeight = row.value > 0 ? Math.max(0, (row.paid / maxDailyIncome) * 118) : 0;
+                  const pendingHeight =
+                    row.value > 0 ? Math.max(0, (row.pending / maxDailyIncome) * 118) : 0;
+                  const expectedHeight =
+                    row.value > 0 ? Math.max(0, (row.expected / maxDailyIncome) * 118) : 0;
+
+                  return (
+                    <div
+                      key={row.key}
+                      onMouseEnter={() =>
+                        setDailyTooltip({
+                          key: row.key,
+                          title: row.fullLabel,
+                          value: formatCurrency(row.value),
+                          note: `Оплачено ${formatCurrency(row.paid)} · Проверка ${formatCurrency(row.pending)} · Ожидается ${formatCurrency(row.expected)}`,
+                        })
+                      }
+                      onMouseLeave={() => setDailyTooltip(null)}
+                      onFocus={() =>
+                        setDailyTooltip({
+                          key: row.key,
+                          title: row.fullLabel,
+                          value: formatCurrency(row.value),
+                          note: `Оплачено ${formatCurrency(row.paid)} · Проверка ${formatCurrency(row.pending)} · Ожидается ${formatCurrency(row.expected)}`,
+                        })
+                      }
+                      onBlur={() => setDailyTooltip(null)}
+                      tabIndex={0}
+                      style={{ display: 'grid', gap: 8, alignItems: 'end' }}
+                    >
+                      <div style={{ height: 128, display: 'flex', alignItems: 'end', justifyContent: 'center' }}>
+                        <div
+                          style={{
+                            width: 'min(48px, 78%)',
+                            minHeight: row.value > 0 ? 8 : 4,
+                            height: Math.max(6, paidHeight + pendingHeight + expectedHeight),
+                            display: 'flex',
+                            flexDirection: 'column-reverse',
+                            overflow: 'hidden',
+                            borderRadius: '10px 10px 5px 5px',
+                            background: row.value > 0 ? '#dbeafe' : 'rgba(23,32,51,0.08)',
+                            outline:
+                              dailyTooltip?.key === row.key
+                                ? '3px solid rgba(42,171,238,0.18)'
+                                : '1px solid rgba(42,171,238,0.12)',
+                            transform: dailyTooltip?.key === row.key ? 'translateY(-2px)' : 'translateY(0)',
+                            transition: 'transform 180ms ease, outline-color 180ms ease',
+                          }}
+                        >
+                          {row.paid > 0 && (
+                            <span style={{ height: paidHeight, background: 'linear-gradient(180deg, #4CAF50, #4CAF50)' }} />
+                          )}
+                          {row.pending > 0 && (
+                            <span
+                              style={{
+                                height: pendingHeight,
+                                background:
+                                  'repeating-linear-gradient(135deg, rgba(255,152,0,0.62) 0 3px, rgba(255,152,0,0.22) 3px 6px)',
+                              }}
+                            />
+                          )}
+                          {row.expected > 0 && (
+                            <span style={{ height: expectedHeight, background: 'rgba(42,171,238,0.22)' }} />
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ color: '#687486', fontSize: 11, textAlign: 'center', lineHeight: 1.25 }}>
+                        {row.label.split('\n').map((line) => (
+                          <span key={line} style={{ display: 'block' }}>
+                            {line}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 18,
+                  justifyContent: 'center',
+                  flexWrap: 'wrap',
+                  color: '#536177',
+                  fontSize: 13,
+                  marginTop: 8,
+                }}
+              >
+                <span><b style={{ color: '#4CAF50' }}>■</b> Оплачено</span>
+                <span><b style={{ color: '#FF9800' }}>▨</b> На проверке</span>
+                <span><b style={{ color: '#2AABEE' }}>■</b> Ожидается</span>
+              </div>
+            </>
           )}
         </article>
+      </section>
 
+      <section
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isTablet ? '1fr' : '1fr 1fr',
+          gap: 12,
+          alignItems: 'stretch',
+          marginBottom: 12,
+        }}
+      >
         <article style={panelStyle}>
           <div
             style={{
@@ -1144,11 +1375,11 @@ export default function FinancePage() {
               gap: 12,
               alignItems: 'center',
               flexWrap: 'wrap',
-              marginBottom: 14,
+              marginBottom: 10,
             }}
           >
             <div>
-              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Оплаты под контролем</h3>
+              <h3 style={{ fontSize: 19, marginBottom: 4 }}>Оплаты под контролем</h3>
               <div style={{ color: '#687486', fontSize: 14 }}>
                 Проведённые уроки, по которым ещё нет подтверждённой оплаты.
               </div>
@@ -1161,7 +1392,7 @@ export default function FinancePage() {
           {loading ? (
             <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка финансовых записей...</p>
           ) : rangeError ? (
-            <p style={{ color: '#9f3f3c', marginBottom: 0 }}>
+            <p style={{ color: '#F44336', marginBottom: 0 }}>
               Исправь диапазон дат, чтобы увидеть оплаты.
             </p>
           ) : debtRows.length === 0 ? (
@@ -1169,112 +1400,145 @@ export default function FinancePage() {
               За выбранный период неоплаченных и ожидающих подтверждения занятий нет.
             </p>
           ) : (
-            <div style={{ display: 'grid', gap: 10 }}>
-              {debtRows.map((row) => (
+            <div style={{ overflowX: 'auto' }}>
+              <div
+                style={{
+                  minWidth: isMobile ? 640 : 0,
+                  display: 'grid',
+                  border: '1px solid rgba(31,42,59,0.08)',
+                  borderRadius: 16,
+                  overflow: 'hidden',
+                }}
+              >
                 <div
-                  key={row.id}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr auto',
-                    gap: 10,
-                    alignItems: 'center',
-                    padding: 14,
-                    borderRadius: 16,
-                    border: '1px solid rgba(24,33,47,0.08)',
-                    background: 'rgba(23,32,51,0.03)',
+                    gridTemplateColumns: '0.95fr 1fr 0.9fr 0.8fr auto',
+                    gap: 12,
+                    padding: '10px 12px',
+                    background: 'rgba(21,32,51,0.035)',
+                    color: '#687486',
+                    fontSize: 13,
+                    fontWeight: 800,
                   }}
                 >
-                  <div>
-                    <div style={{ fontWeight: 700, color: '#243041', marginBottom: 4 }}>
-                      {row.studentName}
-                    </div>
-                    <div style={{ color: '#687486', fontSize: 14 }}>{row.subjectName}</div>
-                  </div>
-                  <div style={{ color: '#435066', fontSize: 14 }}>{row.lessonDate}</div>
-                  <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
-                    <div style={{ fontWeight: 800, color: '#9f3f3c' }}>
+                  <span>Дата и время</span>
+                  <span>Ученик</span>
+                  <span>Урок</span>
+                  <span>Статус</span>
+                  <span style={{ textAlign: 'right' }}>Сумма</span>
+                </div>
+                {debtRows.map((row) => (
+                  <div
+                    key={row.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '0.95fr 1fr 0.9fr 0.8fr auto',
+                      gap: 12,
+                      alignItems: 'center',
+                      padding: '11px 12px',
+                      borderTop: '1px solid rgba(31,42,59,0.07)',
+                      color: '#243041',
+                      fontSize: 14,
+                    }}
+                  >
+                    <span>{formatReadableDate(row.lessonDate)}</span>
+                    <strong>{row.studentName}</strong>
+                    <span>{row.subjectName}</span>
+                    <span
+                      style={{
+                        width: 'fit-content',
+                        padding: '5px 9px',
+                        borderRadius: 999,
+                        background:
+                          row.paymentStatus === 'payment_pending'
+                            ? 'rgba(240,138,36,0.14)'
+                            : 'rgba(42,171,238,0.1)',
+                        color: row.paymentStatus === 'payment_pending' ? '#FF9800' : '#2AABEE',
+                        fontSize: 12,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {row.status}
+                    </span>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        gap: 8,
+                        whiteSpace: 'nowrap',
+                        fontWeight: 900,
+                      }}
+                    >
                       {formatCurrency(row.cost)}
-                    </div>
-                    <div style={{ color: '#687486', fontSize: 12, marginTop: 3 }}>{row.status}</div>
-                    {(row.paymentStatus === 'payment_pending' || row.paymentStatus === 'unpaid') && (
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: 8,
-                          justifyContent: isMobile ? 'flex-start' : 'flex-end',
-                          flexWrap: 'wrap',
-                          marginTop: 8,
-                        }}
-                      >
-                        {row.paymentStatus === 'unpaid' && (
+                      {row.paymentStatus === 'unpaid' && (
+                        <button
+                          type="button"
+                          title="Отметить оплаченным"
+                          onClick={() => handleMarkLessonPaid(row.id)}
+                          disabled={processingPaymentId === row.id}
+                          style={{
+                            minWidth: 30,
+                            width: 30,
+                            height: 30,
+                            padding: 0,
+                            borderRadius: 10,
+                            background: '#4CAF50',
+                            boxShadow: 'none',
+                            fontSize: 14,
+                          }}
+                        >
+                          ₽
+                        </button>
+                      )}
+                      {row.paymentStatus === 'payment_pending' && (
+                        <>
                           <button
                             type="button"
-                            title="Отметить оплаченным"
-                            onClick={() => handleMarkLessonPaid(row.id)}
+                            title="Подтвердить оплату"
+                            onClick={() => handlePaymentDecision(row.id, true)}
                             disabled={processingPaymentId === row.id}
                             style={{
-                              minWidth: 34,
-                              width: 34,
-                              height: 34,
+                              minWidth: 30,
+                              width: 30,
+                              height: 30,
                               padding: 0,
-                              borderRadius: 999,
-                              background: '#2f7d5a',
+                              borderRadius: 10,
+                              background: '#4CAF50',
                               boxShadow: 'none',
-                              fontSize: 15,
+                              fontSize: 14,
                             }}
                           >
-                            ₽
+                            ✓
                           </button>
-                        )}
-                        {row.paymentStatus === 'payment_pending' && (
-                          <>
-                            <button
-                              type="button"
-                              title="Подтвердить оплату"
-                              onClick={() => handlePaymentDecision(row.id, true)}
-                              disabled={processingPaymentId === row.id}
-                              style={{
-                                minWidth: 34,
-                                width: 34,
-                                height: 34,
-                                padding: 0,
-                                borderRadius: 999,
-                                background: '#2f7d5a',
-                                boxShadow: 'none',
-                                fontSize: 15,
-                              }}
-                            >
-                              ✓
-                            </button>
-                            <button
-                              type="button"
-                              title="Отклонить оплату"
-                              onClick={() => handlePaymentDecision(row.id, false)}
-                              disabled={processingPaymentId === row.id}
-                              style={{
-                                minWidth: 34,
-                                width: 34,
-                                height: 34,
-                                padding: 0,
-                                borderRadius: 999,
-                                background: '#a63f3c',
-                                boxShadow: 'none',
-                                fontSize: 15,
-                              }}
-                            >
-                              ×
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
+                          <button
+                            type="button"
+                            title="Отклонить оплату"
+                            onClick={() => handlePaymentDecision(row.id, false)}
+                            disabled={processingPaymentId === row.id}
+                            style={{
+                              minWidth: 30,
+                              width: 30,
+                              height: 30,
+                              padding: 0,
+                              borderRadius: 10,
+                              background: '#F44336',
+                              boxShadow: 'none',
+                              fontSize: 14,
+                            }}
+                          >
+                            ×
+                          </button>
+                        </>
+                      )}
+                    </span>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </article>
-        </div>
 
         <article style={{ ...panelStyle, position: 'relative', overflow: 'hidden' }}>
           <div
@@ -1284,11 +1548,11 @@ export default function FinancePage() {
               gap: 12,
               alignItems: 'flex-start',
               flexWrap: 'wrap',
-              marginBottom: 14,
+              marginBottom: 10,
             }}
           >
             <div>
-              <h3 style={{ fontSize: 20, marginBottom: 6 }}>Средняя неделя по месяцам</h3>
+              <h3 style={{ fontSize: 19, marginBottom: 4 }}>Средняя неделя по месяцам</h3>
               <div style={{ color: '#687486', fontSize: 14 }}>
                 Помогает сравнить месяцы между собой, как в недельной таблице.
               </div>
@@ -1314,73 +1578,137 @@ export default function FinancePage() {
               В этом году пока нет оплаченных занятий для сравнения.
             </p>
           ) : (
-            <div style={{ display: 'grid', gap: 12 }}>
-              {averageWeekRows.map((row) => (
+            <>
+              <div style={{ position: 'relative', height: 184, padding: '6px 4px 0 0' }}>
                 <div
-                  key={row.key}
-                  onMouseEnter={() =>
-                    setSubjectTooltip({
-                      key: row.key,
-                      title: row.fullLabel,
-                      value: formatCurrency(row.value),
-                      note: `Всего за месяц: ${formatCurrency(row.total)}`,
-                    })
-                  }
-                  onMouseLeave={() => setSubjectTooltip(null)}
-                  onFocus={() =>
-                    setSubjectTooltip({
-                      key: row.key,
-                      title: row.fullLabel,
-                      value: formatCurrency(row.value),
-                      note: `Всего за месяц: ${formatCurrency(row.total)}`,
-                    })
-                  }
-                  onBlur={() => setSubjectTooltip(null)}
-                  tabIndex={0}
                   style={{
-                    padding: subjectTooltip?.key === row.key ? '10px' : 0,
-                    margin: subjectTooltip?.key === row.key ? '-10px' : 0,
-                    borderRadius: 16,
-                    background:
-                      subjectTooltip?.key === row.key ? 'rgba(42,111,219,0.06)' : 'transparent',
-                    transition: 'background 220ms ease, padding 220ms ease, margin 220ms ease',
+                    position: 'absolute',
+                    inset: '6px 0 34px 0',
+                    display: 'grid',
+                    gridTemplateRows: 'repeat(4, 1fr)',
                   }}
                 >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      color: '#435066',
-                      fontSize: 14,
-                      marginBottom: 7,
-                    }}
-                  >
-                    <span>{row.label}</span>
-                    <strong style={{ color: '#1f2a3b' }}>
-                      {formatCurrency(row.value)}
-                    </strong>
-                  </div>
-                  <div
-                    style={{
-                      height: 10,
-                      borderRadius: 999,
-                      background: 'rgba(23,32,51,0.08)',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div
+                  {[1, 2, 3, 4].map((line) => (
+                    <span
+                      key={line}
                       style={{
-                        width: `${clampPercent((row.value / maxAverageWeekIncome) * 100)}%`,
-                        height: '100%',
-                        borderRadius: 999,
-                        background: 'linear-gradient(90deg, #2a6fdb 0%, #62a5ff 100%)',
+                        borderTop: '1px solid rgba(31,42,59,0.08)',
+                        color: '#8a95a8',
+                        fontSize: 11,
                       }}
                     />
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+                <svg
+                  viewBox="0 0 560 150"
+                  preserveAspectRatio="none"
+                  style={{ position: 'relative', width: '100%', height: 150, overflow: 'visible' }}
+                >
+                  <defs>
+                    <linearGradient id="finance-average-fill" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="rgba(42,171,238,0.22)" />
+                      <stop offset="100%" stopColor="rgba(42,171,238,0.03)" />
+                    </linearGradient>
+                  </defs>
+                  {(() => {
+                    const width = 560;
+                    const height = 132;
+                    const top = 12;
+                    const left = 18;
+                    const right = 18;
+                    const usableWidth = width - left - right;
+                    const points = averageWeekRows.map((row, index) => {
+                      const x =
+                        averageWeekRows.length === 1
+                          ? width / 2
+                          : left + (index / (averageWeekRows.length - 1)) * usableWidth;
+                      const y = top + height - (row.value / maxAverageWeekIncome) * 104;
+                      return { ...row, x, y };
+                    });
+                    const line = points.map((point) => `${point.x},${point.y}`).join(' ');
+                    const area = `${left},${top + height} ${line} ${width - right},${top + height}`;
+
+                    return (
+                      <>
+                        <polygon points={area} fill="url(#finance-average-fill)" />
+                        <polyline
+                          points={line}
+                          fill="none"
+                          stroke="#2AABEE"
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        {points.map((point) => (
+                          <g key={point.key}>
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r={7}
+                              fill="#2AABEE"
+                              stroke="#fff"
+                              strokeWidth="3"
+                              style={{ cursor: 'pointer' }}
+                              onMouseEnter={() =>
+                                setSubjectTooltip({
+                                  key: point.key,
+                                  title: point.fullLabel,
+                                  value: formatCurrency(point.value),
+                                  note: `Всего за месяц: ${formatCurrency(point.total)}`,
+                                })
+                              }
+                              onMouseLeave={() => setSubjectTooltip(null)}
+                            />
+                            <text
+                              x={point.x}
+                              y={Math.max(12, point.y - 14)}
+                              textAnchor="middle"
+                              fontSize="13"
+                              fontWeight="800"
+                              fill="#1f2a3b"
+                            >
+                              {formatCurrency(point.value)}
+                            </text>
+                          </g>
+                        ))}
+                      </>
+                    );
+                  })()}
+                </svg>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${averageWeekRows.length}, minmax(0, 1fr))`,
+                    gap: 4,
+                    color: '#687486',
+                    fontSize: 12,
+                    textAlign: 'center',
+                    marginTop: 4,
+                  }}
+                >
+                  {averageWeekRows.map((row) => (
+                    <span key={row.key}>{row.label}</span>
+                  ))}
+                </div>
+              </div>
+              {lastAverageWeek && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    padding: '12px 14px',
+                    borderRadius: 16,
+                    background: 'rgba(47,125,90,0.1)',
+                    color: '#4CAF50',
+                    fontSize: 14,
+                    fontWeight: 800,
+                  }}
+                >
+                  ↗ В {lastAverageWeek.fullLabel} средняя неделя{' '}
+                  {averageWeekDelta >= 0 ? 'выше' : 'ниже'} предыдущего месяца на{' '}
+                  {formatCurrency(Math.abs(averageWeekDelta))}.
+                </div>
+              )}
+            </>
           )}
         </article>
       </section>
@@ -1415,7 +1743,7 @@ export default function FinancePage() {
                     type="button"
                     title="Создать абонемент"
                     onClick={handleCreateNewAbonement}
-                    style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#d96f32', boxShadow: 'none', fontSize: 20, display: 'inline-grid', placeItems: 'center' }}
+                    style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#2AABEE', boxShadow: 'none', fontSize: 20, display: 'inline-grid', placeItems: 'center' }}
                   >
                     +
                   </button>
@@ -1453,10 +1781,10 @@ export default function FinancePage() {
                           textAlign: 'left',
                           padding: 14,
                           borderRadius: 18,
-                          background: active ? 'rgba(42,111,219,0.1)' : 'rgba(23,32,51,0.03)',
+                          background: active ? 'rgba(42,171,238,0.1)' : 'rgba(23,32,51,0.03)',
                           color: '#1f2a3b',
                           border: active
-                            ? '1px solid rgba(42,111,219,0.28)'
+                            ? '1px solid rgba(42,171,238,0.28)'
                             : '1px solid rgba(24,33,47,0.08)',
                           boxShadow: 'none',
                         }}
@@ -1489,7 +1817,7 @@ export default function FinancePage() {
                               width: `${progress}%`,
                               height: '100%',
                               borderRadius: 999,
-                              background: 'linear-gradient(90deg, #2a6fdb 0%, #5d93ea 100%)',
+                              background: 'linear-gradient(90deg, #2AABEE 0%, #2AABEE 100%)',
                             }}
                           />
                         </div>
@@ -1655,7 +1983,7 @@ export default function FinancePage() {
                   type="button"
                   title={editingAbonement ? 'Скрыть редактирование' : 'Редактировать абонемент'}
                   onClick={() => setEditingAbonement((current) => !current)}
-                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#d96f32', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#2AABEE', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                 >
                   ✎
                 </button>
@@ -1736,7 +2064,7 @@ export default function FinancePage() {
                 style={{
                   height: '100%',
                   width: `${selectedRelation.total > 0 ? clampPercent((selectedRelation.used / selectedRelation.total) * 100) : 0}%`,
-                  background: 'linear-gradient(90deg, #2a6fdb 0%, #5d93ea 100%)',
+                  background: 'linear-gradient(90deg, #2AABEE 0%, #2AABEE 100%)',
                   borderRadius: 999,
                 }}
               />

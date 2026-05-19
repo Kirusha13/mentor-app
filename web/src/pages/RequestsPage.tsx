@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   approveBooking,
   approveReschedule,
@@ -135,7 +135,7 @@ export default function RequestsPage() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
                   <div>
-                    <div style={{ display: 'inline-flex', padding: '6px 10px', borderRadius: 999, background: 'rgba(217,111,50,0.12)', color: '#d96f32', fontSize: 12, fontWeight: 700, marginBottom: 10 }}>
+                    <div style={{ display: 'inline-flex', padding: '6px 10px', borderRadius: 999, background: 'rgba(42,171,238,0.12)', color: '#2AABEE', fontSize: 12, fontWeight: 700, marginBottom: 10 }}>
                       {requestTitle(lesson)}
                     </div>
                     <div style={{ fontSize: 24, fontWeight: 800, color: '#1f2a3b', marginBottom: 6 }}>
@@ -157,7 +157,7 @@ export default function RequestsPage() {
                       <button
                         onClick={() => handleResolve(lesson, 'reject-booking')}
                         disabled={processingId === lesson.id}
-                        style={{ background: '#a63f3b', boxShadow: 'none' }}
+                        style={{ background: '#F44336', boxShadow: 'none' }}
                       >
                         Отклонить запись
                       </button>
@@ -172,7 +172,7 @@ export default function RequestsPage() {
                       <button
                         onClick={() => handleResolve(lesson, 'reject-reschedule')}
                         disabled={processingId === lesson.id}
-                        style={{ background: '#a63f3b', boxShadow: 'none' }}
+                        style={{ background: '#F44336', boxShadow: 'none' }}
                       >
                         Отклонить перенос
                       </button>
@@ -187,7 +187,7 @@ export default function RequestsPage() {
                       <button
                         onClick={() => handleResolve(lesson, 'reject-payment')}
                         disabled={processingId === lesson.id}
-                        style={{ background: '#a63f3b', boxShadow: 'none' }}
+                        style={{ background: '#F44336', boxShadow: 'none' }}
                       >
                         Отклонить оплату
                       </button>

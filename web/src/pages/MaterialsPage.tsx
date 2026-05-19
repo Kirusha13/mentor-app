@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   createMaterial,
   deleteMaterial,
@@ -19,7 +20,7 @@ import {
 } from '../api/topics';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { getApiErrorMessage } from '../utils/apiError';
-import { getMediaUrl, isImageSource } from '../utils/media';
+import { getMediaUrl } from '../utils/media';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -83,7 +84,35 @@ function parseStudyLevel(value: string): string[] | null {
   return items.length ? items : null;
 }
 
+function getMaterialTitle(material: Material) {
+  if (material.content_text?.trim()) {
+    return material.content_text.trim().split('\n')[0].slice(0, 72);
+  }
+
+  if (material.content_url?.trim()) {
+    try {
+      const url = new URL(material.content_url);
+      const lastPathPart = decodeURIComponent(url.pathname.split('/').filter(Boolean).at(-1) ?? '');
+      return lastPathPart || url.hostname;
+    } catch {
+      return material.content_url;
+    }
+  }
+
+  return 'Материал без названия';
+}
+
+function getMaterialSubtitle(material: Material) {
+  if (material.content_text?.trim()) {
+    const lines = material.content_text.trim().split('\n').filter(Boolean);
+    return lines[1] ?? 'Текстовый материал';
+  }
+
+  return material.content_url ?? 'Без ссылки';
+}
+
 export default function MaterialsPage() {
+  const [searchParams] = useSearchParams();
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 720px)');
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -111,6 +140,8 @@ export default function MaterialsPage() {
   const [materialLevel, setMaterialLevel] = useState<MaterialLevel>('basic');
   const [materialText, setMaterialText] = useState('');
   const [materialUrl, setMaterialUrl] = useState('');
+  const requestedSubjectId = searchParams.get('subject_id');
+  const requestedTopicId = searchParams.get('topic_id');
 
   useEffect(() => {
     const loadData = async () => {
@@ -143,12 +174,16 @@ export default function MaterialsPage() {
       return;
     }
 
-    setSelectedSubjectId((current) =>
-      current && subjects.some((subject) => String(subject.id) === current)
+    setSelectedSubjectId((current) => {
+      if (requestedSubjectId && subjects.some((subject) => String(subject.id) === requestedSubjectId)) {
+        return requestedSubjectId;
+      }
+
+      return current && subjects.some((subject) => String(subject.id) === current)
         ? current
-        : String(subjects[0].id)
-    );
-  }, [subjects]);
+        : String(subjects[0].id);
+    });
+  }, [requestedSubjectId, subjects]);
 
   const normalizedSearch = search.trim().toLowerCase();
 
@@ -203,12 +238,16 @@ export default function MaterialsPage() {
       return;
     }
 
-    setSelectedTopicId((current) =>
-      current && topicRows.some((topic) => String(topic.id) === current)
+    setSelectedTopicId((current) => {
+      if (requestedTopicId && topicRows.some((topic) => String(topic.id) === requestedTopicId)) {
+        return requestedTopicId;
+      }
+
+      return current && topicRows.some((topic) => String(topic.id) === current)
         ? current
-        : String(topicRows[0].id)
-    );
-  }, [topicRows]);
+        : String(topicRows[0].id);
+    });
+  }, [requestedTopicId, topicRows]);
 
   const selectedSubject = useMemo(
     () => subjects.find((subject) => String(subject.id) === selectedSubjectId) ?? null,
@@ -250,6 +289,10 @@ export default function MaterialsPage() {
   const subjectMaterialCount = useMemo(() => {
     const topicIds = new Set(filteredTopics.map((topic) => topic.id));
     return materials.filter((material) => topicIds.has(material.topic_id)).length;
+  }, [filteredTopics, materials]);
+  const subjectLinkCount = useMemo(() => {
+    const topicIds = new Set(filteredTopics.map((topic) => topic.id));
+    return materials.filter((material) => topicIds.has(material.topic_id) && material.format === 'link').length;
   }, [filteredTopics, materials]);
 
   const openCreateRootTopic = () => {
@@ -448,16 +491,10 @@ export default function MaterialsPage() {
   };
 
   return (
-    <div>
-      <section style={{ ...panelStyle, marginBottom: 16 }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: isTablet ? '1fr' : '1.2fr 1fr 1fr 1fr auto',
-            gap: 12,
-            alignItems: 'end',
-          }}
-        >
+    <div style={{ display: 'grid', gap: 16 }}>
+      <h1 className="page-heading">Материалы</h1>
+
+      <section className="mentor-panel toolbar-panel" style={{ gridTemplateColumns: isTablet ? '1fr' : '1.2fr 0.8fr 0.8fr 0.75fr auto' }}>
           <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
             Поиск по темам и материалам
             <input
@@ -507,10 +544,23 @@ export default function MaterialsPage() {
               ))}
             </select>
           </label>
-          <div style={{ display: 'grid', alignContent: 'end', gap: 4, color: '#687486', fontSize: 13 }}>
-            <span>Тем: {subjectTopicCount}</span>
-            <span>Материалов: {subjectMaterialCount}</span>
-          </div>
+          <button type="button" title="Добавить материал" onClick={openCreateMaterial} disabled={!selectedTopic} className="add-trigger" style={{ alignSelf: 'end' }}>
+            +
+          </button>
+      </section>
+
+      <section className="metric-grid">
+        <div className="metric-card">
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>▣</span>
+          <div><div className="metric-value">{subjectTopicCount} тем</div><div className="metric-label">Создано тем</div></div>
+        </div>
+        <div className="metric-card">
+          <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.12)', color: '#4CAF50' }}>▤</span>
+          <div><div className="metric-value">{subjectMaterialCount} материалов</div><div className="metric-label">Всего материалов</div></div>
+        </div>
+        <div className="metric-card">
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>↗</span>
+          <div><div className="metric-value">{subjectLinkCount} ссылок</div><div className="metric-label">Внешних ресурсов</div></div>
         </div>
       </section>
 
@@ -528,7 +578,7 @@ export default function MaterialsPage() {
               <div style={mutedTextStyle}>{selectedSubject?.name ?? 'Предмет не выбран'}</div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button title="Создать тему" type="button" onClick={openCreateRootTopic} style={{ minWidth: 40, width: 40, height: 40, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center', lineHeight: 1 }}>
+            <button title="Создать тему" type="button" onClick={openCreateRootTopic} className="add-trigger" style={{ minWidth: 40, width: 40, height: 40, borderRadius: 999, fontSize: 20 }}>
               +
             </button>
             <button
@@ -565,9 +615,9 @@ export default function MaterialsPage() {
                       padding: '12px 14px',
                       borderRadius: 16,
                       border: active
-                        ? '1px solid rgba(42,111,219,0.28)'
+                        ? '1px solid rgba(42,171,238,0.28)'
                         : '1px solid rgba(24,33,47,0.08)',
-                      background: active ? 'rgba(42,111,219,0.1)' : 'rgba(23,32,51,0.03)',
+                      background: active ? 'rgba(42,171,238,0.1)' : 'rgba(23,32,51,0.03)',
                       boxShadow: 'none',
                       color: '#1f2a3b',
                       marginLeft: topic.depth * 16,
@@ -757,15 +807,6 @@ export default function MaterialsPage() {
                 >
                   ≡
                 </button>
-                <button
-                  type="button"
-                  title="Добавить материал"
-                  onClick={openCreateMaterial}
-                  disabled={!selectedTopic}
-                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, boxShadow: 'none', fontSize: 22, display: 'inline-grid', placeItems: 'center' }}
-                >
-                  +
-                </button>
               </div>
             </div>
 
@@ -778,97 +819,94 @@ export default function MaterialsPage() {
                   : 'У этой темы пока нет материалов.'}
               </div>
             ) : (
-              <div style={{ display: 'grid', gap: 10 }}>
-                {selectedTopicMaterials.map((material) => (
-                  <div
-                    key={material.id}
-                    style={{
-                      padding: 14,
-                      borderRadius: 18,
-                      border: '1px solid rgba(24,33,47,0.08)',
-                      background: 'rgba(23,32,51,0.03)',
-                      display: 'grid',
-                      gap: 10,
-                    }}
-                  >
+              <div style={{ display: 'grid', border: '1px solid rgba(24,33,47,0.08)', borderRadius: 18, overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr auto' : 'minmax(260px, 1fr) 150px 90px 120px 132px', gap: 12, alignItems: 'center', padding: '12px 14px', background: 'rgba(248,250,252,0.9)', color: '#687486', fontSize: 12, fontWeight: 800 }}>
+                  <span>Название материала</span>
+                  {!isMobile && <span>Тип</span>}
+                  {!isMobile && <span>Размер</span>}
+                  {!isMobile && <span>Добавлен</span>}
+                  <span style={{ textAlign: 'right' }}>Действия</span>
+                </div>
+
+                {selectedTopicMaterials.map((material) => {
+                  const formatColor =
+                    material.format === 'pdf'
+                      ? '#D32F2F'
+                      : material.format === 'video'
+                        ? '#1565C0'
+                        : material.format === 'presentation'
+                          ? '#2E7D32'
+                          : material.format === 'image'
+                            ? '#6A1B9A'
+                            : material.format === 'link'
+                              ? '#2AABEE'
+                              : '#607D8B';
+                  const canOpen = Boolean(material.content_url);
+
+                  return (
                     <div
+                      key={material.id}
                       style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        gap: 10,
-                        alignItems: 'flex-start',
-                        flexWrap: 'wrap',
+                        display: 'grid',
+                        gridTemplateColumns: isMobile ? '1fr auto' : 'minmax(260px, 1fr) 150px 90px 120px 132px',
+                        gap: 12,
+                        alignItems: 'center',
+                        padding: '14px',
+                        background: '#fff',
+                        borderTop: '1px solid rgba(24,33,47,0.06)',
                       }}
                     >
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <span
-                          style={{
-                            padding: '6px 10px',
-                            borderRadius: 999,
-                            background: 'rgba(42,111,219,0.1)',
-                            color: '#2a6fdb',
-                            fontWeight: 700,
-                            fontSize: 12,
-                          }}
-                        >
-                          {formatLabels[material.format]}
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', minWidth: 0 }}>
+                        <span style={{ width: 42, height: 42, borderRadius: 12, display: 'inline-grid', placeItems: 'center', flex: '0 0 auto', background: `${formatColor}12`, color: formatColor, fontWeight: 900 }}>
+                          {material.format === 'link' ? '↗' : material.format === 'image' ? '▧' : '▤'}
                         </span>
-                        <span
-                          style={{
-                            padding: '6px 10px',
-                            borderRadius: 999,
-                            background: 'rgba(23,32,51,0.06)',
-                            color: '#324055',
-                            fontSize: 12,
-                          }}
-                        >
-                          {levelLabels[material.level]}
-                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: '#1f2a3b', fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {getMaterialTitle(material)}
+                          </div>
+                          <div style={{ color: '#687486', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {getMaterialSubtitle(material)}
+                          </div>
+                          {isMobile && (
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                              <span style={{ padding: '4px 8px', borderRadius: 999, background: `${formatColor}12`, color: formatColor, fontSize: 12, fontWeight: 800 }}>{formatLabels[material.format]}</span>
+                              <span style={{ padding: '4px 8px', borderRadius: 999, background: 'rgba(23,32,51,0.06)', color: '#324055', fontSize: 12 }}>{levelLabels[material.level]}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button
-                          type="button"
-                          title="Редактировать материал"
-                          onClick={() => openEditMaterial(material)}
-                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
-                        >
+                      {!isMobile && (
+                        <span style={{ justifySelf: 'start', padding: '5px 9px', borderRadius: 999, background: `${formatColor}12`, color: formatColor, fontSize: 12, fontWeight: 800 }}>
+                          {formatLabels[material.format]}
+                        </span>
+                      )}
+                      {!isMobile && <span style={{ color: '#687486', fontSize: 13 }}>—</span>}
+                      {!isMobile && <span style={{ color: '#687486', fontSize: 13 }}>{new Date(material.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span>}
+
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        {canOpen && (
+                          <a
+                            href={getMediaUrl(material.content_url ?? '')}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Открыть материал"
+                            className="icon-button ghost-button"
+                            style={{ textDecoration: 'none' }}
+                          >
+                            ↗
+                          </a>
+                        )}
+                        <button type="button" title="Редактировать материал" onClick={() => openEditMaterial(material)} className="icon-button ghost-button">
                           ✎
                         </button>
-                        <button
-                          type="button"
-                          title="Удалить материал"
-                          onClick={() => handleDeleteMaterial(material)}
-                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
-                        >
+                        <button type="button" title="Удалить материал" onClick={() => handleDeleteMaterial(material)} className="icon-button ghost-button" style={{ color: '#F44336' }}>
                           🗑
                         </button>
                       </div>
                     </div>
-
-                    {material.content_text && (
-                      <div style={{ color: '#243041', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
-                        {material.content_text}
-                      </div>
-                    )}
-
-                    {material.content_url && (
-                      isImageSource(material.content_url) || material.format === 'image' ? (
-                        <a href={getMediaUrl(material.content_url)} target="_blank" rel="noreferrer" style={{ display: 'block' }}>
-                          <img
-                            src={getMediaUrl(material.content_url)}
-                            alt="Материал темы"
-                            style={{ width: 'min(100%, 520px)', maxHeight: 320, objectFit: 'contain', borderRadius: 16, border: '1px solid rgba(24,33,47,0.08)', background: '#fff' }}
-                          />
-                        </a>
-                      ) : (
-                        <a href={getMediaUrl(material.content_url)} target="_blank" rel="noreferrer">
-                          {material.content_url}
-                        </a>
-                      )
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </article>
@@ -876,45 +914,28 @@ export default function MaterialsPage() {
       </section>
 
       {topicModal && (
-        <div
-          onClick={() => setTopicModal(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.48)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 20,
-            zIndex: 40,
-          }}
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: 'min(560px, 100%)',
-              background: '#fff',
-              borderRadius: 24,
-              border: '1px solid rgba(24,33,47,0.08)',
-              boxShadow: '0 30px 80px rgba(15,23,42,0.18)',
-              padding: isMobile ? 18 : 24,
-              display: 'grid',
-              gap: 14,
-            }}
-          >
-            <h3 style={{ fontSize: 22, marginBottom: 0 }}>
-              {topicModal.mode === 'edit'
-                ? 'Редактировать тему'
-                : topicModal.mode === 'create-child'
-                  ? 'Создать подтему'
-                  : 'Создать тему'}
-            </h3>
+        <div onClick={() => setTopicModal(null)} className="modal-overlay">
+          <div onClick={(event) => event.stopPropagation()} className="app-modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">
+                  {topicModal.mode === 'edit'
+                    ? 'Редактировать тему'
+                    : topicModal.mode === 'create-child'
+                      ? 'Создать подтему'
+                      : 'Создать тему'}
+                </h3>
+                <p className="modal-subtitle">Опиши тему и выбери уровни, для которых она будет доступна.</p>
+              </div>
+              <button type="button" title="Закрыть" onClick={() => setTopicModal(null)} className="modal-close">×</button>
+            </div>
 
-            <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+            <label className="modal-field">
               Название темы
               <input value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} />
             </label>
 
-            <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+            <label className="modal-field">
               Описание
               <textarea
                 value={topicDescription}
@@ -923,8 +944,8 @@ export default function MaterialsPage() {
               />
             </label>
 
-            <div style={{ display: 'grid', gap: 8 }}>
-              <div style={{ color: '#556173', fontSize: 14 }}>Уровни обучения</div>
+            <div className="modal-section">
+              <div className="modal-section-title">Уровни обучения</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   type="button"
@@ -933,7 +954,7 @@ export default function MaterialsPage() {
                     setTopicLevelIds([]);
                   }}
                   style={{
-                    background: topicLevelMode === 'all' ? '#2a6fdb' : 'rgba(23,32,51,0.08)',
+                    background: topicLevelMode === 'all' ? '#2AABEE' : 'rgba(23,32,51,0.08)',
                     color: topicLevelMode === 'all' ? '#fff' : '#324055',
                     boxShadow: 'none',
                   }}
@@ -944,7 +965,7 @@ export default function MaterialsPage() {
                   type="button"
                   onClick={() => setTopicLevelMode('custom')}
                   style={{
-                    background: topicLevelMode === 'custom' ? '#2a6fdb' : 'rgba(23,32,51,0.08)',
+                    background: topicLevelMode === 'custom' ? '#2AABEE' : 'rgba(23,32,51,0.08)',
                     color: topicLevelMode === 'custom' ? '#fff' : '#324055',
                     boxShadow: 'none',
                   }}
@@ -971,10 +992,10 @@ export default function MaterialsPage() {
                           style={{
                             padding: '8px 10px',
                             borderRadius: 999,
-                            background: active ? 'rgba(42,111,219,0.12)' : 'rgba(23,32,51,0.05)',
-                            color: active ? '#2a6fdb' : '#324055',
+                            background: active ? 'rgba(42,171,238,0.12)' : 'rgba(23,32,51,0.05)',
+                            color: active ? '#2AABEE' : '#324055',
                             border: active
-                              ? '1px solid rgba(42,111,219,0.24)'
+                              ? '1px solid rgba(42,171,238,0.24)'
                               : '1px solid rgba(24,33,47,0.08)',
                             boxShadow: 'none',
                             fontWeight: 700,
@@ -990,16 +1011,9 @@ export default function MaterialsPage() {
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button type="button" onClick={handleSaveTopic} disabled={saving}>
+            <div className="modal-actions">
+              <button type="button" onClick={handleSaveTopic} disabled={saving} className="modal-primary">
                 {saving ? 'Сохраняем...' : 'Сохранить'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setTopicModal(null)}
-                style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
-              >
-                Отмена
               </button>
             </div>
           </div>
@@ -1007,43 +1021,22 @@ export default function MaterialsPage() {
       )}
 
       {materialModal && (
-        <div
-          onClick={() => setMaterialModal(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.48)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 20,
-            zIndex: 40,
-          }}
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: 'min(620px, 100%)',
-              background: '#fff',
-              borderRadius: 24,
-              border: '1px solid rgba(24,33,47,0.08)',
-              boxShadow: '0 30px 80px rgba(15,23,42,0.18)',
-              padding: isMobile ? 18 : 24,
-              display: 'grid',
-              gap: 14,
-            }}
-          >
-            <h3 style={{ fontSize: 22, marginBottom: 0 }}>
-              {materialModal.mode === 'edit' ? 'Редактировать материал' : 'Добавить материал'}
-            </h3>
+        <div onClick={() => setMaterialModal(null)} className="modal-overlay">
+          <div onClick={(event) => event.stopPropagation()} className="app-modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">
+                  {materialModal.mode === 'edit' ? 'Редактировать материал' : 'Добавить материал'}
+                </h3>
+                <p className="modal-subtitle">Выбери формат, уровень и добавь содержимое материала.</p>
+              </div>
+              <button type="button" title="Закрыть" onClick={() => setMaterialModal(null)} className="modal-close">×</button>
+            </div>
 
             <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-                gap: 10,
-              }}
+              className="modal-row"
             >
-              <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+              <label className="modal-field">
                 Формат
                 <select
                   value={materialFormat}
@@ -1057,7 +1050,7 @@ export default function MaterialsPage() {
                 </select>
               </label>
 
-              <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+              <label className="modal-field">
                 Уровень
                 <select
                   value={materialLevel}
@@ -1073,7 +1066,7 @@ export default function MaterialsPage() {
             </div>
 
             {materialFormat === 'text' ? (
-              <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+              <label className="modal-field">
                 Содержимое
                 <textarea
                   value={materialText}
@@ -1083,7 +1076,7 @@ export default function MaterialsPage() {
                 />
               </label>
             ) : (
-              <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+              <label className="modal-field">
                 Ссылка
                 <input
                   value={materialUrl}
@@ -1093,16 +1086,9 @@ export default function MaterialsPage() {
               </label>
             )}
 
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button type="button" onClick={handleSaveMaterial} disabled={saving}>
+            <div className="modal-actions">
+              <button type="button" onClick={handleSaveMaterial} disabled={saving} className="modal-primary">
                 {saving ? 'Сохраняем...' : 'Сохранить'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setMaterialModal(null)}
-                style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
-              >
-                Отмена
               </button>
             </div>
           </div>

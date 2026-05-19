@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   createSubject,
   deleteSubject,
@@ -15,7 +15,7 @@ const panelStyle = {
   boxShadow: 'var(--shadow-card)',
 } as const;
 
-const DEFAULT_COLORS = ['#d96f32', '#2a6fdb', '#2f7d63', '#7b61c8', '#cc8b00', '#c9485b'];
+const DEFAULT_COLORS = ['#2AABEE', '#4CAF50', '#9C27B0', '#1565C0', '#2E7D32', '#6A1B9A'];
 
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -259,7 +259,7 @@ export default function SubjectsPage() {
                     key={subject.id}
                     style={{
                       border: '1px solid rgba(24,33,47,0.08)',
-                      borderLeft: `5px solid ${subject.color || '#d96f32'}`,
+                      borderLeft: `5px solid ${subject.color || '#2AABEE'}`,
                       borderRadius: '20px',
                       padding: '18px',
                       background: '#fff',
@@ -337,7 +337,7 @@ export default function SubjectsPage() {
                                   width: 14,
                                   height: 14,
                                   borderRadius: 999,
-                                  background: subject.color || '#d96f32',
+                                  background: subject.color || '#2AABEE',
                                   flexShrink: 0,
                                 }}
                               />
@@ -430,7 +430,7 @@ export default function SubjectsPage() {
                                 height: 42,
                                 padding: 0,
                                 borderRadius: 999,
-                                background: '#a63f3b',
+                                background: '#F44336',
                                 boxShadow: 'none',
                                 fontSize: 18,
                               }}

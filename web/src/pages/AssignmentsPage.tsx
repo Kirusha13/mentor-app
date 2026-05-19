@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+﻿import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   createAssignment,
   deleteAssignment,
@@ -20,14 +20,6 @@ import { formatFileSize, getMediaUrl, isImageSource } from '../utils/media';
 
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 
-const panelStyle = {
-  background: 'rgba(255,255,255,0.88)',
-  padding: '16px',
-  borderRadius: '18px',
-  border: '1px solid rgba(24,33,47,0.08)',
-  boxShadow: 'var(--shadow-card)',
-} as const;
-
 const badgeStyle = {
   padding: '7px 11px',
   borderRadius: 999,
@@ -44,10 +36,10 @@ const STATUS_LABELS: Record<CompletionStatus, string> = {
 };
 
 const STATUS_COLORS: Record<CompletionStatus, string> = {
-  assigned: '#2a6fdb',
-  in_progress: '#d96f32',
-  completed: '#2f7d63',
-  overdue: '#a63f3b',
+  assigned: '#2AABEE',
+  in_progress: '#FF9800',
+  completed: '#4CAF50',
+  overdue: '#F44336',
 };
 
 type AssignmentColumn = {
@@ -100,6 +92,7 @@ export default function AssignmentsPage() {
   const [creating, setCreating] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<number | null>(null);
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<CompletionStatus | 'all'>('all');
   const [relationFilter, setRelationFilter] = useState<'all' | string>('all');
   const [newTutorStudentId, setNewTutorStudentId] = useState('');
@@ -114,6 +107,7 @@ export default function AssignmentsPage() {
   const [attachedFiles, setAttachedFiles] = useState<AssignmentFileAttachment[]>([]);
   const [assignmentGradeCommentDraft, setAssignmentGradeCommentDraft] = useState('');
   const [assignmentCommentSaving, setAssignmentCommentSaving] = useState(false);
+  const [expandedColumnKey, setExpandedColumnKey] = useState<string | null>(null);
   const [statusPreviewLimit] = useState(5);
 
   const relationOptions = useMemo(
@@ -135,13 +129,27 @@ export default function AssignmentsPage() {
   const filteredAssignments = useMemo(
     () =>
       assignments.filter((assignment) => {
+        const relation = tutorStudents.find((item) => item.id === assignment.tutor_student_id);
+        const student = students.find((item) => item.id === relation?.student_id);
+        const subject = subjects.find((item) => item.id === relation?.subject_id);
+        const topicTitle = topics.find((topic) => topic.id === assignment.topic_id)?.title ?? 'Без темы';
+        const query = search.trim().toLowerCase();
+        const haystack = [
+          assignment.title ?? '',
+          assignment.description,
+          topicTitle,
+          student?.full_name ?? '',
+          subject?.name ?? '',
+        ]
+          .join(' ')
+          .toLowerCase();
         const byStatus =
           statusFilter === 'all' || assignment.completion_status === statusFilter;
         const byRelation =
           relationFilter === 'all' || String(assignment.tutor_student_id) === relationFilter;
-        return byStatus && byRelation;
+        return (!query || haystack.includes(query)) && byStatus && byRelation;
       }),
-    [assignments, relationFilter, statusFilter]
+    [assignments, relationFilter, search, statusFilter, students, subjects, topics, tutorStudents]
   );
 
   const selectedAssignment = useMemo(
@@ -439,27 +447,27 @@ export default function AssignmentsPage() {
       {
         key: 'review',
         title: 'Нужно проверить',
-        color: '#d96f32',
+        color: '#2AABEE',
         items: sortByDeadline(needReview),
       },
       {
         key: 'active',
         title: 'В работе',
-        color: '#2a6fdb',
+        color: '#2AABEE',
         status: 'in_progress',
         items: sortByDeadline(active),
       },
       {
         key: 'overdue',
         title: 'Просрочено',
-        color: '#a63f3b',
+        color: '#F44336',
         status: 'overdue',
         items: sortByDeadline(overdue),
       },
       {
         key: 'checked',
         title: 'Проверено',
-        color: '#2f7d63',
+        color: '#4CAF50',
         status: 'completed',
         items: sortByDeadline(checked),
       },
@@ -482,7 +490,7 @@ export default function AssignmentsPage() {
         onClick={() => setSelectedAssignmentId(assignment.id)}
         style={{
           border: '1px solid rgba(24,33,47,0.1)',
-          borderLeft: `5px solid ${isDeadlineOverdue ? '#a63f3b' : color}`,
+          borderLeft: `5px solid ${isDeadlineOverdue ? '#F44336' : color}`,
           borderRadius: 16,
           padding: '12px 13px',
           background: '#fff',
@@ -527,7 +535,7 @@ export default function AssignmentsPage() {
         </div>
 
         <div style={{ display: 'grid', gap: 5 }}>
-          <div style={{ color: isDeadlineOverdue ? '#a63f3b' : '#435066', fontSize: 12, fontWeight: 800 }}>
+          <div style={{ color: isDeadlineOverdue ? '#F44336' : '#435066', fontSize: 12, fontWeight: 800 }}>
             до {deadline.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}, {deadline.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
           </div>
           <div style={{ color: '#687486', fontSize: 12, lineHeight: 1.35 }}>
@@ -548,7 +556,7 @@ export default function AssignmentsPage() {
             </span>
           )}
           {assignment.grade && (
-            <span style={{ ...badgeStyle, padding: '5px 8px', fontSize: 11, background: 'rgba(47,125,99,0.1)', color: '#2f7d63', fontWeight: 800 }}>
+            <span style={{ ...badgeStyle, padding: '5px 8px', fontSize: 11, background: 'rgba(47,125,99,0.1)', color: '#4CAF50', fontWeight: 800 }}>
               {assignment.grade}
             </span>
           )}
@@ -558,15 +566,45 @@ export default function AssignmentsPage() {
   };
 
   return (
-    <div>
-      <div style={{ display: 'grid', gap: 14, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gap: 16 }}>
+      <h1 className="page-heading">Задания</h1>
+
+      <section className="mentor-panel toolbar-panel" style={{ gridTemplateColumns: 'minmax(260px, 1.4fr) minmax(170px, 0.6fr) minmax(220px, 0.8fr) auto' }}>
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Поиск по заданиям..."
+        />
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CompletionStatus | 'all')}>
+          <option value="all">Все статусы</option>
+          <option value="assigned">Назначено</option>
+          <option value="in_progress">В работе</option>
+          <option value="completed">Выполнено</option>
+          <option value="overdue">Просрочено</option>
+        </select>
+        <select value={relationFilter} onChange={(event) => setRelationFilter(event.target.value)}>
+          <option value="all">Все ученики</option>
+          {relationOptions.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+        <button type="button" title="Создать задание" onClick={() => setCreateModalOpen(true)} className="add-trigger">
+          +
+        </button>
+      </section>
+
+      <div style={{ display: 'grid', gap: 16, alignItems: 'start' }}>
         {createModalOpen && (
-          <div onClick={() => setCreateModalOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.48)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 40 }}>
-            <div onClick={(event) => event.stopPropagation()} style={{ width: 'min(620px, 100%)', maxHeight: '88vh', overflowY: 'auto' }}>
-        <section style={panelStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-            <h3 style={{ fontSize: 19, marginBottom: 0 }}>Создать задание</h3>
-            <button title="Закрыть" type="button" onClick={() => setCreateModalOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 22 }}>×</button>
+          <div onClick={() => setCreateModalOpen(false)} className="modal-overlay">
+            <div onClick={(event) => event.stopPropagation()} className="app-modal wide">
+          <div className="modal-header">
+            <div>
+              <h3 className="modal-title">Создать задание</h3>
+              <p className="modal-subtitle">Выбери ученика, задай дедлайн и прикрепи материалы для выполнения.</p>
+            </div>
+            <button title="Закрыть" type="button" onClick={() => setCreateModalOpen(false)} className="modal-close">×</button>
           </div>
 
           {relationOptions.length === 0 ? (
@@ -574,51 +612,71 @@ export default function AssignmentsPage() {
               Сначала создай ученика и привяжи его к предмету.
             </div>
           ) : (
-            <div style={{ display: 'grid', gap: 8 }}>
-              <select value={newTutorStudentId} onChange={(event) => setNewTutorStudentId(event.target.value)}>
-                {relationOptions.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-
-              <input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Заголовок задания" />
-              <textarea value={newDescription} onChange={(event) => setNewDescription(event.target.value)} placeholder="Описание задания" rows={5} style={{ resize: 'vertical' }} />
-              <input type="datetime-local" value={newDeadline} onChange={(event) => setNewDeadline(event.target.value)} />
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <select value={topicLevelFilter} onChange={(event) => setTopicLevelFilter(event.target.value)}>
-                  <option value="student">Уровни ученика</option>
-                  <option value="">Все уровни</option>
-                  {topicLevelOptions.map((level) => (
-                    <option key={level.id} value={String(level.id)}>
-                      {level.name}
+            <div className="modal-form-grid">
+              <label className="modal-field">
+                Ученик и предмет
+                <select value={newTutorStudentId} onChange={(event) => setNewTutorStudentId(event.target.value)}>
+                  {relationOptions.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
                     </option>
                   ))}
                 </select>
+              </label>
 
-                <select value={newTopicId} onChange={(event) => setNewTopicId(event.target.value)}>
-                  <option value="">Без темы</option>
-                  {availableTopics.map((topic) => (
-                    <option key={topic.id} value={topic.id}>
-                      {topic.title} • {formatTopicLevels(topic, tutorLevels)}
-                    </option>
-                  ))}
-                </select>
+              <label className="modal-field">
+                Заголовок задания
+                <input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Например: Уравнения" />
+              </label>
+
+              <label className="modal-field">
+                Описание задания
+                <textarea value={newDescription} onChange={(event) => setNewDescription(event.target.value)} placeholder="Что нужно сделать ученику" rows={5} style={{ resize: 'vertical' }} />
+              </label>
+
+              <label className="modal-field">
+                Дедлайн
+                <input type="datetime-local" value={newDeadline} onChange={(event) => setNewDeadline(event.target.value)} />
+              </label>
+
+              <div className="modal-row">
+                <label className="modal-field">
+                  Уровень ученика
+                  <select value={topicLevelFilter} onChange={(event) => setTopicLevelFilter(event.target.value)}>
+                    <option value="student">Уровни ученика</option>
+                    <option value="">Все уровни</option>
+                    {topicLevelOptions.map((level) => (
+                      <option key={level.id} value={String(level.id)}>
+                        {level.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="modal-field">
+                  Тема
+                  <select value={newTopicId} onChange={(event) => setNewTopicId(event.target.value)}>
+                    <option value="">Без темы</option>
+                    {availableTopics.map((topic) => (
+                      <option key={topic.id} value={topic.id}>
+                        {topic.title} • {formatTopicLevels(topic, tutorLevels)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
 
-              <div style={{ display: 'grid', gap: 8, padding: 12, borderRadius: 16, background: 'rgba(23,32,51,0.04)', border: '1px solid rgba(24,33,47,0.06)' }}>
-                <div style={{ fontWeight: 700, color: '#243041' }}>Вложения преподавателя</div>
+              <div className="modal-section">
+                <div className="modal-section-title">Вложения преподавателя</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr auto', gap: 8 }}>
                   <input value={newLinkLabel} onChange={(event) => setNewLinkLabel(event.target.value)} placeholder="Подпись ссылки" />
                   <input value={newLinkUrl} onChange={(event) => setNewLinkUrl(event.target.value)} placeholder="https://..." />
                   <button type="button" onClick={handleAddLink} style={{ boxShadow: 'none', minWidth: 112 }}>
-                    Добавить
+                    +
                   </button>
                 </div>
 
-                <label style={{ display: 'grid', gap: 6, color: '#4d5a6d', fontSize: 14 }}>
+                <label className="modal-field">
                   Прикрепить файл
                   <input type="file" multiple onChange={handleFileSelection} />
                 </label>
@@ -646,59 +704,33 @@ export default function AssignmentsPage() {
                 )}
               </div>
 
-              <button onClick={handleCreate} disabled={creating}>
-                {creating ? 'Создаём...' : 'Создать задание'}
-              </button>
+              <div className="modal-actions">
+                <button className="modal-primary" onClick={handleCreate} disabled={creating}>
+                  {creating ? 'Создаём...' : 'Создать задание'}
+                </button>
+              </div>
             </div>
           )}
-        </section>
             </div>
           </div>
         )}
 
-        <section style={{ ...panelStyle, padding: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) auto', alignItems: 'end', gap: 12, marginBottom: 16 }}>
-            <div>
-              <h3 style={{ fontSize: 19, marginBottom: 4 }}>Список заданий</h3>
-              <div style={{ color: '#6b7788', fontSize: 14 }}>Всего: {assignments.length} • после фильтров: {filteredAssignments.length}</div>
-            </div>
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '40px minmax(160px, 190px) minmax(220px, 280px)',
-                gap: 8,
-                justifyContent: 'end',
-                alignItems: 'center',
-              }}
-            >
-              <button
-                title="Создать задание"
-                type="button"
-                onClick={() => setCreateModalOpen(true)}
-                style={{ minWidth: 40, width: 40, height: 40, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center' }}
-              >
-                +
-              </button>
-              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CompletionStatus | 'all')} style={{ width: '100%' }}>
-                <option value="all">Все статусы</option>
-                <option value="assigned">Назначено</option>
-                <option value="in_progress">В работе</option>
-                <option value="completed">Выполнено</option>
-                <option value="overdue">Просрочено</option>
-              </select>
-
-              <select value={relationFilter} onChange={(event) => setRelationFilter(event.target.value)} style={{ width: '100%' }}>
-                <option value="all">Все ученики</option>
-                {relationOptions.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <section className="metric-grid">
+          <div className="metric-card">
+            <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>ДЗ</span>
+            <div><div className="metric-value">{assignments.length} задания</div><div className="metric-label">Всего заданий</div></div>
           </div>
+          <div className="metric-card">
+            <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>!</span>
+            <div><div className="metric-value">{assignmentColumns[0]?.items.length ?? 0} нужно проверить</div><div className="metric-label">Требуют проверки</div></div>
+          </div>
+          <div className="metric-card">
+            <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.12)', color: '#4CAF50' }}>✓</span>
+            <div><div className="metric-value">{assignmentColumns[3]?.items.length ?? 0} проверено</div><div className="metric-label">Успешно проверено</div></div>
+          </div>
+        </section>
 
+        <section className="mentor-panel" style={{ padding: 16 }}>
           {loading ? (
             <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка заданий...</p>
           ) : (
@@ -710,66 +742,96 @@ export default function AssignmentsPage() {
                 alignItems: 'start',
               }}
             >
-              {assignmentColumns.map((column) => (
-                <section
-                  key={column.key}
-                  style={{
-                    borderRadius: 18,
-                    background: 'rgba(23,32,51,0.035)',
-                    border: '1px solid rgba(24,33,47,0.07)',
-                    padding: 12,
-                    minHeight: 180,
-                    display: 'grid',
-                    gap: 10,
-                    alignContent: 'start',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-                        <span style={{ width: 9, height: 9, borderRadius: 999, background: column.color }} />
-                        <h4 style={{ fontSize: 16, marginBottom: 0 }}>{column.title}</h4>
-                      </div>
-                    </div>
-                    <span style={{ padding: '5px 8px', borderRadius: 999, background: 'rgba(255,255,255,0.9)', color: '#1f2a3b', fontSize: 12, fontWeight: 900 }}>
-                      {column.items.length}
-                    </span>
-                  </div>
+              {assignmentColumns.map((column) => {
+                const isExpanded = expandedColumnKey === column.key;
+                const visibleItems = isExpanded ? column.items : column.items.slice(0, statusPreviewLimit);
 
-                  {column.items.length === 0 ? (
-                    <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,0.72)', color: '#7a8595', fontSize: 13, lineHeight: 1.4 }}>
-                      Здесь пока пусто.
+                return (
+                  <section
+                    key={column.key}
+                    style={{
+                      borderRadius: 20,
+                      background: 'linear-gradient(180deg, rgba(23,32,51,0.035), rgba(23,32,51,0.018))',
+                      border: '1px solid rgba(24,33,47,0.07)',
+                      padding: 14,
+                      minHeight: 420,
+                      display: 'grid',
+                      gridTemplateRows: 'auto 1fr',
+                      gap: 12,
+                      alignContent: 'start',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                          <span style={{ width: 9, height: 9, borderRadius: 999, background: column.color }} />
+                          <h4 style={{ fontSize: 16, marginBottom: 0 }}>{column.title}</h4>
+                        </div>
+                      </div>
+                      <span style={{ padding: '5px 8px', borderRadius: 999, background: 'rgba(255,255,255,0.95)', color: '#1f2a3b', fontSize: 12, fontWeight: 900 }}>
+                        {column.items.length}
+                      </span>
                     </div>
-                  ) : (
-                    <div style={{ display: 'grid', gap: 10 }}>
-                      {column.items.slice(0, statusPreviewLimit).map(renderAssignmentCard)}
-                      {column.items.length > statusPreviewLimit && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (column.status) {
-                              setStatusFilter(column.status);
-                            }
-                          }}
-                          style={{
-                            justifySelf: 'start',
-                            background: 'transparent',
-                            color: column.color,
-                            border: `1px solid ${column.color}33`,
-                            boxShadow: 'none',
-                            padding: '8px 12px',
-                            borderRadius: 999,
-                            fontSize: 12,
-                            fontWeight: 800,
-                          }}
-                        >
-                          Смотреть все ({column.items.length})
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </section>
-              ))}
+
+                    {column.items.length === 0 ? (
+                      <div
+                        style={{
+                          minHeight: 250,
+                          borderRadius: 18,
+                          border: '1px dashed rgba(24,33,47,0.13)',
+                          background: 'rgba(255,255,255,0.62)',
+                          color: '#7a8595',
+                          display: 'grid',
+                          placeItems: 'center',
+                          textAlign: 'center',
+                          padding: 18,
+                        }}
+                      >
+                        <div>
+                          <div style={{ width: 54, height: 54, borderRadius: 999, margin: '0 auto 12px', display: 'grid', placeItems: 'center', background: `${column.color}14`, color: column.color, fontSize: 24 }}>
+                            {column.key === 'review' ? '▣' : column.key === 'active' ? '✈' : column.key === 'overdue' ? '◷' : '✓'}
+                          </div>
+                          <div style={{ color: '#1f2a3b', fontWeight: 900, marginBottom: 6 }}>
+                            {column.key === 'overdue' ? 'Нет просроченных' : column.key === 'checked' ? 'Больше нет заданий' : 'Пока пусто'}
+                          </div>
+                          <div style={{ fontSize: 13, lineHeight: 1.45 }}>
+                            {column.key === 'review'
+                              ? 'Задания появятся здесь после ответа ученика.'
+                              : column.key === 'active'
+                                ? 'Здесь будут задания, над которыми работают ученики.'
+                                : column.key === 'overdue'
+                                  ? 'Отлично, дедлайны под контролем.'
+                                  : 'Все задания в этой колонке проверены.'}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
+                        {visibleItems.map(renderAssignmentCard)}
+                        {column.items.length > statusPreviewLimit && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedColumnKey(isExpanded ? null : column.key)}
+                            style={{
+                              justifySelf: 'start',
+                              background: 'transparent',
+                              color: column.color,
+                              border: `1px solid ${column.color}33`,
+                              boxShadow: 'none',
+                              padding: '8px 12px',
+                              borderRadius: 999,
+                              fontSize: 12,
+                              fontWeight: 800,
+                            }}
+                          >
+                            {isExpanded ? 'Свернуть' : `Смотреть все (${column.items.length})`}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
             </div>
           )}
         </section>
@@ -895,7 +957,7 @@ export default function AssignmentsPage() {
                       if (!value || value < 1 || value > 5) return;
                       handlePatchAssignment(selectedAssignment.id, { grade: value });
                     }}
-                    style={{ background: '#2f7d63', boxShadow: 'none' }}
+                    style={{ background: '#4CAF50', boxShadow: 'none' }}
                   >
                     Поставить оценку
                   </button>

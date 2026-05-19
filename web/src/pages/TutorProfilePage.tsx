@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getTutorProfile, updateTutorProfile, type TutorProfile } from '../api/tutor';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -152,7 +152,7 @@ export default function TutorProfilePage() {
           style={{
             padding: 22,
             background:
-              'radial-gradient(circle at 18% 12%, rgba(217,111,50,0.34), transparent 28%), linear-gradient(135deg, #172033 0%, #24324a 100%)',
+              'radial-gradient(circle at 18% 12%, rgba(42,171,238,0.34), transparent 28%), linear-gradient(135deg, #172033 0%, #24324a 100%)',
             color: '#fff',
             display: 'grid',
             alignContent: 'space-between',

@@ -15,6 +15,7 @@ import {
 import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTopics, type TheoryTopic } from '../api/topics';
+import { getTutorLevels, type TutorLevel } from '../api/tutorLevels';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { getApiErrorCode, getApiErrorMessage } from '../utils/apiError';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
@@ -30,22 +31,18 @@ import {
 } from '../utils/lessonTime';
 
 type CalendarMode = 'day' | 'week' | 'month';
+type LessonCardViewMode = 'day' | 'week' | 'month';
+type LessonCardDensity = 'standard' | 'compact';
 type SlotDayDraft = {
   enabled: boolean;
   start: string;
   end: string;
 };
 
-const panelStyle = {
-  background: 'rgba(255,255,255,0.88)',
-  padding: '20px',
-  borderRadius: '22px',
-  border: '1px solid rgba(24,33,47,0.08)',
-  boxShadow: 'var(--shadow-card)',
-} as const;
-
 const DEFAULT_GRID_START_HOUR = 8;
 const DEFAULT_GRID_END_HOUR = 22;
+const TIMELINE_SLOT_MINUTES = 30;
+const MIN_EVENT_CARD_HEIGHT = 86;
 const WEEK_DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 function createDefaultSlotDrafts(): SlotDayDraft[] {
@@ -136,14 +133,14 @@ function calculateLessonCost(rate: number, startTime: string, endTime: string) {
 }
 
 function statusColor(status: ConductStatus) {
-  if (status === 'conducted') return '#2f7d63';
-  if (status === 'cancelled') return '#a63f3b';
-  if (status === 'rescheduled') return '#7b61c8';
-  if (status === 'reschedule_pending') return '#d96f32';
-  if (status === 'reschedule_rejected') return '#7b3f00';
-  if (status === 'booking_pending') return '#9c27b0';
-  if (status === 'booking_rejected') return '#8a4f1d';
-  return '#2a6fdb';
+  if (status === 'conducted') return '#4CAF50';
+  if (status === 'cancelled') return '#F44336';
+  if (status === 'rescheduled') return '#FF9800';
+  if (status === 'reschedule_pending') return '#FF9800';
+  if (status === 'reschedule_rejected') return '#F44336';
+  if (status === 'booking_pending') return '#9C27B0';
+  if (status === 'booking_rejected') return '#F44336';
+  return '#2AABEE';
 }
 
 function statusLabel(status: ConductStatus) {
@@ -157,14 +154,140 @@ function statusLabel(status: ConductStatus) {
   return 'Запланировано';
 }
 
+function statusShortLabel(status: ConductStatus) {
+  if (status === 'conducted') return 'Проведено';
+  if (status === 'cancelled') return 'Отмена';
+  if (status === 'rescheduled') return 'Перенос';
+  if (status === 'reschedule_pending') return 'Ждёт переноса';
+  if (status === 'reschedule_rejected') return 'Отклонён';
+  if (status === 'booking_pending') return 'Запрос';
+  if (status === 'booking_rejected') return 'Отклонён';
+  return 'План';
+}
+
 function paymentLabel(status: PaymentStatus) {
   if (status === 'paid') return 'Оплачено';
   if (status === 'payment_pending') return 'Ожидает подтверждения';
   return 'Не оплачено';
 }
 
+function formatMoney(value: number) {
+  return `${Math.round(value).toLocaleString('ru-RU')} ₽`;
+}
+
+function pluralRu(value: number, forms: [string, string, string]) {
+  const abs = Math.abs(value) % 100;
+  const last = abs % 10;
+  if (abs > 10 && abs < 20) return forms[2];
+  if (last > 1 && last < 5) return forms[1];
+  if (last === 1) return forms[0];
+  return forms[2];
+}
+
 function isWindow(lesson: Lesson) {
   return lesson.tutor_student_id == null;
+}
+
+function CalendarEventCard({
+  lesson,
+  student,
+  subject,
+  topic,
+  selected,
+  viewMode,
+  density,
+  onClick,
+}: {
+  lesson: Lesson;
+  student?: Student;
+  subject?: Subject;
+  topic?: TheoryTopic;
+  selected: boolean;
+  viewMode: LessonCardViewMode;
+  density: LessonCardDensity;
+  onClick: () => void;
+}) {
+  const windowCard = isWindow(lesson);
+  const accent = windowCard ? '#2AABEE' : subject?.color || '#2AABEE';
+  const state = statusColor(lesson.conduct_status);
+  const studentName = windowCard ? 'Свободный слот' : student?.full_name ?? 'Ученик';
+  const subjectName = windowCard ? 'Окно для записи' : subject?.name ?? lesson.subject_name ?? 'Без предмета';
+  const costText = windowCard ? '' : `${lesson.cost ?? '—'} ₽`;
+  const subjectLine = windowCard ? subjectName : `${subjectName} • ${costText}`;
+  const statusText = windowCard ? 'Доступен' : viewMode === 'month' || density === 'compact' ? statusShortLabel(lesson.conduct_status) : statusLabel(lesson.conduct_status);
+  const isCompact = density === 'compact';
+  const cardBackground = windowCard
+    ? 'linear-gradient(135deg, rgba(226,238,255,0.98), rgba(247,250,255,0.98))'
+    : `linear-gradient(135deg, ${state}26, rgba(255,255,255,0.96))`;
+  const cardBorderColor = windowCard ? 'rgba(42,171,238,0.34)' : `${state}4a`;
+  const badgeBackground = windowCard ? 'rgba(42,171,238,0.18)' : `${state}26`;
+  const timeFontSize = isCompact ? 11.5 : 12.5;
+  const titleFontSize = isCompact ? 11.5 : 12.5;
+  const metaFontSize = isCompact ? 10 : 10.5;
+  const statusFontSize = isCompact ? 8.5 : 9.5;
+  const titleClamp = viewMode === 'month' || isCompact ? 1 : 2;
+
+  return (
+    <div
+      key={lesson.id}
+      onClick={onClick}
+      title={`${toTime(toStartTime(lesson))} - ${toTime(toEndTime(lesson))} • ${studentName} • ${subjectLine} • ${statusLabel(lesson.conduct_status)}`}
+      style={{
+        minHeight: isCompact ? 54 : 72,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'flex-start',
+        gap: isCompact ? 2 : 4,
+        padding: isCompact ? '6px 8px' : '8px 10px',
+        borderRadius: 10,
+        background: cardBackground,
+        color: '#111827',
+        boxShadow: isCompact ? '0 10px 22px rgba(15,23,42,0.08)' : '0 14px 28px rgba(15,23,42,0.11)',
+        overflow: 'hidden',
+        cursor: 'pointer',
+        border: selected ? `2px solid ${accent}` : `1px solid ${cardBorderColor}`,
+        borderLeft: `5px solid ${state}`,
+      }}
+    >
+      <div style={{ fontSize: timeFontSize, fontWeight: 900, lineHeight: 1.08, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
+        {toTime(toStartTime(lesson))} - {toTime(toEndTime(lesson))}
+      </div>
+      <div
+        style={{
+          fontSize: titleFontSize,
+          fontWeight: 800,
+          lineHeight: 1.12,
+          overflow: 'hidden',
+          display: '-webkit-box',
+          WebkitLineClamp: titleClamp,
+          WebkitBoxOrient: 'vertical',
+          wordBreak: 'break-word',
+          flexShrink: 0,
+        }}
+      >
+        {studentName}
+      </div>
+      <div style={{ fontSize: metaFontSize, color: '#334155', lineHeight: 1.12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
+        {subjectLine}
+      </div>
+      {!windowCard && topic && !isCompact && (
+        <div style={{ fontSize: 10, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          Тема: {topic.title}
+        </div>
+      )}
+      <div style={{ marginTop: 'auto', display: 'flex', gap: 5, alignItems: 'center', minHeight: 16, overflow: 'hidden' }}>
+        <span style={{ padding: isCompact ? '2px 6px' : '3px 7px', borderRadius: 999, background: badgeBackground, color: state, fontSize: statusFontSize, fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', border: `1px solid ${state}30` }}>
+          {statusText}
+        </span>
+        {!isCompact && !windowCard && (
+          <span style={{ color: '#475569', fontSize: 9.5, whiteSpace: 'nowrap' }}>
+            {Math.round(lessonEndMinutes(lesson) - lessonStartMinutes(lesson))} мин
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function overlaps(first: Lesson, second: Lesson) {
@@ -187,7 +310,18 @@ function monthGrid(date: Date) {
   }));
 }
 
-function layoutTimelineLessons(items: Lesson[], startHour: number, hourHeight: number) {
+function getTimelineOffsetFromSlots(minutesFromWindowStart: number, slotHeights: number[]) {
+  const clampedMinutes = Math.max(0, minutesFromWindowStart);
+  const slotIndex = Math.floor(clampedMinutes / TIMELINE_SLOT_MINUTES);
+  const slotRemainder = clampedMinutes % TIMELINE_SLOT_MINUTES;
+  const fullSlotHeight = slotHeights
+    .slice(0, Math.min(slotIndex, slotHeights.length))
+    .reduce((sum, height) => sum + height, 0);
+  const currentSlotHeight = slotHeights[Math.min(slotIndex, slotHeights.length - 1)] ?? 0;
+  return fullSlotHeight + (slotRemainder / TIMELINE_SLOT_MINUTES) * currentSlotHeight;
+}
+
+function layoutTimelineLessons(items: Lesson[], startHour: number, slotHeights: number[]) {
   const sorted = [...items].sort((a, b) => {
     const startDiff = lessonStartMinutes(a) - lessonStartMinutes(b);
     if (startDiff !== 0) return startDiff;
@@ -217,6 +351,8 @@ function layoutTimelineLessons(items: Lesson[], startHour: number, hourHeight: n
   for (const lesson of sorted) {
     const start = lessonStartMinutes(lesson) - startHour * 60;
     const end = lessonEndMinutes(lesson) - startHour * 60;
+    const top = getTimelineOffsetFromSlots(start, slotHeights);
+    const bottom = getTimelineOffsetFromSlots(end, slotHeights);
 
     active = active.filter((item) => item.end > start);
 
@@ -235,8 +371,8 @@ function layoutTimelineLessons(items: Lesson[], startHour: number, hourHeight: n
 
     positioned.push({
       lesson,
-      top: (start / 60) * hourHeight,
-      height: Math.max(((end - start) / 60) * hourHeight, 44),
+      top,
+      height: Math.max(bottom - top, MIN_EVENT_CARD_HEIGHT),
       column,
       columns: 1,
     });
@@ -259,6 +395,7 @@ export default function SchedulePage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<TheoryTopic[]>([]);
+  const [tutorLevels, setTutorLevels] = useState<TutorLevel[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(() =>
@@ -417,6 +554,36 @@ export default function SchedulePage() {
     return map;
   }, [visibleLessons]);
 
+  const rangeLessons = useMemo(() => {
+    const from = formatDate(range.from);
+    const to = formatDate(range.to);
+    return visibleLessons.filter((lesson) => {
+      const date = toLessonDateStr(lesson);
+      return date >= from && date <= to;
+    });
+  }, [range.from, range.to, visibleLessons]);
+
+  const rangeBookedLessons = useMemo(
+    () => rangeLessons.filter((lesson) => !isWindow(lesson)),
+    [rangeLessons]
+  );
+
+  const rangeMovedLessons = useMemo(
+    () =>
+      rangeBookedLessons.filter((lesson) =>
+        ['rescheduled', 'reschedule_pending', 'cancelled'].includes(lesson.conduct_status)
+      ),
+    [rangeBookedLessons]
+  );
+
+  const rangeExpectedIncome = useMemo(
+    () =>
+      rangeBookedLessons
+        .filter((lesson) => !['cancelled', 'booking_rejected', 'reschedule_rejected'].includes(lesson.conduct_status))
+        .reduce((sum, lesson) => sum + Number(lesson.cost ?? 0), 0),
+    [rangeBookedLessons]
+  );
+
   const selectedMonthDayLessons = useMemo(() => {
     if (!selectedMonthDay) return [];
     return [...(lessonsByDate.get(selectedMonthDay) ?? [])].sort(
@@ -452,17 +619,43 @@ export default function SchedulePage() {
       return 0;
     }
 
-    return Math.max(420, viewportHeight - 190);
+    return Math.max(500, viewportHeight - 235);
   }, [mode, viewportHeight]);
 
-  const timelineHourHeight = useMemo(() => {
-    const hours = Math.max(1, timelineWindow.endHour - timelineWindow.startHour);
-    return Math.max(24, Math.floor(availableTimelineHeight / hours));
-  }, [availableTimelineHeight, timelineWindow.endHour, timelineWindow.startHour]);
+  const timelineSlotHeights = useMemo(() => {
+    const slots = Math.max(1, (timelineWindow.endHour - timelineWindow.startHour) * (60 / TIMELINE_SLOT_MINUTES));
+    const baseSlotHeight = Math.max(34, Math.floor(availableTimelineHeight / slots));
+    const heights = Array.from({ length: slots }, () => baseSlotHeight);
+    const timelineLessons =
+      mode === 'day'
+        ? dayLessons
+        : mode === 'week'
+          ? weekLessonsByDay.flat()
+          : [];
+
+    for (const lesson of timelineLessons) {
+      const startMinutes = lessonStartMinutes(lesson) - timelineWindow.startHour * 60;
+      const endMinutes = lessonEndMinutes(lesson) - timelineWindow.startHour * 60;
+      const startSlot = Math.max(0, Math.floor(startMinutes / TIMELINE_SLOT_MINUTES));
+      const endSlot = Math.min(slots, Math.ceil(endMinutes / TIMELINE_SLOT_MINUTES));
+      const span = Math.max(1, endSlot - startSlot);
+      const currentHeight = heights.slice(startSlot, endSlot).reduce((sum, height) => sum + height, 0);
+      const requiredHeight = MIN_EVENT_CARD_HEIGHT + 8;
+
+      if (currentHeight < requiredHeight) {
+        const extraPerSlot = Math.ceil((requiredHeight - currentHeight) / span);
+        for (let index = startSlot; index < endSlot; index += 1) {
+          heights[index] += extraPerSlot;
+        }
+      }
+    }
+
+    return heights;
+  }, [availableTimelineHeight, dayLessons, mode, timelineWindow.endHour, timelineWindow.startHour, weekLessonsByDay]);
 
   const timelineHeight = useMemo(
-    () => Math.max(0, (timelineWindow.endHour - timelineWindow.startHour) * timelineHourHeight),
-    [timelineHourHeight, timelineWindow.endHour, timelineWindow.startHour]
+    () => timelineSlotHeights.reduce((sum, height) => sum + height, 0),
+    [timelineSlotHeights]
   );
 
   useEffect(() => {
@@ -550,18 +743,20 @@ export default function SchedulePage() {
         setLoading(true);
         const dateFrom = buildLocalDayStartIso(formatDate(range.from));
         const dateTo = buildLocalDayEndIso(formatDate(range.to));
-        const [lessonData, tutorStudentData, studentData, subjectData, topicData] = await Promise.all([
+        const [lessonData, tutorStudentData, studentData, subjectData, topicData, levelData] = await Promise.all([
           getLessons({ date_from: dateFrom, date_to: dateTo }),
           getTutorStudents(),
           getStudents(),
           getSubjects(),
           getTopics(),
+          getTutorLevels(),
         ]);
         setLessons(lessonData);
         setTutorStudents(tutorStudentData);
         setStudents(studentData);
         setSubjects(subjectData);
         setTopics(topicData);
+        setTutorLevels(levelData);
       } catch (error) {
         console.error('Ошибка загрузки расписания:', error);
         alert('Не удалось загрузить расписание');
@@ -862,97 +1057,24 @@ export default function SchedulePage() {
     setAnchorDate((prev) => addDays(prev, direction * 7));
   };
 
-  const renderLessonCard = (lesson: Lesson, density: 'normal' | 'compact' | 'tiny' | 'week' = 'normal') => {
+  const renderLessonCard = (lesson: Lesson, viewMode: LessonCardViewMode, density: LessonCardDensity = 'standard') => {
     const relation = tutorStudents.find((item) => item.id === lesson.tutor_student_id);
     const student = students.find((item) => item.id === relation?.student_id);
     const subject = subjects.find((item) => item.id === relation?.subject_id);
     const topic = topics.find((item) => item.id === lesson.topic_id);
-    const windowCard = isWindow(lesson);
-    const accent = windowCard ? '#2a6fdb' : subject?.color || '#d96f32';
-    const state = statusColor(lesson.conduct_status);
-    const weekCard = density === 'week';
-    const compact = density !== 'normal';
-    const tiny = density === 'tiny';
-    const title = windowCard ? 'Свободный слот' : student?.full_name ?? 'Ученик';
-    const subtitle = windowCard
-      ? 'Окно для записи'
-      : `${subject?.name ?? 'Без предмета'} • ${lesson.cost ?? '—'} ₽`;
-    const textClamp = tiny ? 1 : weekCard ? 3 : compact ? 2 : 2;
 
     return (
-      <div
+      <CalendarEventCard
         key={lesson.id}
+        lesson={lesson}
+        student={student}
+        subject={subject}
+        topic={topic}
+        selected={selectedLessonId === lesson.id}
+        viewMode={viewMode}
+        density={density}
         onClick={() => setSelectedLessonId(lesson.id)}
-        title={`${toTime(toStartTime(lesson))} - ${toTime(toEndTime(lesson))} • ${title}${windowCard ? '' : ` • ${subtitle}`}`}
-        style={{
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'flex-start',
-          gap: tiny ? 1 : weekCard ? 2 : compact ? 2 : 3,
-          padding: tiny ? '3px 5px' : weekCard ? '5px 5px' : compact ? '5px 7px' : '8px 9px',
-          borderRadius: compact ? 10 : 12,
-          background: windowCard ? '#2a6fdb' : state,
-          color: '#fff',
-          boxShadow: compact ? 'none' : `0 8px 18px ${state}24`,
-          overflow: 'hidden',
-          cursor: 'pointer',
-          border: selectedLessonId === lesson.id ? `2px solid ${accent}` : `1px solid ${accent}`,
-        }}
-      >
-        <div style={{ fontSize: tiny ? 10 : weekCard ? 11.5 : compact ? 11 : 12, fontWeight: 900, lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
-          {toTime(toStartTime(lesson))} - {toTime(toEndTime(lesson))}
-        </div>
-        <div
-          style={{
-            fontWeight: 800,
-            fontSize: tiny ? 10 : weekCard ? 11.5 : compact ? 11 : 12,
-            lineHeight: weekCard ? 1.08 : 1.08,
-            overflow: 'hidden',
-            display: '-webkit-box',
-            WebkitLineClamp: textClamp,
-            WebkitBoxOrient: 'vertical',
-            wordBreak: 'break-word',
-          }}
-        >
-          {title}
-        </div>
-        {weekCard && !windowCard && (
-          <div
-            style={{
-              fontSize: 10,
-              opacity: 0.92,
-              lineHeight: 1.12,
-              overflow: 'hidden',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              wordBreak: 'break-word',
-              flexShrink: 0,
-            }}
-          >
-            {(subject?.name ?? 'Без предмета')} • {lesson.cost ?? '—'} ₽
-          </div>
-        )}
-        {!tiny && !weekCard && (
-          <div style={{ fontSize: compact ? 9 : 11, opacity: 0.92, lineHeight: 1.12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
-            {subtitle}
-          </div>
-        )}
-        {!windowCard && topic && density === 'normal' && (
-          <div
-            style={{
-              fontSize: 10,
-              opacity: 0.86,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Тема: {topic.title}
-          </div>
-        )}
-      </div>
+      />
     );
   };
 
@@ -984,17 +1106,21 @@ export default function SchedulePage() {
     }
   };
 
+  const getTimelineOffset = (minutesFromWindowStart: number) =>
+    getTimelineOffsetFromSlots(minutesFromWindowStart, timelineSlotHeights);
+
   const renderTimeLabels = () => (
     <div style={{ position: 'relative', height: timelineHeight }}>
       {Array.from({ length: timelineWindow.endHour - timelineWindow.startHour + 1 }, (_, index) => {
         const hour = timelineWindow.startHour + index;
         if (hour > timelineWindow.endHour) return null;
+        const top = getTimelineOffset(index * 60);
         return (
           <div
             key={hour}
             style={{
               position: 'absolute',
-              top: Math.max(4, Math.min(index * timelineHourHeight - 8, timelineHeight - 18)),
+              top: Math.max(4, Math.min(top - 8, timelineHeight - 18)),
               fontSize: 11,
               lineHeight: 1,
               color: '#748093',
@@ -1007,33 +1133,60 @@ export default function SchedulePage() {
     </div>
   );
 
-  const renderTimelineColumn = (items: Lesson[], narrow = false) => (
+  const renderTimelineColumn = (items: Lesson[], viewMode: LessonCardViewMode) => (
     <div
       style={{
         position: 'relative',
         height: timelineHeight,
         borderRadius: 0,
-        background:
-          `repeating-linear-gradient(to bottom, rgba(23,32,51,0.06) 0, rgba(23,32,51,0.06) 1px, transparent 1px, transparent ${timelineHourHeight}px)`,
+        background: '#fff',
         borderRight: '1px solid rgba(24,33,47,0.09)',
         borderBottom: '1px solid rgba(24,33,47,0.09)',
         overflow: 'hidden',
       }}
     >
-      {layoutTimelineLessons(items, timelineWindow.startHour, timelineHourHeight).map(({ lesson, top, height, column, columns }) => {
-        const laneGap = 6;
-        const width = `calc((100% - 16px - ${(columns - 1) * laneGap}px) / ${columns})`;
-        const left = `calc(8px + ${column} * (((100% - 16px - ${(columns - 1) * laneGap}px) / ${columns}) + ${laneGap}px))`;
+      {timelineSlotHeights.map((_, index) => (
+        <div
+          key={`slot-line-${index}`}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: getTimelineOffset(index * TIMELINE_SLOT_MINUTES),
+            borderTop: `1px solid ${index % 2 === 0 ? 'rgba(23,32,51,0.075)' : 'rgba(23,32,51,0.04)'}`,
+            pointerEvents: 'none',
+          }}
+        />
+      ))}
+      {layoutTimelineLessons(items, timelineWindow.startHour, timelineSlotHeights).map(({ lesson, top, height, column, columns }) => {
+        const narrow = viewMode === 'week';
+        const laneGap = narrow ? 4 : 6;
+        const safeColumn = narrow ? Math.min(column, 2) : column;
+        const width = narrow && columns > 1
+          ? `calc(100% - ${16 + safeColumn * 12}px)`
+          : `calc((100% - 16px - ${(columns - 1) * laneGap}px) / ${columns})`;
+        const left = narrow && columns > 1
+          ? `${8 + safeColumn * 12}px`
+          : `calc(8px + ${column} * (((100% - 16px - ${(columns - 1) * laneGap}px) / ${columns}) + ${laneGap}px))`;
 
-        const cardHeight = Math.max(height - 6, 30);
-        const density = narrow ? 'week' : cardHeight < 42 ? 'tiny' : cardHeight < 64 ? 'compact' : 'normal';
+        const rawCardHeight = Math.max(height - 8, 0);
+        const density: LessonCardDensity = rawCardHeight < MIN_EVENT_CARD_HEIGHT || columns > 1 ? 'compact' : 'standard';
+        const cardHeight = Math.max(rawCardHeight, density === 'compact' ? MIN_EVENT_CARD_HEIGHT : 92);
 
         return (
           <div
             key={lesson.id}
-            style={{ position: 'absolute', top: top + 3, left, width, height: cardHeight, zIndex: column + 1 }}
+            style={{
+              position: 'absolute',
+              top: top + 3,
+              left,
+              width,
+              minWidth: narrow && columns === 1 ? 0 : undefined,
+              height: cardHeight,
+              zIndex: narrow && columns > 1 ? 10 + column : column + 1,
+            }}
           >
-            {renderLessonCard(lesson, density)}
+            {renderLessonCard(lesson, viewMode, density)}
           </div>
         );
       })}
@@ -1043,30 +1196,30 @@ export default function SchedulePage() {
   const renderCalendarBody = () => {
     if (mode === 'day') {
       return (
-        <div style={{ display: 'grid', gridTemplateColumns: '58px minmax(0, 1fr)', gap: 0, width: '100%', minWidth: 0, border: '1px solid rgba(24,33,47,0.1)', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '58px minmax(0, 1fr)', gap: 0, width: '100%', minWidth: 0, border: '1px solid rgba(24,33,47,0.1)', borderRadius: 20, overflow: 'hidden', background: '#fff' }}>
           <div />
-          <div style={{ textAlign: 'center', padding: '8px 6px', background: 'rgba(23,32,51,0.05)', fontWeight: 800, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
+          <div style={{ textAlign: 'center', padding: '10px 6px', background: 'rgba(248,250,252,0.96)', fontWeight: 900, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
             {formatDayLong(dayDate)}
           </div>
           {renderTimeLabels()}
-          {renderTimelineColumn(dayLessons)}
+          {renderTimelineColumn(dayLessons, 'day')}
         </div>
       );
     }
 
     if (mode === 'week') {
       return (
-        <div style={{ display: 'grid', gridTemplateColumns: '58px repeat(7, minmax(0, 1fr))', gap: 0, width: '100%', minWidth: 0, border: '1px solid rgba(24,33,47,0.1)', borderRadius: 14, overflow: 'hidden' }}>
-          <div style={{ background: 'rgba(23,32,51,0.04)', borderBottom: '1px solid rgba(24,33,47,0.09)' }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '58px repeat(7, minmax(0, 1fr))', gap: 0, width: '100%', minWidth: 0, border: '1px solid rgba(24,33,47,0.1)', borderRadius: 20, overflow: 'hidden', background: '#fff' }}>
+          <div style={{ background: 'rgba(248,250,252,0.96)', borderBottom: '1px solid rgba(24,33,47,0.09)' }} />
           {weekDays.map((day, index) => (
-            <div key={formatDate(day)} style={{ textAlign: 'center', padding: '6px 4px', background: 'rgba(23,32,51,0.05)', minWidth: 0, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
-              <div style={{ fontWeight: 800 }}>{WEEK_DAYS[index]}</div>
+            <div key={formatDate(day)} style={{ textAlign: 'center', padding: '8px 4px', background: 'rgba(248,250,252,0.96)', minWidth: 0, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
+              <div style={{ fontWeight: 900, color: '#1f2a3b' }}>{WEEK_DAYS[index]}</div>
               <div style={{ color: '#667386', fontSize: 12 }}>{formatDayShort(day)}</div>
             </div>
           ))}
           {renderTimeLabels()}
           {weekLessonsByDay.map((items, index) => (
-            <div key={index} style={{ minWidth: 0 }}>{renderTimelineColumn(items, true)}</div>
+            <div key={index} style={{ minWidth: 0 }}>{renderTimelineColumn(items, 'week')}</div>
           ))}
         </div>
       );
@@ -1093,7 +1246,7 @@ export default function SchedulePage() {
                   borderRadius: 18,
                   padding: 12,
                   background: inMonth ? 'rgba(255,255,255,0.72)' : 'rgba(23,32,51,0.03)',
-                  border: isToday ? '2px solid rgba(217,111,50,0.9)' : '1px solid rgba(24,33,47,0.06)',
+                  border: isToday ? '2px solid rgba(42,171,238,0.9)' : '1px solid rgba(24,33,47,0.06)',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -1106,7 +1259,7 @@ export default function SchedulePage() {
                       height: 28,
                       padding: 0,
                       borderRadius: 999,
-                      background: isToday ? 'rgba(217,111,50,0.12)' : 'transparent',
+                      background: isToday ? 'rgba(42,171,238,0.12)' : 'transparent',
                       color: inMonth ? '#1e293b' : '#98a1af',
                       boxShadow: 'none',
                       fontWeight: 800,
@@ -1121,7 +1274,7 @@ export default function SchedulePage() {
                   )}
                 </div>
                 <div style={{ display: 'grid', gap: 8 }}>
-                  {items.slice(0, 3).map((lesson) => renderLessonCard(lesson, 'compact'))}
+                  {items.slice(0, 3).map((lesson) => renderLessonCard(lesson, 'month', 'compact'))}
                   {items.length > 3 && (
                     <button
                       type="button"
@@ -1149,78 +1302,122 @@ export default function SchedulePage() {
   };
 
   return (
-    <div>
-      <div style={{ display: 'grid', gap: 12 }}>
-        <section style={{ ...panelStyle, padding: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', minWidth: 0 }}>
-              <button title="Предыдущий период" onClick={() => moveRange(-1)} style={{ minWidth: 38, width: 38, height: 38, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 20, display: 'inline-grid', placeItems: 'center' }}>
-                ‹
-              </button>
-              <button onClick={() => setAnchorDate(atMidnight(new Date()))} style={{ background: 'rgba(217,111,50,0.92)', boxShadow: 'none', padding: '9px 12px' }}>Сегодня</button>
-              <button title="Следующий период" onClick={() => moveRange(1)} style={{ minWidth: 38, width: 38, height: 38, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 20, display: 'inline-grid', placeItems: 'center' }}>
-                ›
-              </button>
-              <div style={{ fontWeight: 900, color: '#1f2a3b', fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {rangeLabel}
-              </div>
-              <span style={{ color: '#687486', fontSize: 12, whiteSpace: 'nowrap' }}>
-                {visibleLessons.length} записей
-              </span>
-            </div>
+    <div style={{ display: 'grid', gap: 16 }}>
+      <h1 className="page-heading">Расписание</h1>
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
-              <label
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  color: '#324055',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={showRescheduledLessons}
-                  onChange={(event) => setShowRescheduledLessons(event.target.checked)}
-                  style={{ width: 14, height: 14 }}
-                />
-                Перенесённые/отменённые
-              </label>
-              <select
-                value={mode}
-                title="Режим расписания"
-                onChange={(event) => setMode(event.target.value as CalendarMode)}
-                style={{
-                  width: 146,
-                  height: 40,
-                  minHeight: 40,
-                  padding: '0 34px 0 12px',
-                  lineHeight: '40px',
-                  fontSize: 14,
-                  boxSizing: 'border-box',
-                  display: 'block',
-                }}
-              >
-                <option value="day">День</option>
-                <option value="week">Неделя</option>
-                <option value="month">Месяц</option>
-              </select>
-              <button title="Создать занятие" type="button" onClick={() => setIsCreateLessonOpen(true)} style={{ minWidth: 38, width: 38, height: 38, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center' }}>
-                +
-              </button>
-              <button title="Создать свободные слоты" type="button" onClick={() => setIsSlotPlannerOpen(true)} style={{ minWidth: 38, width: 38, height: 38, padding: 0, borderRadius: 999, background: 'rgba(42,111,219,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}>
-                □
-              </button>
+      <section
+        className="mentor-panel"
+        style={{
+          padding: 14,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', minWidth: 0 }}>
+          <button title="Предыдущий период" onClick={() => moveRange(-1)} className="icon-button ghost-button">
+            ‹
+          </button>
+          <button title="Следующий период" onClick={() => moveRange(1)} className="icon-button ghost-button">
+            ›
+          </button>
+          <button onClick={() => setAnchorDate(atMidnight(new Date()))} className="ghost-button" style={{ height: 42, padding: '0 18px' }}>
+            Сегодня
+          </button>
+          <div style={{ display: 'flex', gap: 9, alignItems: 'center', minWidth: 0, marginLeft: 4 }}>
+            <span style={{ color: '#536177', fontSize: 20 }}>▣</span>
+            <div style={{ fontWeight: 900, color: '#1f2a3b', fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {rangeLabel}
             </div>
           </div>
+        </div>
 
-          <div style={{ width: '100%', minWidth: 0, overflow: 'hidden' }}>
-            {loading ? <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка расписания...</p> : renderCalendarBody()}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'inline-flex', padding: 4, borderRadius: 16, background: 'rgba(23,32,51,0.06)', border: '1px solid rgba(24,33,47,0.08)' }}>
+            {[
+              ['week', 'Неделя'],
+              ['day', 'День'],
+              ['month', 'Месяц'],
+            ].map(([value, label]) => {
+              const active = mode === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setMode(value as CalendarMode)}
+                  style={{
+                    height: 38,
+                    minWidth: 88,
+                    borderRadius: 13,
+                    background: active ? '#172033' : 'transparent',
+                    color: active ? '#fff' : '#435066',
+                    border: 'none',
+                    boxShadow: active ? '0 8px 18px rgba(15,23,42,0.16)' : 'none',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
-        </section>
+
+          <button type="button" title="Добавить занятие" onClick={() => setIsCreateLessonOpen(true)} className="add-trigger">
+            +
+          </button>
+          <button title="Создать свободные слоты" type="button" onClick={() => setIsSlotPlannerOpen(true)} className="icon-button ghost-button">
+            □
+          </button>
+        </div>
+      </section>
+
+      <section className="metric-grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 }}>
+        <div className="metric-card" style={{ minHeight: 92, background: 'linear-gradient(135deg, rgba(42,171,238,0.10), rgba(255,255,255,0.96))', borderColor: 'rgba(42,171,238,0.18)' }}>
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.13)', color: '#2AABEE' }}>▣</span>
+          <div><div className="metric-value">{rangeBookedLessons.length} {pluralRu(rangeBookedLessons.length, ['занятие', 'занятия', 'занятий'])}</div><div className="metric-label">{mode === 'day' ? 'В выбранный день' : mode === 'month' ? 'В этом месяце' : 'На этой неделе'}</div></div>
+        </div>
+        <div className="metric-card" style={{ minHeight: 92, background: 'linear-gradient(135deg, rgba(42,171,238,0.12), rgba(255,250,244,0.98))', borderColor: 'rgba(42,171,238,0.18)' }}>
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.14)', color: '#2AABEE' }}>↔</span>
+          <div><div className="metric-value">{rangeMovedLessons.length} {pluralRu(rangeMovedLessons.length, ['перенос', 'переноса', 'переносов'])}</div><div className="metric-label">В выбранном периоде</div></div>
+        </div>
+        <div className="metric-card" style={{ minHeight: 92, background: 'linear-gradient(135deg, rgba(47,125,99,0.12), rgba(247,255,251,0.98))', borderColor: 'rgba(47,125,99,0.18)' }}>
+          <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.14)', color: '#4CAF50' }}>₽</span>
+          <div><div className="metric-label">Ожидаемый доход</div><div className="metric-value">{formatMoney(rangeExpectedIncome)}</div><div className="metric-label">По расписанию</div></div>
+        </div>
+        <label className="metric-card" style={{ minHeight: 92, cursor: 'pointer', background: 'rgba(255,255,255,0.9)' }}>
+          <span className="metric-icon" style={{ background: 'rgba(23,32,51,0.06)', color: '#536177' }}>
+            <input
+              type="checkbox"
+              checked={showRescheduledLessons}
+              onChange={(event) => setShowRescheduledLessons(event.target.checked)}
+              style={{ width: 18, height: 18 }}
+            />
+          </span>
+          <div><div className="metric-value">Показать перенесённые</div><div className="metric-label">И отменённые занятия</div></div>
+        </label>
+      </section>
+
+      <section className="mentor-panel" style={{ padding: 10, overflow: 'hidden', borderRadius: 24, boxShadow: 'var(--shadow-card)' }}>
+        <div style={{ width: '100%', minWidth: 0, overflow: 'hidden' }}>
+          {loading ? <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка расписания...</p> : renderCalendarBody()}
+        </div>
+      </section>
+
+      <div
+        className="mentor-panel"
+        style={{
+          padding: '12px 16px',
+          color: '#687486',
+          fontSize: 13,
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}><span>ⓘ</span> Время указано по вашему часовому поясу: Москва (UTC+3)</span>
+        <span>Занятия длятся 60 минут по умолчанию. Стоимость указана за занятие.</span>
       </div>
 
       {selectedMonthDay && selectedMonthDayDate && (
@@ -1253,7 +1450,7 @@ export default function SchedulePage() {
                   const student = students.find((item) => item.id === relation?.student_id);
                   const subject = subjects.find((item) => item.id === relation?.subject_id);
                   const windowCard = isWindow(lesson);
-                  const color = windowCard ? '#2a6fdb' : statusColor(lesson.conduct_status);
+                  const color = windowCard ? '#2AABEE' : statusColor(lesson.conduct_status);
 
                   return (
                     <button
@@ -1296,63 +1493,76 @@ export default function SchedulePage() {
       {isCreateLessonOpen && (
         <div
           onClick={() => setIsCreateLessonOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.34)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 24, zIndex: 1000 }}
+          className="modal-overlay"
         >
           <div
             onClick={(event) => event.stopPropagation()}
-            style={{ width: 'min(620px, 100%)', borderRadius: 28, background: 'rgba(255,255,255,0.98)', boxShadow: '0 28px 70px rgba(15, 23, 42, 0.22)', border: '1px solid rgba(24,33,47,0.08)', overflow: 'hidden' }}
+            className="app-modal"
           >
-            <div style={{ padding: '22px 24px 18px', background: 'rgba(217,111,50,0.1)', borderBottom: '1px solid rgba(24,33,47,0.08)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                <div>
-                  <h3 style={{ fontSize: 28, lineHeight: 1.02, marginBottom: 8 }}>Создать занятие</h3>
-                  <p style={{ color: '#5d6778', marginBottom: 0 }}>Заполни ученика, дату, время и тему занятия. Стоимость посчитается автоматически.</p>
-                </div>
-                <button onClick={() => setIsCreateLessonOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>×</button>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">Создать занятие</h3>
+                <p className="modal-subtitle">Заполни ученика, дату, время и тему занятия. Стоимость посчитается автоматически.</p>
               </div>
+              <button type="button" title="Закрыть" onClick={() => setIsCreateLessonOpen(false)} className="modal-close">×</button>
             </div>
 
-            <div style={{ padding: 24, display: 'grid', gap: 10 }}>
-              <select
-                value={selectedTutorStudentId}
-                onChange={(event) => {
-                  const nextId = event.target.value;
-                  const nextOption = tutorStudentOptions.find((item) => String(item.id) === nextId);
-                  setSelectedTutorStudentId(nextId);
-                  setCost(nextOption?.rate ? String(nextOption.rate) : '');
-                }}
-              >
-                {tutorStudentOptions.length === 0 ? (
-                  <option value="">Нет активных связок</option>
-                ) : (
-                  tutorStudentOptions.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))
-                )}
-              </select>
-              <input type="date" value={lessonDate} onChange={(event) => setLessonDate(event.target.value)} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
-                <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+            <div className="modal-form-grid">
+              <label className="modal-field">
+                Ученик и предмет
+                <select
+                  value={selectedTutorStudentId}
+                  onChange={(event) => {
+                    const nextId = event.target.value;
+                    const nextOption = tutorStudentOptions.find((item) => String(item.id) === nextId);
+                    setSelectedTutorStudentId(nextId);
+                    setCost(nextOption?.rate ? String(nextOption.rate) : '');
+                  }}
+                >
+                  {tutorStudentOptions.length === 0 ? (
+                    <option value="">Нет активных связок</option>
+                  ) : (
+                    tutorStudentOptions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
+              <label className="modal-field">
+                Дата
+                <input type="date" value={lessonDate} onChange={(event) => setLessonDate(event.target.value)} />
+              </label>
+              <div className="modal-row">
+                <label className="modal-field">
+                  Время начала
+                  <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+                </label>
+                <label className="modal-field">
+                  Время окончания
+                  <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+                </label>
               </div>
-              <input type="number" value={cost} readOnly placeholder="Стоимость" style={{ background: 'rgba(23,32,51,0.04)', color: '#435066' }} />
-              <select value={newTopicId} onChange={(event) => setNewTopicId(event.target.value)}>
-                <option value="">Без темы</option>
-                {availableCreateTopics.map((topic) => (
-                  <option key={topic.id} value={topic.id}>
-                    {topic.title} • {formatTopicLevels(topic.study_level)}
-                  </option>
-                ))}
-              </select>
+              <label className="modal-field">
+                Стоимость
+                <input type="number" value={cost} readOnly placeholder="Стоимость" style={{ background: '#f8fafc', color: '#435066' }} />
+              </label>
+              <label className="modal-field">
+                Тема занятия
+                <select value={newTopicId} onChange={(event) => setNewTopicId(event.target.value)}>
+                  <option value="">Без темы</option>
+                  {availableCreateTopics.map((topic) => (
+                    <option key={topic.id} value={topic.id}>
+                      {topic.title} • {formatTopicLevels(topic, tutorLevels)}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
-                <button onClick={handleCreateLesson} disabled={saving || !tutorStudentOptions.length}>
+              <div className="modal-actions">
+                <button className="modal-primary" onClick={handleCreateLesson} disabled={saving || !tutorStudentOptions.length}>
                   {saving ? 'Сохраняем...' : 'Создать занятие'}
-                </button>
-                <button onClick={() => setIsCreateLessonOpen(false)} style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>
-                  Отмена
                 </button>
               </div>
             </div>
@@ -1363,73 +1573,92 @@ export default function SchedulePage() {
       {isSlotPlannerOpen && (
         <div
           onClick={() => setIsSlotPlannerOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.34)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 24, zIndex: 1000 }}
+          className="modal-overlay"
         >
           <div
             onClick={(event) => event.stopPropagation()}
-            style={{ width: 'min(820px, 100%)', borderRadius: 28, background: 'rgba(255,255,255,0.98)', boxShadow: '0 28px 70px rgba(15, 23, 42, 0.22)', border: '1px solid rgba(24,33,47,0.08)', overflow: 'hidden' }}
+            className="app-modal wide"
+            style={{ width: 'min(1040px, 100%)' }}
           >
-            <div style={{ padding: '22px 24px 18px', background: 'rgba(42,111,219,0.08)', borderBottom: '1px solid rgba(24,33,47,0.08)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ display: 'inline-flex', padding: '8px 12px', borderRadius: 999, background: '#2a6fdb', color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
-                    Свободные слоты
-                  </div>
-                  <h3 style={{ fontSize: 28, lineHeight: 1.02, marginBottom: 8 }}>Создать слоты на неделю</h3>
-                  <p style={{ color: '#5d6778', marginBottom: 0 }}>
-                    Укажи по дням диапазон времени, а система сама разобьёт его на слоты нужной длительности.
-                  </p>
+            <div className="modal-header">
+              <div>
+                <div style={{ display: 'inline-flex', padding: '8px 12px', borderRadius: 999, background: '#2AABEE', color: '#fff', fontSize: 12, fontWeight: 900, marginBottom: 12 }}>
+                  Свободные слоты
                 </div>
-                <button onClick={() => setIsSlotPlannerOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>×</button>
+                <h3 className="modal-title">Создать свободные слоты</h3>
+                <p className="modal-subtitle">
+                  Выберите дни и задайте диапазоны времени. Система создаст слоты автоматически.
+                </p>
               </div>
+              <button type="button" title="Закрыть" onClick={() => setIsSlotPlannerOpen(false)} className="modal-close">×</button>
             </div>
 
-            <div style={{ padding: 24 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 12, marginBottom: 20 }}>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'grid', gap: 18 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 220px', gap: 16, alignItems: 'end', padding: 14, borderRadius: 20, background: '#f8fafc', border: '1px solid rgba(31,42,59,0.08)' }}>
+                <div style={{ display: 'inline-flex', gap: 6, padding: 5, borderRadius: 16, background: '#fff', border: '1px solid rgba(31,42,59,0.1)', width: 'fit-content' }}>
                   <button
+                    type="button"
                     title="Текущая неделя"
                     onClick={() => setSlotWeekOffset(0)}
-                    style={{ background: slotWeekOffset === 0 ? 'rgba(217,111,50,0.92)' : 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                    style={{
+                      height: 40,
+                      borderRadius: 13,
+                      background: slotWeekOffset === 0 ? '#2AABEE' : 'transparent',
+                      color: slotWeekOffset === 0 ? '#fff' : '#324055',
+                      border: 'none',
+                      boxShadow: slotWeekOffset === 0 ? '0 10px 22px rgba(42,171,238,0.22)' : 'none',
+                    }}
                   >
-                    Текущая
+                    Текущая неделя
                   </button>
                   <button
+                    type="button"
                     title="Следующая неделя"
                     onClick={() => setSlotWeekOffset(1)}
-                    style={{ background: slotWeekOffset === 1 ? 'rgba(217,111,50,0.92)' : 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                    style={{
+                      height: 40,
+                      borderRadius: 13,
+                      background: slotWeekOffset === 1 ? '#2AABEE' : 'transparent',
+                      color: slotWeekOffset === 1 ? '#fff' : '#324055',
+                      border: 'none',
+                      boxShadow: slotWeekOffset === 1 ? '0 10px 22px rgba(42,171,238,0.22)' : 'none',
+                    }}
                   >
-                    Следующая
+                    Следующая неделя
                   </button>
                 </div>
-                <input
-                  type="number"
-                  min="15"
-                  step="15"
-                  value={slotDurationMinutes}
-                  onChange={(event) => setSlotDurationMinutes(event.target.value)}
-                  placeholder="Длительность, мин"
-                />
+                <label className="modal-field">
+                  Длительность слота
+                  <input
+                    type="number"
+                    min="15"
+                    step="15"
+                    value={slotDurationMinutes}
+                    onChange={(event) => setSlotDurationMinutes(event.target.value)}
+                    placeholder="60 мин"
+                  />
+                </label>
               </div>
 
-              <div style={{ display: 'grid', gap: 10, marginBottom: 20 }}>
+              <div className="slot-days-grid">
                 {slotDrafts.map((draft, index) => {
                   const dayDate = addDays(slotPlannerWeekStart, index);
+                  const enabled = draft.enabled;
                   return (
                     <div
                       key={index}
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '180px 1fr 1fr',
-                        gap: 10,
-                        alignItems: 'center',
-                        padding: 14,
-                        borderRadius: 16,
-                        background: 'rgba(23,32,51,0.04)',
-                        border: '1px solid rgba(24,33,47,0.06)',
+                        gap: 12,
+                        minHeight: 190,
+                        padding: 16,
+                        borderRadius: 20,
+                        background: enabled ? '#eef6ff' : '#fff',
+                        border: enabled ? '1px solid rgba(42,171,238,0.35)' : '1px solid rgba(31,42,59,0.1)',
+                        boxShadow: enabled ? '0 14px 30px rgba(42,171,238,0.1)' : '0 10px 26px rgba(15,23,42,0.05)',
                       }}
                     >
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700, color: '#1f2a3b' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 900, color: '#1f2a3b' }}>
                         <input
                           type="checkbox"
                           checked={draft.enabled}
@@ -1437,32 +1666,40 @@ export default function SchedulePage() {
                         />
                         {WEEK_DAYS[index]} • {formatDayShort(dayDate)}
                       </label>
-                      <input
-                        type="time"
-                        value={draft.start}
-                        disabled={!draft.enabled}
-                        onChange={(event) => handleSlotDraftChange(index, { start: event.target.value })}
-                      />
-                      <input
-                        type="time"
-                        value={draft.end}
-                        disabled={!draft.enabled}
-                        onChange={(event) => handleSlotDraftChange(index, { end: event.target.value })}
-                      />
+                      <label className="modal-field" style={{ gap: 6, fontSize: 13 }}>
+                        С
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type="time"
+                            value={draft.start}
+                            disabled={!draft.enabled}
+                            onChange={(event) => handleSlotDraftChange(index, { start: event.target.value })}
+                            style={{ paddingRight: 38, background: draft.enabled ? '#fff' : '#f8fafc' }}
+                          />
+                          <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: '#687486', pointerEvents: 'none' }}>◷</span>
+                        </div>
+                      </label>
+                      <label className="modal-field" style={{ gap: 6, fontSize: 13 }}>
+                        До
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type="time"
+                            value={draft.end}
+                            disabled={!draft.enabled}
+                            onChange={(event) => handleSlotDraftChange(index, { end: event.target.value })}
+                            style={{ paddingRight: 38, background: draft.enabled ? '#fff' : '#f8fafc' }}
+                          />
+                          <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: '#687486', pointerEvents: 'none' }}>◷</span>
+                        </div>
+                      </label>
                     </div>
                   );
                 })}
               </div>
 
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button onClick={handleCreateSlots} disabled={saving}>
+              <div className="modal-actions">
+                <button type="button" onClick={handleCreateSlots} disabled={saving} className="modal-primary">
                   {saving ? 'Сохраняем...' : 'Создать слоты'}
-                </button>
-                <button
-                  onClick={() => setIsSlotPlannerOpen(false)}
-                  style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
-                >
-                  Отмена
                 </button>
               </div>
             </div>
@@ -1476,7 +1713,7 @@ export default function SchedulePage() {
         const subject = subjects.find((item) => item.id === relation?.subject_id);
         const topic = topics.find((item) => item.id === selectedLesson.topic_id);
         const selectedWindow = isWindow(selectedLesson);
-        const currentStatusColor = selectedWindow ? '#2a6fdb' : statusColor(selectedLesson.conduct_status);
+        const currentStatusColor = selectedWindow ? '#2AABEE' : statusColor(selectedLesson.conduct_status);
         const canMarkConducted = !selectedWindow && selectedLesson.conduct_status === 'scheduled';
         const canOpenReschedule = !selectedWindow && selectedLesson.conduct_status === 'scheduled';
         const canApproveBooking = !selectedWindow && selectedLesson.conduct_status === 'booking_pending';
@@ -1551,12 +1788,12 @@ export default function SchedulePage() {
                         setIsEditingLesson((prev) => !prev);
                         setIsReschedulingLesson(false);
                       }}
-                      style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: isEditingLesson ? 'rgba(23,32,51,0.92)' : '#d96f32', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                      style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: isEditingLesson ? 'rgba(23,32,51,0.92)' : '#2AABEE', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                     >
                       ✎
                     </button>
                     {canMarkConducted && (
-                      <button title="Отметить проведённым" onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'conducted' })} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#2f7d63', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}>
+                      <button title="Отметить проведённым" onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'conducted' })} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#4CAF50', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}>
                         ✓
                       </button>
                     )}
@@ -1567,7 +1804,7 @@ export default function SchedulePage() {
                           setIsReschedulingLesson((prev) => !prev);
                           setIsEditingLesson(false);
                         }}
-                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: isReschedulingLesson ? '#7b61c8' : 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: isReschedulingLesson ? '#9C27B0' : 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                       >
                         ↻
                       </button>
@@ -1575,7 +1812,7 @@ export default function SchedulePage() {
                     {canApproveBooking && (
                       <button
                         onClick={() => handleBookingDecision(selectedLesson.id, true)}
-                        style={{ background: '#2f7d63', boxShadow: 'none' }}
+                        style={{ background: '#4CAF50', boxShadow: 'none' }}
                       >
                         Подтвердить запись
                       </button>
@@ -1583,7 +1820,7 @@ export default function SchedulePage() {
                     {canRejectBooking && (
                       <button
                         onClick={() => handleBookingDecision(selectedLesson.id, false)}
-                        style={{ background: '#a63f3b', boxShadow: 'none' }}
+                        style={{ background: '#F44336', boxShadow: 'none' }}
                       >
                         Отклонить запись
                       </button>
@@ -1591,7 +1828,7 @@ export default function SchedulePage() {
                     {canApprovePayment && (
                       <button
                         onClick={() => handlePaymentDecision(selectedLesson.id, true)}
-                        style={{ background: '#2f7d63', boxShadow: 'none' }}
+                        style={{ background: '#4CAF50', boxShadow: 'none' }}
                       >
                         Подтвердить оплату
                       </button>
@@ -1599,7 +1836,7 @@ export default function SchedulePage() {
                     {canRejectPayment && (
                       <button
                         onClick={() => handlePaymentDecision(selectedLesson.id, false)}
-                        style={{ background: '#a63f3b', boxShadow: 'none' }}
+                        style={{ background: '#F44336', boxShadow: 'none' }}
                       >
                         Отклонить оплату
                       </button>
@@ -1608,7 +1845,7 @@ export default function SchedulePage() {
                       <button
                         title="Отметить оплаченным"
                         onClick={() => handleLessonPatch(selectedLesson.id, { payment_status: 'paid' })}
-                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#2f7d63', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#4CAF50', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                       >
                         ₽
                       </button>
@@ -1617,7 +1854,7 @@ export default function SchedulePage() {
                       <button
                         title="Удалить слот"
                         onClick={() => handleLessonDelete(selectedLesson)}
-                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#a63f3b', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#F44336', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                       >
                         🗑
                       </button>
@@ -1626,7 +1863,7 @@ export default function SchedulePage() {
                       <button
                         title="Отменить занятие"
                         onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'cancelled' })}
-                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#a63f3b', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#F44336', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                       >
                         ⊘
                       </button>
@@ -1656,7 +1893,7 @@ export default function SchedulePage() {
                         <option value="">Без темы</option>
                         {availableEditTopics.map((topic) => (
                           <option key={topic.id} value={topic.id}>
-                            {topic.title} • {formatTopicLevels(topic.study_level)}
+                            {topic.title} • {formatTopicLevels(topic, tutorLevels)}
                           </option>
                         ))}
                       </select>
@@ -1690,7 +1927,7 @@ export default function SchedulePage() {
                       <input type="time" value={rescheduleEndTime} onChange={(event) => setRescheduleEndTime(event.target.value)} />
                     </div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button onClick={handleLessonReschedule} style={{ background: '#7b61c8', boxShadow: 'none' }}>
+                      <button onClick={handleLessonReschedule} style={{ background: '#9C27B0', boxShadow: 'none' }}>
                         Подтвердить перенос
                       </button>
                       <button
@@ -1729,7 +1966,7 @@ export default function SchedulePage() {
                             height: 36,
                             padding: 0,
                             borderRadius: 999,
-                            background: showLessonNoteEditor ? 'rgba(23,32,51,0.92)' : '#d96f32',
+                            background: showLessonNoteEditor ? 'rgba(23,32,51,0.92)' : '#2AABEE',
                             boxShadow: 'none',
                             fontSize: 18,
                             display: 'inline-grid',
@@ -1757,7 +1994,7 @@ export default function SchedulePage() {
                       </div>
 
                       {!showLessonNoteEditor && selectedLesson.tutor_note?.trim() && (
-                        <div style={{ padding: '12px 14px', borderRadius: 14, background: 'rgba(217,111,50,0.08)', border: '1px solid rgba(217,111,50,0.16)' }}>
+                        <div style={{ padding: '12px 14px', borderRadius: 14, background: 'rgba(42,171,238,0.08)', border: '1px solid rgba(42,171,238,0.16)' }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#9b531f', marginBottom: 6 }}>Личная заметка</div>
                           <div style={{ color: '#364152', whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{selectedLesson.tutor_note}</div>
                         </div>

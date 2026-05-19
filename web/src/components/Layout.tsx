@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getPendingCount } from '../api/lessons';
 import { getTutorProfile } from '../api/tutor';
@@ -13,27 +13,117 @@ const NAV_GROUPS = [
   {
     title: 'Главное',
     items: [
-      { to: '/', label: 'Главная', exact: true },
-      { to: '/schedule', label: 'Расписание' },
+      { to: '/', label: 'Главная', icon: 'home', exact: true },
+      { to: '/schedule', label: 'Расписание', icon: 'calendar' },
     ],
   },
   {
     title: 'Учебный процесс',
     items: [
-      { to: '/students', label: 'Ученики' },
-      { to: '/assignments', label: 'Задания' },
-      { to: '/materials', label: 'Материалы' },
+      { to: '/students', label: 'Ученики', icon: 'users' },
+      { to: '/assignments', label: 'Задания', icon: 'file' },
+      { to: '/materials', label: 'Материалы', icon: 'book' },
     ],
   },
   {
     title: 'Структура',
-    items: [{ to: '/contacts', label: 'Контакты' }],
+    items: [{ to: '/contacts', label: 'Контакты', icon: 'contact' }],
   },
   {
     title: 'Финансы',
-    items: [{ to: '/finance', label: 'Финансы' }],
+    items: [{ to: '/finance', label: 'Финансы', icon: 'ruble' }],
   },
 ] as const;
+
+type NavIconName = (typeof NAV_GROUPS)[number]['items'][number]['icon'];
+
+function NavIcon({ name }: { name: NavIconName }) {
+  const common = {
+    width: 19,
+    height: 19,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2.1,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  };
+
+  if (name === 'home') {
+    return (
+      <svg {...common}>
+        <path d="M3 11.5 12 4l9 7.5" />
+        <path d="M5.5 10.5V20h13v-9.5" />
+        <path d="M9.5 20v-5h5v5" />
+      </svg>
+    );
+  }
+
+  if (name === 'calendar') {
+    return (
+      <svg {...common}>
+        <path d="M7 3v4" />
+        <path d="M17 3v4" />
+        <path d="M4 8h16" />
+        <path d="M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" />
+      </svg>
+    );
+  }
+
+  if (name === 'users') {
+    return (
+      <svg {...common}>
+        <path d="M16 19c0-2.2-1.8-4-4-4s-4 1.8-4 4" />
+        <circle cx="12" cy="8" r="3" />
+        <path d="M4.5 18c.2-1.7 1.3-3.1 2.8-3.8" />
+        <path d="M16.7 14.2c1.5.7 2.6 2.1 2.8 3.8" />
+        <path d="M6.8 10.5a2.3 2.3 0 1 1 1.5-4" />
+        <path d="M17.2 10.5a2.3 2.3 0 1 0-1.5-4" />
+      </svg>
+    );
+  }
+
+  if (name === 'file') {
+    return (
+      <svg {...common}>
+        <path d="M7 3h7l4 4v14H7z" />
+        <path d="M14 3v5h5" />
+        <path d="M9.5 13h5" />
+        <path d="M9.5 17h4" />
+      </svg>
+    );
+  }
+
+  if (name === 'book') {
+    return (
+      <svg {...common}>
+        <path d="M5 4h6a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H5z" />
+        <path d="M19 4h-5a3 3 0 0 0-3 3" />
+        <path d="M19 4v13h-5a3 3 0 0 0-3 3" />
+      </svg>
+    );
+  }
+
+  if (name === 'contact') {
+    return (
+      <svg {...common}>
+        <path d="M5 4h14v16H5z" />
+        <circle cx="12" cy="10" r="2.5" />
+        <path d="M8.5 17c.6-2 2-3 3.5-3s2.9 1 3.5 3" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...common}>
+      <path d="M8 4v16" />
+      <path d="M16 4v16" />
+      <path d="M6 8h10a3 3 0 1 1 0 6H6" />
+      <path d="M6 14h12" />
+    </svg>
+  );
+}
 
 function getInitials(label: string) {
   return label
@@ -132,27 +222,28 @@ export default function Layout({ children }: LayoutProps) {
         gridTemplateColumns: isMobile
           ? '1fr'
           : isTablet
-            ? '240px minmax(0, 1fr)'
-            : '272px minmax(0, 1fr)',
+            ? '238px minmax(0, 1fr)'
+            : '286px minmax(0, 1fr)',
+        background: 'transparent',
       }}
     >
       <aside
         style={{
           background:
-            'linear-gradient(180deg, rgba(23,32,51,0.98) 0%, rgba(26,38,59,0.97) 100%)',
+            'radial-gradient(circle at 20% 0%, rgba(86,112,158,0.28), transparent 24%), linear-gradient(180deg, #152238 0%, #111d30 52%, #0d1728 100%)',
           color: '#f8fafc',
-          padding: isMobile ? '14px 14px 12px' : '18px 14px 16px',
+          padding: isMobile ? '14px 14px 12px' : '22px 18px 18px',
           borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.06)',
           borderBottom: isMobile ? '1px solid rgba(255,255,255,0.06)' : 'none',
           boxShadow: isMobile
             ? '0 14px 32px rgba(18, 26, 38, 0.12)'
-            : '18px 0 40px rgba(18, 26, 38, 0.12)',
+            : '18px 0 42px rgba(15, 23, 42, 0.16)',
           position: isMobile ? 'relative' : 'sticky',
           top: 0,
           height: isMobile ? 'auto' : '100vh',
           display: 'flex',
           flexDirection: 'column',
-          gap: 16,
+          gap: 18,
         }}
       >
         <div
@@ -163,11 +254,12 @@ export default function Layout({ children }: LayoutProps) {
         >
           <div
             style={{
-              fontSize: 12,
-              letterSpacing: '0.16em',
+              fontSize: 13,
+              letterSpacing: '0.18em',
               textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.52)',
-              marginBottom: 12,
+              color: 'rgba(255,255,255,0.72)',
+              marginBottom: 16,
+              fontWeight: 800,
             }}
           >
             Mentor App
@@ -186,12 +278,12 @@ export default function Layout({ children }: LayoutProps) {
                   ? '1px solid rgba(255,255,255,0.18)'
                   : '1px solid rgba(255,255,255,0.1)',
                 background: isProfileActive
-                  ? 'linear-gradient(180deg, rgba(217,111,50,0.96) 0%, rgba(199,93,36,0.96) 100%)'
+                  ? 'linear-gradient(180deg, rgba(42,171,238,0.96) 0%, rgba(34,158,217,0.96) 100%)'
                   : 'linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
                 fontSize: 18,
                 fontWeight: 800,
                 boxShadow: isProfileActive
-                  ? '0 10px 24px rgba(217,111,50,0.24)'
+                  ? '0 10px 24px rgba(42,171,238,0.24)'
                   : '0 8px 18px rgba(7, 11, 20, 0.18)',
               }}
             >
@@ -211,12 +303,12 @@ export default function Layout({ children }: LayoutProps) {
                   ? '1px solid rgba(255,255,255,0.18)'
                   : '1px solid rgba(255,255,255,0.1)',
                 background: isRequestsActive
-                  ? 'linear-gradient(180deg, rgba(217,111,50,0.96) 0%, rgba(199,93,36,0.96) 100%)'
+                  ? 'linear-gradient(180deg, rgba(42,171,238,0.96) 0%, rgba(34,158,217,0.96) 100%)'
                   : 'linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
                 fontSize: 18,
                 fontWeight: 800,
                 boxShadow: isRequestsActive
-                  ? '0 10px 24px rgba(217,111,50,0.24)'
+                  ? '0 10px 24px rgba(42,171,238,0.24)'
                   : '0 8px 18px rgba(7, 11, 20, 0.18)',
               }}
             >
@@ -231,7 +323,7 @@ export default function Layout({ children }: LayoutProps) {
                     height: 20,
                     padding: '0 5px',
                     borderRadius: 999,
-                    background: '#d94b4b',
+                    background: '#F44336',
                     color: '#fff',
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -253,17 +345,18 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </div>
 
-        <nav style={{ display: 'grid', gap: 14, overflowY: 'auto', paddingRight: 2 }}>
+        <nav style={{ display: 'grid', gap: 16, overflowY: 'auto', paddingRight: 2 }}>
           {NAV_GROUPS.map((group) => (
             <div
               key={group.title}
               style={{
                 display: 'grid',
                 gap: 8,
-                padding: '10px 8px',
-                borderRadius: 18,
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.04)',
+                padding: '10px',
+                borderRadius: 20,
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.025) 100%)',
+                border: '1px solid rgba(255,255,255,0.055)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
               }}
             >
               <div
@@ -294,24 +387,38 @@ export default function Layout({ children }: LayoutProps) {
                     style={({ isActive }) => ({
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
-                      minHeight: 42,
-                      padding: '0 13px',
+                      gap: 11,
+                      minHeight: 46,
+                      padding: '0 14px',
                       borderRadius: 14,
                       color: isActive ? '#fff' : 'rgba(255,255,255,0.72)',
                       background: isActive
-                        ? 'linear-gradient(180deg, rgba(217,111,50,0.96) 0%, rgba(199,93,36,0.96) 100%)'
-                        : 'rgba(255,255,255,0.02)',
+                        ? 'linear-gradient(180deg, #2AABEE 0%, #229ED9 100%)'
+                        : 'rgba(255,255,255,0.025)',
                       border: isActive
                         ? '1px solid rgba(255,255,255,0.12)'
                         : '1px solid rgba(255,255,255,0.04)',
                       boxShadow: isActive
-                        ? '0 10px 24px rgba(217,111,50,0.24)'
+                        ? '0 12px 26px rgba(42,171,238,0.28)'
                         : 'inset 0 1px 0 rgba(255,255,255,0.02)',
                       fontSize: 14,
                       fontWeight: 700,
                     })}
                   >
+                    <span
+                      style={{
+                        width: 25,
+                        height: 25,
+                        borderRadius: 9,
+                        display: 'inline-grid',
+                        placeItems: 'center',
+                        background: 'rgba(255,255,255,0.08)',
+                        color: 'inherit',
+                        flex: '0 0 auto',
+                      }}
+                    >
+                      <NavIcon name={item.icon} />
+                    </span>
                     <span>{item.label}</span>
                   </NavLink>
                 ))}
@@ -371,12 +478,12 @@ export default function Layout({ children }: LayoutProps) {
         <div
           style={{
             minHeight: isMobile ? 'auto' : 'calc(100vh - 36px)',
-            borderRadius: isMobile ? 18 : 24,
-            background: 'rgba(255,255,255,0.52)',
-            border: '1px solid rgba(255,255,255,0.5)',
-            boxShadow: '0 24px 60px rgba(27, 39, 52, 0.08)',
-            backdropFilter: 'blur(16px)',
-            padding: isMobile ? 12 : isTablet ? 14 : 18,
+            borderRadius: isMobile ? 18 : 28,
+            background: 'rgba(255,255,255,0.72)',
+            border: '1px solid rgba(255,255,255,0.78)',
+            boxShadow: '0 26px 70px rgba(21, 32, 51, 0.08)',
+            backdropFilter: 'blur(18px)',
+            padding: isMobile ? 12 : isTablet ? 16 : 22,
           }}
         >
           {children}
