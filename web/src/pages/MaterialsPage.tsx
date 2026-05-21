@@ -494,7 +494,7 @@ export default function MaterialsPage() {
     <div style={{ display: 'grid', gap: 16 }}>
       <h1 className="page-heading">Материалы</h1>
 
-      <section className="mentor-panel toolbar-panel" style={{ gridTemplateColumns: isTablet ? '1fr' : '1.2fr 0.8fr 0.8fr 0.75fr auto' }}>
+      <section className="mentor-panel toolbar-panel" style={{ gridTemplateColumns: isTablet ? '1fr' : '1.2fr 0.8fr 0.8fr 0.75fr' }}>
           <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
             Поиск по темам и материалам
             <input
@@ -544,9 +544,6 @@ export default function MaterialsPage() {
               ))}
             </select>
           </label>
-          <button type="button" title="Добавить материал" onClick={openCreateMaterial} disabled={!selectedTopic} className="add-trigger" style={{ alignSelf: 'end' }}>
-            +
-          </button>
       </section>
 
       <section className="metric-grid">
@@ -638,14 +635,9 @@ export default function MaterialsPage() {
                         }}
                       />
                     )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 700 }}>{topic.title}</div>
-                        {(childTopicCount.get(topic.id) ?? 0) > 0 && (
-                          <div style={{ color: '#687486', fontSize: 12, marginTop: 2 }}>
-                            Подтем: {childTopicCount.get(topic.id)}
-                          </div>
-                        )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{topic.title}</div>
                       </div>
                       {(childTopicCount.get(topic.id) ?? 0) > 0 && (
                         <span
@@ -665,39 +657,6 @@ export default function MaterialsPage() {
                         </span>
                       )}
                     </div>
-                    <div
-                      style={{
-                        marginTop: 6,
-                        display: 'flex',
-                        gap: 6,
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      {(topic.level_ids?.length
-                        ? topic.level_ids.map((levelId) => tutorLevels.find((level) => level.id === levelId)?.name ?? `Уровень #${levelId}`)
-                        : topic.study_level?.length
-                          ? topic.study_level
-                          : ['Все уровни']
-                      ).map((level) => (
-                        <span
-                          key={level}
-                          style={{
-                            padding: '4px 8px',
-                            borderRadius: 999,
-                            background: 'rgba(23,32,51,0.06)',
-                            color: '#435066',
-                            fontSize: 12,
-                          }}
-                        >
-                          {level}
-                        </span>
-                      ))}
-                    </div>
-                    {topic.description && (
-                      <div style={{ ...mutedTextStyle, marginTop: 4, fontSize: 13 }}>
-                        {topic.description}
-                      </div>
-                    )}
                   </button>
                 );
               })
@@ -717,8 +676,8 @@ export default function MaterialsPage() {
                 marginBottom: 14,
               }}
             >
-              <div>
-                <h3 style={{ fontSize: 22, marginBottom: 6 }}>
+              <div style={{ minWidth: 0, flex: '1 1 240px' }}>
+                <h3 style={{ fontSize: 22, marginBottom: 6, overflowWrap: 'anywhere' }}>
                   {selectedTopic ? selectedTopic.title : 'Выбери тему'}
                 </h3>
                 <div style={mutedTextStyle}>
@@ -729,7 +688,7 @@ export default function MaterialsPage() {
               </div>
 
               {selectedTopic && (
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginLeft: 'auto', flexShrink: 0 }}>
                   <button
                     type="button"
                     title="Редактировать тему"
@@ -801,11 +760,13 @@ export default function MaterialsPage() {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   type="button"
-                  title="Открыть уровни"
-                  onClick={() => (window.location.href = '/levels')}
-                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                  title="Добавить материал"
+                  onClick={openCreateMaterial}
+                  disabled={!selectedTopic}
+                  className="add-trigger"
+                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center' }}
                 >
-                  ≡
+                  +
                 </button>
               </div>
             </div>
@@ -897,10 +858,22 @@ export default function MaterialsPage() {
                             ↗
                           </a>
                         )}
-                        <button type="button" title="Редактировать материал" onClick={() => openEditMaterial(material)} className="icon-button ghost-button">
+                        <button
+                          type="button"
+                          title="Редактировать материал"
+                          onClick={() => openEditMaterial(material)}
+                          className="icon-button ghost-button"
+                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999 }}
+                        >
                           ✎
                         </button>
-                        <button type="button" title="Удалить материал" onClick={() => handleDeleteMaterial(material)} className="icon-button ghost-button" style={{ color: '#F44336' }}>
+                        <button
+                          type="button"
+                          title="Удалить материал"
+                          onClick={() => handleDeleteMaterial(material)}
+                          className="icon-button ghost-button"
+                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, color: '#F44336' }}
+                        >
                           🗑
                         </button>
                       </div>

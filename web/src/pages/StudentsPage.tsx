@@ -284,23 +284,6 @@ export default function StudentsPage() {
     activeSubjectNames.length === 0
       ? 'Предметы не созданы'
       : activeSubjectNames.slice(0, 2).join(', ') + (activeSubjectNames.length > 2 ? ` +${activeSubjectNames.length - 2}` : '');
-  const weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() || 7) - 1));
-  weekStart.setHours(0, 0, 0, 0);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekEnd.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
-  const lessonsThisWeek = lessons.filter((lesson) => {
-    const startsAt = new Date(lesson.starts_at).getTime();
-    return (
-      lesson.tutor_student_id !== null &&
-      !Number.isNaN(startsAt) &&
-      startsAt >= weekStart.getTime() &&
-      startsAt <= weekEnd.getTime() &&
-      !['cancelled', 'rescheduled', 'booking_rejected', 'reschedule_rejected'].includes(lesson.conduct_status)
-    );
-  }).length;
-
   const getStudentInitials = (name: string) =>
     name
       .split(' ')
@@ -364,7 +347,6 @@ export default function StudentsPage() {
 
   const renderGrid = (groups: StudentGroupData[]) => <div style={{ display: 'grid', gap: 16, gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fit, minmax(300px, 1fr))' : '1fr' }}>{sortGroups(groups).map((group, index) => {
     const primary = group.cards[0];
-    const activeSubjects = group.cards.filter((card) => card.tutorStudent.status === 'active').length;
     const nextLesson = getNextLessonForGroup(group);
     const balance = getBalanceForGroup(group);
     const palette = ['#2AABEE', '#4CAF50', '#9C27B0', '#1565C0', '#6A1B9A'];
@@ -387,9 +369,6 @@ export default function StudentsPage() {
               {card.subject?.name ?? t.subjectMissing}
             </span>
           ))}
-        </div>
-        <div style={{ color: '#687486', fontSize: 13 }}>
-          Активных предметов: {activeSubjects} из {group.cards.length}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'end' }}>
           <div>
@@ -436,24 +415,14 @@ export default function StudentsPage() {
           <div><div className="metric-value">{groupCards(studentCards).length} учеников</div><div className="metric-label">Всего в системе</div></div>
         </div>
         <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>⌂</span>
-          <div><div className="metric-value">{realClassOptions.length} класса</div><div className="metric-label">{realClassOptions.length ? `${realClassOptions[0]}–${realClassOptions[realClassOptions.length - 1]} классы` : 'Классы не указаны'}</div></div>
-        </div>
-        <div className="metric-card">
           <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.12)', color: '#4CAF50' }}>▤</span>
           <div><div className="metric-value">{activeSubjectTitle}</div><div className="metric-label">{activeSubjectSubtitle}</div></div>
-        </div>
-        <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(123,97,200,0.12)', color: '#9C27B0' }}>▣</span>
-          <div><div className="metric-value">{lessonsThisWeek} занятий на этой неделе</div><div className="metric-label">По расписанию</div></div>
         </div>
       </section>
 
       <section className="mentor-panel" style={{ padding: 18 }}>
         {loading ? <p style={{ ...mutedTextStyle, marginBottom: 0 }}>{t.loading}</p> : filteredCards.length === 0 ? <p style={{ ...mutedTextStyle, marginBottom: 0 }}>{t.notFound}</p> : <div style={{ display: 'grid', gap: 16 }}>{activeGroups.length > 0 ? renderGrid(activeGroups) : <div style={{ padding: 16, borderRadius: 16, background: 'rgba(23,32,51,0.03)', color: '#687486' }}>{t.noActive}</div>}{totalInactiveCards.length > 0 && <div style={{ display: 'grid', gap: 12, paddingTop: 4, borderTop: '1px solid rgba(24,33,47,0.08)' }}><button type="button" onClick={() => setShowInactiveStudents((prev) => !prev)} style={{ justifySelf: 'start', background: 'transparent', color: '#324055', border: '1px solid rgba(24,33,47,0.12)', boxShadow: 'none', padding: '8px 12px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f87171' }} />{showInactiveStudents ? `${t.hideInactive} (${inactiveGroups.length})` : `${t.showInactive} (${inactiveGroups.length})`}</button>{showInactiveStudents && (inactiveGroups.length > 0 ? renderGrid(inactiveGroups) : <div style={{ padding: 14, borderRadius: 14, background: 'rgba(23,32,51,0.03)', color: '#687486', fontSize: 14 }}>По текущим фильтрам неактивные ученики не найдены.</div>)}</div>}</div>}
       </section>
-
-      {false && createModalOpen && <div onClick={() => setCreateModalOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.48)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 40 }}><div onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 100%)', background: '#fff', borderRadius: 24, border: '1px solid rgba(24,33,47,0.08)', boxShadow: '0 30px 80px rgba(15,23,42,0.18)', padding: 24, display: 'grid', gap: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}><div><h3 style={{ fontSize: 22, marginBottom: 6 }}>{'\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0443\u0447\u0435\u043d\u0438\u043a\u0430'}</h3><div style={mutedTextStyle}>{'\u041d\u043e\u0432\u044b\u0439 \u0443\u0447\u0435\u043d\u0438\u043a \u0441\u0440\u0430\u0437\u0443 \u0441\u043e\u0437\u0434\u0430\u0451\u0442\u0441\u044f \u0438 \u043f\u0440\u0438\u0432\u044f\u0437\u044b\u0432\u0430\u0435\u0442\u0441\u044f \u043a \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u043c\u0443 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0443.'}</div></div><button type="button" onClick={() => setCreateModalOpen(false)} style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none', padding: '10px 14px' }}>{t.close}</button></div>{subjects.length === 0 ? <div style={{ padding: 16, borderRadius: 16, background: 'rgba(42,171,238,0.1)', color: '#b9551f' }}>{'\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0441\u043e\u0437\u0434\u0430\u0439 \u043f\u0440\u0435\u0434\u043c\u0435\u0442 \u043d\u0430 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435 \u00ab\u041f\u0440\u0435\u0434\u043c\u0435\u0442\u044b\u00bb.'}</div> : <><input value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} placeholder={'\u0424\u0418\u041e \u0443\u0447\u0435\u043d\u0438\u043a\u0430'} /><input value={newStudentTelegramId} onChange={(e) => setNewStudentTelegramId(e.target.value)} placeholder={'Telegram ID'} type="number" /><input value={newStudentGrade} onChange={(e) => setNewStudentGrade(e.target.value)} placeholder={t.grade} type="number" /><input value={newStudentPhone} onChange={(e) => setNewStudentPhone(e.target.value)} placeholder={t.phone} /><select value={newStudentSubjectId} onChange={(e) => { const nextSubjectId = e.target.value; const nextSubject = subjects.find((subject) => String(subject.id) === nextSubjectId); setNewStudentSubjectId(nextSubjectId); setNewStudentRate(nextSubject?.default_rate ? String(nextSubject.default_rate) : ''); }}>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select><input value={newStudentRate} onChange={(e) => setNewStudentRate(e.target.value)} placeholder={t.rate} type="number" /><div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}><button type="button" onClick={handleCreateStudent} disabled={creatingStudent}>{creatingStudent ? '\u0421\u043e\u0437\u0434\u0430\u0451\u043c...' : t.create}</button><button type="button" onClick={() => setCreateModalOpen(false)} style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>{t.cancel}</button></div></>}</div></div>}
 
       {createModalOpen && (
         <div onClick={() => setCreateModalOpen(false)} className="modal-overlay">

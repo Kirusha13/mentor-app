@@ -1,5 +1,12 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  createSubject,
+  deleteSubject,
+  getSubjects,
+  updateSubject,
+  type Subject,
+} from '../api/subjects';
 import { getTutorProfile, updateTutorProfile, type TutorProfile } from '../api/tutor';
 import { getApiErrorMessage } from '../utils/apiError';
 
@@ -67,41 +74,82 @@ export default function TutorProfilePage() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
 
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(true);
+  const [subjectSearch, setSubjectSearch] = useState('');
+  const [subjectCreateModalOpen, setSubjectCreateModalOpen] = useState(false);
+  const [creatingSubject, setCreatingSubject] = useState(false);
+  const [newSubjectName, setNewSubjectName] = useState('');
+  const [newSubjectRate, setNewSubjectRate] = useState('');
+  const [editingSubjectId, setEditingSubjectId] = useState<number | null>(null);
+  const [editSubjectName, setEditSubjectName] = useState('');
+  const [editSubjectRate, setEditSubjectRate] = useState('');
+
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadProfile = async () => {
       try {
         setLoading(true);
         const data = await getTutorProfile();
+        if (cancelled) return;
         setProfile(data);
         setFullName(data.full_name);
         setPhoneNumber(data.phone_number ?? '');
-        setAvatarUrl(data.avatar_url ?? '');
       } catch (error) {
-        console.error('Ошибка загрузки профиля репетитора:', error);
-        alert(getApiErrorMessage(error, 'Не удалось загрузить личный кабинет.'));
+        if (!cancelled) {
+          console.error('Ошибка загрузки профиля репетитора:', error);
+          alert(getApiErrorMessage(error, 'Не удалось загрузить личный кабинет.'));
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    const loadSubjects = async () => {
+      try {
+        setSubjectsLoading(true);
+        const data = await getSubjects();
+        if (!cancelled) setSubjects(data);
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Ошибка загрузки предметов:', error);
+          alert('Не удалось загрузить предметы');
+        }
+      } finally {
+        if (!cancelled) setSubjectsLoading(false);
       }
     };
 
     void loadProfile();
+    void loadSubjects();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const initials = useMemo(() => getInitials(profile?.full_name ?? 'Репетитор'), [profile?.full_name]);
 
-  const handleCancel = () => {
+  const filteredSubjects = useMemo(
+    () =>
+      subjects.filter((subject) =>
+        subject.name.toLowerCase().includes(subjectSearch.trim().toLowerCase())
+      ),
+    [subjectSearch, subjects]
+  );
+
+  const handleProfileCancel = () => {
     if (!profile) return;
     setFullName(profile.full_name);
     setPhoneNumber(profile.phone_number ?? '');
-    setAvatarUrl(profile.avatar_url ?? '');
     setEditing(false);
   };
 
-  const handleSave = async () => {
+  const handleProfileSave = async () => {
     if (!profile) return;
     if (!fullName.trim()) {
       alert('Укажи имя репетитора.');
@@ -113,18 +161,101 @@ export default function TutorProfilePage() {
       const updated = await updateTutorProfile({
         full_name: fullName.trim(),
         phone_number: phoneNumber.trim() || null,
-        avatar_url: avatarUrl.trim() || null,
       });
       setProfile(updated);
       setFullName(updated.full_name);
       setPhoneNumber(updated.phone_number ?? '');
-      setAvatarUrl(updated.avatar_url ?? '');
       setEditing(false);
     } catch (error) {
       console.error('Ошибка сохранения профиля репетитора:', error);
       alert(getApiErrorMessage(error, 'Не удалось сохранить изменения профиля.'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSubjectCreate = async () => {
+    const rate = Number(newSubjectRate);
+    if (!newSubjectName.trim() || !Number.isFinite(rate) || rate <= 0) {
+      alert('Заполни название предмета и корректную ставку');
+      return;
+    }
+
+    try {
+      setCreatingSubject(true);
+      const created = await createSubject({
+        name: newSubjectName.trim(),
+        default_rate: rate,
+      });
+
+      setSubjects((prev) => [created, ...prev]);
+      setNewSubjectName('');
+      setNewSubjectRate('');
+      setSubjectCreateModalOpen(false);
+      alert(`Предмет "${created.name}" создан`);
+    } catch (error) {
+      console.error('Ошибка создания предмета:', error);
+      alert('Не удалось создать предмет');
+    } finally {
+      setCreatingSubject(false);
+    }
+  };
+
+  const startSubjectEditing = (subject: Subject) => {
+    setEditingSubjectId(subject.id);
+    setEditSubjectName(subject.name);
+    setEditSubjectRate(String(subject.default_rate ?? ''));
+  };
+
+  const cancelSubjectEditing = () => {
+    setEditingSubjectId(null);
+    setEditSubjectName('');
+    setEditSubjectRate('');
+  };
+
+  const handleSubjectSave = async (subjectId: number) => {
+    const rate = Number(editSubjectRate);
+    if (!editSubjectName.trim() || !Number.isFinite(rate) || rate <= 0) {
+      alert('Заполни название предмета и корректную ставку');
+      return;
+    }
+
+    try {
+      const updated = await updateSubject(subjectId, {
+        name: editSubjectName.trim(),
+        default_rate: rate,
+      });
+
+      setSubjects((prev) =>
+        prev.map((subject) => (subject.id === subjectId ? updated : subject))
+      );
+      cancelSubjectEditing();
+    } catch (error) {
+      console.error('Ошибка обновления предмета:', error);
+      alert('Не удалось обновить предмет');
+    }
+  };
+
+  const handleSubjectDelete = async (subjectId: number, subjectName: string) => {
+    const confirmed = window.confirm(`Удалить предмет "${subjectName}"?`);
+    if (!confirmed) return;
+
+    try {
+      await deleteSubject(subjectId);
+      setSubjects((prev) => prev.filter((subject) => subject.id !== subjectId));
+    } catch (error) {
+      console.error('Ошибка удаления предмета:', error);
+      alert('Не удалось удалить предмет');
+    }
+  };
+
+  const handleCopyToken = async (token: string) => {
+    try {
+      await navigator.clipboard.writeText(token);
+      alert('Invitation token скопирован');
+    } catch (error) {
+      console.error('Ошибка копирования токена:', error);
+      alert('Не удалось скопировать token');
     }
   };
 
@@ -144,7 +275,7 @@ export default function TutorProfilePage() {
           padding: 0,
           overflow: 'hidden',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gridTemplateColumns: 'minmax(0, 1fr)',
           alignItems: 'stretch',
         }}
       >
@@ -154,139 +285,100 @@ export default function TutorProfilePage() {
             background:
               'radial-gradient(circle at 18% 12%, rgba(42,171,238,0.34), transparent 28%), linear-gradient(135deg, #172033 0%, #24324a 100%)',
             color: '#fff',
-            display: 'grid',
-            alignContent: 'space-between',
-            gap: 22,
-            minHeight: 230,
+            display: 'flex',
+            gap: 16,
+            alignItems: 'center',
+            minHeight: 180,
           }}
         >
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            {profile.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={profile.full_name}
-                style={{
-                  width: 78,
-                  height: 78,
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  border: '2px solid rgba(255,255,255,0.18)',
-                  boxShadow: '0 18px 38px rgba(0,0,0,0.18)',
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: 78,
-                  height: 78,
-                  borderRadius: '50%',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(255,255,255,0.12)',
-                  border: '2px solid rgba(255,255,255,0.14)',
-                  fontSize: 28,
-                  fontWeight: 900,
-                  boxShadow: '0 18px 38px rgba(0,0,0,0.14)',
-                }}
-              >
-                {initials || 'Р'}
-              </div>
-            )}
+          {profile.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              alt={profile.full_name}
+              style={{
+                width: 78,
+                height: 78,
+                borderRadius: '50%',
+                objectFit: 'cover',
+                border: '2px solid rgba(255,255,255,0.18)',
+                boxShadow: '0 18px 38px rgba(0,0,0,0.18)',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 78,
+                height: 78,
+                borderRadius: '50%',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(255,255,255,0.12)',
+                border: '2px solid rgba(255,255,255,0.14)',
+                fontSize: 28,
+                fontWeight: 900,
+                boxShadow: '0 18px 38px rgba(0,0,0,0.14)',
+                flexShrink: 0,
+              }}
+            >
+              {initials || 'Р'}
+            </div>
+          )}
 
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.05, marginBottom: 8 }}>
-                {profile.full_name}
-              </div>
-              <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 14 }}>
-                Личный кабинет репетитора
-              </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.05, marginBottom: 8 }}>
+              {profile.full_name}
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 14 }}>
+              Личный кабинет репетитора
             </div>
           </div>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {[
-              `Telegram ID: ${profile.telegram_id}`,
-              profile.phone_number ? `Телефон: ${profile.phone_number}` : 'Телефон не указан',
-            ].map((item) => (
-              <span
-                key={item}
-                style={{
-                  padding: '7px 10px',
-                  borderRadius: 999,
-                  background: 'rgba(255,255,255,0.1)',
-                  color: 'rgba(255,255,255,0.82)',
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
-                {item}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ padding: 22, display: 'grid', gap: 12, alignContent: 'center' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
-            {fieldCard('Регистрация', formatDateTime(profile.registered_at))}
-            {fieldCard('Последний визит', formatDateTime(profile.last_visited_at))}
-            {fieldCard('ID профиля', String(profile.id))}
-          </div>
-
-          <button
-            type="button"
-            title="Открыть предметы"
-            onClick={() => navigate('/subjects')}
-            style={{
-              justifySelf: 'start',
-              background: '#fff',
-              color: '#1f2a3b',
-              border: '1px solid rgba(24,33,47,0.12)',
-              boxShadow: 'none',
-            }}
-          >
-            Предметы
-          </button>
         </div>
       </section>
 
-      <section
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: 16,
-          alignItems: 'start',
-        }}
-      >
-        <article style={{ ...panelStyle, display: 'grid', gap: 14 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              flexWrap: 'wrap',
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 21, fontWeight: 900, color: '#1f2a3b', marginBottom: 4 }}>
-                Данные профиля
-              </div>
-              <div style={mutedTextStyle}>Имя, телефон и аватар, которые используются в кабинете.</div>
+      <article style={{ ...panelStyle, display: 'grid', gap: 14 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 21, fontWeight: 900, color: '#1f2a3b', marginBottom: 4 }}>
+              Данные профиля
             </div>
+            <div style={mutedTextStyle}>Имя и телефон, которые используются в кабинете.</div>
+          </div>
 
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              title="Открыть уровни обучения"
+              onClick={() => navigate('/levels')}
+              style={{
+                background: '#fff',
+                color: '#1f2a3b',
+                border: '1px solid rgba(24,33,47,0.12)',
+                boxShadow: 'none',
+              }}
+            >
+              Уровни обучения
+            </button>
             {!editing ? (
               <button type="button" title="Редактировать профиль" onClick={() => setEditing(true)}>
                 Редактировать
               </button>
             ) : (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" onClick={handleSave} disabled={saving}>
+              <>
+                <button type="button" onClick={handleProfileSave} disabled={saving}>
                   {saving ? 'Сохраняем...' : 'Сохранить'}
                 </button>
                 <button
                   type="button"
-                  onClick={handleCancel}
+                  onClick={handleProfileCancel}
                   style={{
                     background: '#fff',
                     color: '#1f2a3b',
@@ -296,53 +388,266 @@ export default function TutorProfilePage() {
                 >
                   Отмена
                 </button>
-              </div>
+              </>
             )}
           </div>
+        </div>
 
-          <div style={{ display: 'grid', gap: 12 }}>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={mutedTextStyle}>Полное имя</span>
-              <input value={fullName} onChange={(event) => setFullName(event.target.value)} disabled={!editing} />
-            </label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+          {fieldCard('Дата регистрации', formatDateTime(profile.registered_at))}
+        </div>
 
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={mutedTextStyle}>Телефон</span>
-              <input
-                value={phoneNumber}
-                onChange={(event) => setPhoneNumber(event.target.value)}
-                disabled={!editing}
-                placeholder="+7..."
-              />
-            </label>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={mutedTextStyle}>Полное имя</span>
+            <input value={fullName} onChange={(event) => setFullName(event.target.value)} disabled={!editing} />
+          </label>
 
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={mutedTextStyle}>Ссылка на аватар</span>
-              <input
-                value={avatarUrl}
-                onChange={(event) => setAvatarUrl(event.target.value)}
-                disabled={!editing}
-                placeholder="https://..."
-              />
-            </label>
-          </div>
-        </article>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={mutedTextStyle}>Телефон</span>
+            <input
+              value={phoneNumber}
+              onChange={(event) => setPhoneNumber(event.target.value)}
+              disabled={!editing}
+              placeholder="+7..."
+            />
+          </label>
+        </div>
+      </article>
 
-        <article style={{ ...panelStyle, display: 'grid', gap: 12 }}>
+      <article style={{ ...panelStyle, display: 'grid', gap: 16 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(180px, 1fr) auto',
+            alignItems: 'end',
+            gap: 12,
+          }}
+        >
           <div>
             <div style={{ fontSize: 21, fontWeight: 900, color: '#1f2a3b', marginBottom: 4 }}>
-              Системная информация
+              Предметы
             </div>
-            <div style={mutedTextStyle}>Технические данные профиля. Обычно их не нужно редактировать.</div>
+            <div style={mutedTextStyle}>Всего предметов: {subjects.length}</div>
           </div>
 
-          <div style={{ display: 'grid', gap: 10 }}>
-            {fieldCard('Telegram ID', String(profile.telegram_id))}
-            {fieldCard('Дата регистрации', formatDateTime(profile.registered_at))}
-            {fieldCard('Последний визит', formatDateTime(profile.last_visited_at))}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+            <input
+              value={subjectSearch}
+              onChange={(event) => setSubjectSearch(event.target.value)}
+              placeholder="Поиск по названию"
+              style={{ maxWidth: 260 }}
+            />
+            <button
+              title="Создать предмет"
+              type="button"
+              onClick={() => setSubjectCreateModalOpen(true)}
+              style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center' }}
+            >
+              +
+            </button>
           </div>
-        </article>
-      </section>
+        </div>
+
+        {subjectsLoading ? (
+          <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка предметов...</p>
+        ) : filteredSubjects.length === 0 ? (
+          <div
+            style={{
+              padding: 18,
+              borderRadius: 18,
+              background: 'rgba(23,32,51,0.04)',
+              color: '#687486',
+            }}
+          >
+            Предметы не найдены.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 14 }}>
+            {filteredSubjects.map((subject) => {
+              const isEditing = editingSubjectId === subject.id;
+
+              return (
+                <article
+                  key={subject.id}
+                  style={{
+                    border: '1px solid rgba(24,33,47,0.08)',
+                    borderRadius: '20px',
+                    padding: '18px',
+                    background: '#fff',
+                    boxShadow: '0 10px 24px rgba(15,23,42,0.05)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: 16,
+                      alignItems: 'flex-start',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 240 }}>
+                      {isEditing ? (
+                        <div style={{ display: 'grid', gap: 10 }}>
+                          <input
+                            value={editSubjectName}
+                            onChange={(event) => setEditSubjectName(event.target.value)}
+                            placeholder="Название предмета"
+                          />
+                          <input
+                            value={editSubjectRate}
+                            onChange={(event) => setEditSubjectRate(event.target.value)}
+                            placeholder="Ставка"
+                            type="number"
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <h4 style={{ fontSize: 22, marginBottom: 10 }}>{subject.name}</h4>
+                          <p style={{ color: '#435066', marginBottom: 8 }}>
+                            <span style={{ fontWeight: 700 }}>Ставка:</span> {subject.default_rate || '—'} ₽/ч
+                          </p>
+                          <p
+                            style={{
+                              color: '#687486',
+                              marginBottom: 0,
+                              wordBreak: 'break-all',
+                              fontSize: 16,
+                            }}
+                          >
+                            <span style={{ fontWeight: 700, color: '#435066' }}>Token:</span> {subject.invitation_token || '—'}
+                          </p>
+                        </>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {isEditing ? (
+                        <>
+                          <button onClick={() => handleSubjectSave(subject.id)}>Сохранить</button>
+                          <button
+                            onClick={cancelSubjectEditing}
+                            style={{
+                              background: 'rgba(23,32,51,0.92)',
+                              boxShadow: 'none',
+                            }}
+                          >
+                            Отмена
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {subject.invitation_token && (
+                            <button
+                              title="Скопировать token"
+                              onClick={() => handleCopyToken(subject.invitation_token)}
+                              style={{
+                                minWidth: 42,
+                                width: 42,
+                                height: 42,
+                                padding: 0,
+                                borderRadius: 999,
+                                boxShadow: 'none',
+                                fontSize: 18,
+                                display: 'inline-grid',
+                                placeItems: 'center',
+                              }}
+                            >
+                              ⧉
+                            </button>
+                          )}
+                          <button
+                            title="Редактировать предмет"
+                            onClick={() => startSubjectEditing(subject)}
+                            style={{
+                              minWidth: 42,
+                              width: 42,
+                              height: 42,
+                              padding: 0,
+                              borderRadius: 999,
+                              background: 'rgba(23,32,51,0.92)',
+                              boxShadow: 'none',
+                              fontSize: 18,
+                              display: 'inline-grid',
+                              placeItems: 'center',
+                            }}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            title="Удалить предмет"
+                            onClick={() => handleSubjectDelete(subject.id, subject.name)}
+                            style={{
+                              minWidth: 42,
+                              width: 42,
+                              height: 42,
+                              padding: 0,
+                              borderRadius: 999,
+                              background: '#F44336',
+                              boxShadow: 'none',
+                              fontSize: 18,
+                            }}
+                          >
+                            🗑
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </article>
+
+      {subjectCreateModalOpen && (
+        <div onClick={() => setSubjectCreateModalOpen(false)} className="modal-overlay">
+          <div onClick={(event) => event.stopPropagation()} className="app-modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">Создать предмет</h3>
+                <p className="modal-subtitle">Добавь название и ставку по умолчанию.</p>
+              </div>
+              <button title="Закрыть" type="button" onClick={() => setSubjectCreateModalOpen(false)} className="modal-close">×</button>
+            </div>
+
+            <div className="modal-form-grid">
+              <label className="modal-field">
+                Название предмета
+                <input
+                  value={newSubjectName}
+                  onChange={(event) => setNewSubjectName(event.target.value)}
+                  placeholder="Название предмета"
+                />
+              </label>
+              <label className="modal-field">
+                Ставка по умолчанию
+                <input
+                  value={newSubjectRate}
+                  onChange={(event) => setNewSubjectRate(event.target.value)}
+                  placeholder="Ставка по умолчанию"
+                  type="number"
+                />
+              </label>
+
+              <div className="modal-actions">
+                <button onClick={handleSubjectCreate} disabled={creatingSubject} className="modal-primary">
+                  {creatingSubject ? 'Создаём...' : 'Создать предмет'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

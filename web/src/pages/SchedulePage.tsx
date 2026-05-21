@@ -1,11 +1,13 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import {
   approveBooking,
+  approveReschedule,
   confirmPayment,
   createLesson,
   deleteLesson,
   getLessons,
   rejectBooking,
+  rejectReschedule,
   rescheduleLesson,
   updateLesson,
   type ConductStatus,
@@ -171,6 +173,13 @@ function paymentLabel(status: PaymentStatus) {
   return 'Не оплачено';
 }
 
+function requestTitle(lesson: Lesson) {
+  if (lesson.payment_status === 'payment_pending') return 'Подтверждение оплаты';
+  if (lesson.conduct_status === 'booking_pending') return 'Запрос на запись';
+  if (lesson.conduct_status === 'reschedule_pending') return 'Запрос на перенос';
+  return 'Запрос';
+}
+
 function formatMoney(value: number) {
   return `${Math.round(value).toLocaleString('ru-RU')} ₽`;
 }
@@ -210,11 +219,11 @@ function CalendarEventCard({
   const windowCard = isWindow(lesson);
   const accent = windowCard ? '#2AABEE' : subject?.color || '#2AABEE';
   const state = statusColor(lesson.conduct_status);
-  const studentName = windowCard ? 'Свободный слот' : student?.full_name ?? 'Ученик';
-  const subjectName = windowCard ? 'Окно для записи' : subject?.name ?? lesson.subject_name ?? 'Без предмета';
+  const studentName = windowCard ? '' : student?.full_name ?? 'Ученик';
+  const subjectName = windowCard ? '' : subject?.name ?? lesson.subject_name ?? 'Без предмета';
   const costText = windowCard ? '' : `${lesson.cost ?? '—'} ₽`;
   const subjectLine = windowCard ? subjectName : `${subjectName} • ${costText}`;
-  const statusText = windowCard ? 'Доступен' : viewMode === 'month' || density === 'compact' ? statusShortLabel(lesson.conduct_status) : statusLabel(lesson.conduct_status);
+  const statusText = viewMode === 'month' || density === 'compact' ? statusShortLabel(lesson.conduct_status) : statusLabel(lesson.conduct_status);
   const isCompact = density === 'compact';
   const cardBackground = windowCard
     ? 'linear-gradient(135deg, rgba(226,238,255,0.98), rgba(247,250,255,0.98))'
@@ -231,7 +240,11 @@ function CalendarEventCard({
     <div
       key={lesson.id}
       onClick={onClick}
-      title={`${toTime(toStartTime(lesson))} - ${toTime(toEndTime(lesson))} • ${studentName} • ${subjectLine} • ${statusLabel(lesson.conduct_status)}`}
+      title={
+        windowCard
+          ? `${toTime(toStartTime(lesson))} - ${toTime(toEndTime(lesson))}`
+          : `${toTime(toStartTime(lesson))} - ${toTime(toEndTime(lesson))} • ${studentName} • ${subjectLine} • ${statusLabel(lesson.conduct_status)}`
+      }
       style={{
         minHeight: isCompact ? 54 : 72,
         height: '100%',
@@ -253,39 +266,40 @@ function CalendarEventCard({
       <div style={{ fontSize: timeFontSize, fontWeight: 900, lineHeight: 1.08, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
         {toTime(toStartTime(lesson))} - {toTime(toEndTime(lesson))}
       </div>
-      <div
-        style={{
-          fontSize: titleFontSize,
-          fontWeight: 800,
-          lineHeight: 1.12,
-          overflow: 'hidden',
-          display: '-webkit-box',
-          WebkitLineClamp: titleClamp,
-          WebkitBoxOrient: 'vertical',
-          wordBreak: 'break-word',
-          flexShrink: 0,
-        }}
-      >
-        {studentName}
-      </div>
-      <div style={{ fontSize: metaFontSize, color: '#334155', lineHeight: 1.12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
-        {subjectLine}
-      </div>
+      {!windowCard && (
+        <>
+          <div
+            style={{
+              fontSize: titleFontSize,
+              fontWeight: 800,
+              lineHeight: 1.12,
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: titleClamp,
+              WebkitBoxOrient: 'vertical',
+              wordBreak: 'break-word',
+              flexShrink: 0,
+            }}
+          >
+            {studentName}
+          </div>
+          <div style={{ fontSize: metaFontSize, color: '#334155', lineHeight: 1.12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
+            {subjectLine}
+          </div>
+        </>
+      )}
       {!windowCard && topic && !isCompact && (
         <div style={{ fontSize: 10, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           Тема: {topic.title}
         </div>
       )}
-      <div style={{ marginTop: 'auto', display: 'flex', gap: 5, alignItems: 'center', minHeight: 16, overflow: 'hidden' }}>
-        <span style={{ padding: isCompact ? '2px 6px' : '3px 7px', borderRadius: 999, background: badgeBackground, color: state, fontSize: statusFontSize, fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', border: `1px solid ${state}30` }}>
-          {statusText}
-        </span>
-        {!isCompact && !windowCard && (
-          <span style={{ color: '#475569', fontSize: 9.5, whiteSpace: 'nowrap' }}>
-            {Math.round(lessonEndMinutes(lesson) - lessonStartMinutes(lesson))} мин
+      {!windowCard && (
+        <div style={{ marginTop: 'auto', display: 'flex', gap: 5, alignItems: 'center', minHeight: 16, overflow: 'hidden' }}>
+          <span style={{ padding: isCompact ? '2px 6px' : '3px 7px', borderRadius: 999, background: badgeBackground, color: state, fontSize: statusFontSize, fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', border: `1px solid ${state}30` }}>
+            {statusText}
           </span>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -391,6 +405,7 @@ export default function SchedulePage() {
   const [mode, setMode] = useState<CalendarMode>('week');
   const [anchorDate, setAnchorDate] = useState(() => atMidnight(new Date()));
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [requestLessons, setRequestLessons] = useState<Lesson[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -429,6 +444,8 @@ export default function SchedulePage() {
   const [lessonGradeCommentDraft, setLessonGradeCommentDraft] = useState('');
   const [lessonCommentSaving, setLessonCommentSaving] = useState(false);
   const [showLessonNoteEditor, setShowLessonNoteEditor] = useState(false);
+  const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
+  const [processingRequestId, setProcessingRequestId] = useState<number | null>(null);
 
   const dayDate = useMemo(() => atMidnight(anchorDate), [anchorDate]);
   const weekStart = useMemo(() => startOfWeek(anchorDate), [anchorDate]);
@@ -514,6 +531,28 @@ export default function SchedulePage() {
       return true;
     });
   }, [lessons, showRescheduledLessons]);
+
+  const pendingRequests = useMemo(
+    () =>
+      requestLessons.filter(
+        (lesson) =>
+          lesson.conduct_status === 'booking_pending' ||
+          lesson.conduct_status === 'reschedule_pending' ||
+          lesson.payment_status === 'payment_pending'
+      ),
+    [requestLessons]
+  );
+
+  const pendingRequestsWithMeta = useMemo(
+    () =>
+      pendingRequests.map((lesson) => {
+        const relation = tutorStudents.find((item) => item.id === lesson.tutor_student_id);
+        const student = students.find((item) => item.id === relation?.student_id);
+        const subject = subjects.find((item) => item.id === relation?.subject_id);
+        return { lesson, relation, student, subject };
+      }),
+    [pendingRequests, students, subjects, tutorStudents]
+  );
 
   useEffect(() => {
     const handleResize = () => setViewportHeight(window.innerHeight);
@@ -743,8 +782,9 @@ export default function SchedulePage() {
         setLoading(true);
         const dateFrom = buildLocalDayStartIso(formatDate(range.from));
         const dateTo = buildLocalDayEndIso(formatDate(range.to));
-        const [lessonData, tutorStudentData, studentData, subjectData, topicData, levelData] = await Promise.all([
+        const [lessonData, requestLessonData, tutorStudentData, studentData, subjectData, topicData, levelData] = await Promise.all([
           getLessons({ date_from: dateFrom, date_to: dateTo }),
+          getLessons(),
           getTutorStudents(),
           getStudents(),
           getSubjects(),
@@ -752,6 +792,7 @@ export default function SchedulePage() {
           getTutorLevels(),
         ]);
         setLessons(lessonData);
+        setRequestLessons(requestLessonData);
         setTutorStudents(tutorStudentData);
         setStudents(studentData);
         setSubjects(subjectData);
@@ -773,6 +814,13 @@ export default function SchedulePage() {
         .map((lesson) => (lesson.id === updated.id ? updated : lesson))
         .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     );
+    setRequestLessons((prev) =>
+      prev.some((lesson) => lesson.id === updated.id)
+        ? prev
+            .map((lesson) => (lesson.id === updated.id ? updated : lesson))
+            .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+        : [updated, ...prev].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+    );
   };
 
   const handleCreateLesson = async () => {
@@ -791,6 +839,9 @@ export default function SchedulePage() {
         topic_id: newTopicId ? Number(newTopicId) : undefined,
       });
       setLessons((prev) =>
+        [...prev, created].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+      );
+      setRequestLessons((prev) =>
         [...prev, created].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
       );
       setSelectedLessonId(created.id);
@@ -891,6 +942,9 @@ export default function SchedulePage() {
       setLessons((prev) =>
         [...prev, ...created].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
       );
+      setRequestLessons((prev) =>
+        [...prev, ...created].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+      );
 
       if (created.length > 0 && failed.length === 0) {
         setIsSlotPlannerOpen(false);
@@ -973,10 +1027,35 @@ export default function SchedulePage() {
     }
   };
 
+  const handleRequestResolve = async (
+    lesson: Lesson,
+    action: 'approve-booking' | 'reject-booking' | 'approve-reschedule' | 'reject-reschedule' | 'approve-payment' | 'reject-payment'
+  ) => {
+    try {
+      setProcessingRequestId(lesson.id);
+      let updated: Lesson;
+
+      if (action === 'approve-booking') updated = await approveBooking(lesson.id);
+      else if (action === 'reject-booking') updated = await rejectBooking(lesson.id);
+      else if (action === 'approve-reschedule') updated = await approveReschedule(lesson.id);
+      else if (action === 'reject-reschedule') updated = await rejectReschedule(lesson.id);
+      else if (action === 'approve-payment') updated = await confirmPayment(lesson.id, { confirm: true });
+      else updated = await confirmPayment(lesson.id, { confirm: false });
+
+      upsertLesson(updated);
+    } catch (error) {
+      console.error('Ошибка обработки запроса:', error);
+      alert(getApiErrorMessage(error, 'Не удалось обработать запрос'));
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
+
   const handleLessonDelete = async (lesson: Lesson) => {
     try {
       await deleteLesson(lesson.id);
       setLessons((prev) => prev.filter((item) => item.id !== lesson.id));
+      setRequestLessons((prev) => prev.filter((item) => item.id !== lesson.id));
       setSelectedLessonId(null);
     } catch (error) {
       console.error('Ошибка удаления записи из расписания:', error);
@@ -1033,6 +1112,10 @@ export default function SchedulePage() {
       });
 
       setLessons((prev) =>
+        [...prev.filter((lesson) => lesson.id !== movedLesson.id && lesson.id !== updatedOriginal.id), updatedOriginal, movedLesson]
+          .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+      );
+      setRequestLessons((prev) =>
         [...prev.filter((lesson) => lesson.id !== movedLesson.id && lesson.id !== updatedOriginal.id), updatedOriginal, movedLesson]
           .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
       );
@@ -1363,6 +1446,48 @@ export default function SchedulePage() {
             })}
           </div>
 
+          <button
+            type="button"
+            title="Запросы"
+            onClick={() => setIsRequestsModalOpen(true)}
+            style={{
+              position: 'relative',
+              height: 42,
+              padding: '0 16px',
+              borderRadius: 14,
+              background: '#fff',
+              color: '#1f2a3b',
+              border: '1px solid rgba(24,33,47,0.12)',
+              boxShadow: 'none',
+              fontWeight: 800,
+            }}
+          >
+            Запросы
+            {pendingRequests.length > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: -8,
+                  right: -8,
+                  minWidth: 22,
+                  height: 22,
+                  padding: '0 6px',
+                  borderRadius: 999,
+                  background: '#F44336',
+                  color: '#fff',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 11,
+                  fontWeight: 900,
+                  boxShadow: '0 8px 18px rgba(244,67,54,0.28)',
+                }}
+              >
+                {pendingRequests.length > 99 ? '99+' : pendingRequests.length}
+              </span>
+            )}
+          </button>
+
           <button type="button" title="Добавить занятие" onClick={() => setIsCreateLessonOpen(true)} className="add-trigger">
             +
           </button>
@@ -1420,6 +1545,108 @@ export default function SchedulePage() {
         <span>Занятия длятся 60 минут по умолчанию. Стоимость указана за занятие.</span>
       </div>
 
+      {isRequestsModalOpen && (
+        <div onClick={() => setIsRequestsModalOpen(false)} className="modal-overlay">
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="app-modal wide"
+            style={{ width: 'min(860px, 100%)' }}
+          >
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">Запросы</h3>
+                <p className="modal-subtitle">Подтверди запись, перенос или оплату ученика.</p>
+              </div>
+              <button type="button" title="Закрыть" onClick={() => setIsRequestsModalOpen(false)} className="modal-close">×</button>
+            </div>
+
+            {loading ? (
+              <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка запросов...</p>
+            ) : pendingRequestsWithMeta.length === 0 ? (
+              <p style={{ color: '#687486', marginBottom: 0 }}>Активных запросов сейчас нет.</p>
+            ) : (
+              <div style={{ display: 'grid', gap: 14 }}>
+                {pendingRequestsWithMeta.map(({ lesson, student, subject }) => (
+                  <div
+                    key={lesson.id}
+                    style={{
+                      padding: 18,
+                      borderRadius: 18,
+                      background: 'rgba(23,32,51,0.04)',
+                      border: '1px solid rgba(24,33,47,0.06)',
+                      display: 'grid',
+                      gap: 14,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ display: 'inline-flex', padding: '6px 10px', borderRadius: 999, background: 'rgba(42,171,238,0.12)', color: '#2AABEE', fontSize: 12, fontWeight: 700, marginBottom: 10 }}>
+                          {requestTitle(lesson)}
+                        </div>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: '#1f2a3b', marginBottom: 6 }}>
+                          {student?.full_name ?? 'Ученик'}
+                        </div>
+                        <div style={{ color: '#5d6778' }}>
+                          {subject?.name ?? lesson.subject_name ?? 'Без предмета'} • {toLessonDateStr(lesson)} • {toTime(toStartTime(lesson))} - {toTime(toEndTime(lesson))}
+                        </div>
+                      </div>
+                      <div style={{ fontWeight: 700, color: '#1f2a3b' }}>{lesson.cost ?? '—'} ₽</div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      {lesson.conduct_status === 'booking_pending' && (
+                        <>
+                          <button onClick={() => handleRequestResolve(lesson, 'approve-booking')} disabled={processingRequestId === lesson.id}>
+                            Подтвердить запись
+                          </button>
+                          <button
+                            onClick={() => handleRequestResolve(lesson, 'reject-booking')}
+                            disabled={processingRequestId === lesson.id}
+                            style={{ background: '#F44336', boxShadow: 'none' }}
+                          >
+                            Отклонить запись
+                          </button>
+                        </>
+                      )}
+
+                      {lesson.conduct_status === 'reschedule_pending' && (
+                        <>
+                          <button onClick={() => handleRequestResolve(lesson, 'approve-reschedule')} disabled={processingRequestId === lesson.id}>
+                            Подтвердить перенос
+                          </button>
+                          <button
+                            onClick={() => handleRequestResolve(lesson, 'reject-reschedule')}
+                            disabled={processingRequestId === lesson.id}
+                            style={{ background: '#F44336', boxShadow: 'none' }}
+                          >
+                            Отклонить перенос
+                          </button>
+                        </>
+                      )}
+
+                      {lesson.payment_status === 'payment_pending' && (
+                        <>
+                          <button onClick={() => handleRequestResolve(lesson, 'approve-payment')} disabled={processingRequestId === lesson.id}>
+                            Подтвердить оплату
+                          </button>
+                          <button
+                            onClick={() => handleRequestResolve(lesson, 'reject-payment')}
+                            disabled={processingRequestId === lesson.id}
+                            style={{ background: '#F44336', boxShadow: 'none' }}
+                          >
+                            Отклонить оплату
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {selectedMonthDay && selectedMonthDayDate && (
         <div
           onClick={() => setSelectedMonthDay(null)}
@@ -1473,14 +1700,20 @@ export default function SchedulePage() {
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
                         <strong>{toTime(toStartTime(lesson))} - {toTime(toEndTime(lesson))}</strong>
-                        <span style={{ color: color, fontSize: 12, fontWeight: 800 }}>{statusLabel(lesson.conduct_status)}</span>
+                        {!windowCard && (
+                          <span style={{ color: color, fontSize: 12, fontWeight: 800 }}>{statusLabel(lesson.conduct_status)}</span>
+                        )}
                       </div>
-                      <div style={{ fontWeight: 800, marginBottom: 4 }}>
-                        {windowCard ? 'Свободный слот' : student?.full_name ?? 'Ученик'}
-                      </div>
-                      <div style={{ color: '#687486', fontSize: 13 }}>
-                        {windowCard ? 'Доступен для записи' : `${subject?.name ?? 'Без предмета'} • ${lesson.cost ?? '—'} ₽ • ${paymentLabel(lesson.payment_status)}`}
-                      </div>
+                      {!windowCard && (
+                        <>
+                          <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                            {student?.full_name ?? 'Ученик'}
+                          </div>
+                          <div style={{ color: '#687486', fontSize: 13 }}>
+                            {subject?.name ?? 'Без предмета'} • {lesson.cost ?? '—'} ₽ • {paymentLabel(lesson.payment_status)}
+                          </div>
+                        </>
+                      )}
                     </button>
                   );
                 })
@@ -1770,7 +2003,6 @@ export default function SchedulePage() {
                         ['Тема занятия', topic?.title ?? 'Без темы'],
                         ['Стоимость', `${selectedLesson.cost ?? '—'} ₽`],
                         ['Оплата', paymentLabel(selectedLesson.payment_status)],
-                        ['Оценка', selectedLesson.grade ? String(selectedLesson.grade) : 'Не выставлена'],
                       ]
                   ).map(([label, value]) => (
                     <div key={label} style={{ padding: 14, borderRadius: 16, background: 'rgba(23,32,51,0.04)', border: '1px solid rgba(24,33,47,0.06)' }}>
@@ -1792,6 +2024,33 @@ export default function SchedulePage() {
                     >
                       ✎
                     </button>
+                    {!selectedWindow && (
+                      <button
+                        type="button"
+                        title={
+                          showLessonNoteEditor
+                            ? 'Скрыть заметку'
+                            : selectedLesson.tutor_note?.trim()
+                              ? 'Редактировать заметку'
+                              : 'Добавить личную заметку'
+                        }
+                        onClick={() => setShowLessonNoteEditor((prev) => !prev)}
+                        style={{
+                          minWidth: 42,
+                          width: 42,
+                          height: 42,
+                          padding: 0,
+                          borderRadius: 999,
+                          background: showLessonNoteEditor ? 'rgba(23,32,51,0.92)' : '#2AABEE',
+                          boxShadow: 'none',
+                          fontSize: 18,
+                          display: 'inline-grid',
+                          placeItems: 'center',
+                        }}
+                      >
+                        {selectedLesson.tutor_note?.trim() ? '✎' : '+'}
+                      </button>
+                    )}
                     {canMarkConducted && (
                       <button title="Отметить проведённым" onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'conducted' })} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#4CAF50', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}>
                         ✓
@@ -1950,31 +2209,6 @@ export default function SchedulePage() {
                     <div style={{ display: 'grid', gap: 12, padding: 16, borderRadius: 18, background: 'rgba(23,32,51,0.035)', border: '1px solid rgba(24,33,47,0.06)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                         <div style={{ fontSize: 14, color: '#687486' }}>Оценка за занятие</div>
-                        <button
-                          type="button"
-                          title={
-                            showLessonNoteEditor
-                              ? 'Скрыть заметку'
-                              : selectedLesson.tutor_note?.trim()
-                                ? 'Редактировать заметку'
-                                : 'Добавить личную заметку'
-                          }
-                          onClick={() => setShowLessonNoteEditor((prev) => !prev)}
-                          style={{
-                            minWidth: 36,
-                            width: 36,
-                            height: 36,
-                            padding: 0,
-                            borderRadius: 999,
-                            background: showLessonNoteEditor ? 'rgba(23,32,51,0.92)' : '#2AABEE',
-                            boxShadow: 'none',
-                            fontSize: 18,
-                            display: 'inline-grid',
-                            placeItems: 'center',
-                          }}
-                        >
-                          {selectedLesson.tutor_note?.trim() ? '✎' : '+'}
-                        </button>
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
