@@ -33,6 +33,7 @@ export interface Assignment {
   tutor_student_id: number;
   topic_id: number | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface AssignmentQuery {

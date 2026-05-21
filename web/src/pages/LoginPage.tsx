@@ -2,7 +2,11 @@
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
-const CALLBACK_URL = `${window.location.origin}/auth/callback`;
+const CALLBACK_ORIGIN =
+  window.location.hostname === '127.0.0.1'
+    ? `${window.location.protocol}//localhost${window.location.port ? `:${window.location.port}` : ''}`
+    : window.location.origin;
+const CALLBACK_URL = `${CALLBACK_ORIGIN}/auth/callback`;
 
 const featureCards = [
   {
@@ -21,7 +25,7 @@ const featureCards = [
     icon: '↗',
     color: '#4CAF50',
     title: 'Портфолио',
-    text: 'Темы, оценки, динамика и понятный отчёт для опекуна.',
+    text: 'Темы, оценки, динамика и понятный отчёт о прогрессе ученика.',
   },
 ];
 

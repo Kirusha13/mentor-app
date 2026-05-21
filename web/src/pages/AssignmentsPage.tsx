@@ -20,35 +20,28 @@ import { formatFileSize, getMediaUrl, isImageSource } from '../utils/media';
 
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 
-const badgeStyle = {
-  padding: '7px 11px',
-  borderRadius: 999,
-  background: 'rgba(23,32,51,0.06)',
-  color: '#3f4e63',
-  fontSize: 13,
-} as const;
-
-const STATUS_LABELS: Record<CompletionStatus, string> = {
-  assigned: 'Назначено',
-  in_progress: 'В работе',
-  completed: 'Выполнено',
-  overdue: 'Просрочено',
-};
-
-const STATUS_COLORS: Record<CompletionStatus, string> = {
-  assigned: '#2AABEE',
-  in_progress: '#FF9800',
-  completed: '#4CAF50',
-  overdue: '#F44336',
-};
-
 type AssignmentColumn = {
-  key: string;
+  key: AssignmentLane;
   title: string;
   color: string;
-  status?: CompletionStatus;
+  soft: string;
   items: Assignment[];
 };
+
+type AssignmentLane = 'created' | 'in_progress' | 'review' | 'overdue' | 'checked';
+
+type AssignmentCardMode = 'kanban' | 'checked' | 'archive';
+
+const LANE_META: Record<AssignmentLane, { title: string; color: string; soft: string; actionLabel: string }> = {
+  created: { title: 'Создано', color: '#2AABEE', soft: '#EFF9FF', actionLabel: 'Создано' },
+  in_progress: { title: 'В работе', color: '#4CAF50', soft: '#F1FBF2', actionLabel: 'Открыто' },
+  review: { title: 'На проверке', color: '#FF9800', soft: '#FFF8EE', actionLabel: 'Отправлено' },
+  overdue: { title: 'Просрочено', color: '#F44336', soft: '#FFF2F1', actionLabel: 'Дедлайн' },
+  checked: { title: 'Проверено', color: '#9C27B0', soft: '#F9F0FF', actionLabel: 'Проверено' },
+};
+
+const ACTIVE_LANES: AssignmentLane[] = ['created', 'in_progress', 'review', 'overdue'];
+const KANBAN_PREVIEW_LIMIT = 3;
 
 const fileToDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -81,6 +74,65 @@ const normalizeAttachments = (attachments: Assignment['attachments']): Assignmen
   return { links, files };
 };
 
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return `${date.toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+  })}, ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function formatDateInput(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function defaultPeriodStart() {
+  const date = new Date();
+  date.setDate(date.getDate() - 7);
+  return formatDateInput(date);
+}
+
+function defaultPeriodEnd() {
+  const date = new Date();
+  date.setDate(date.getDate() + 14);
+  return formatDateInput(date);
+}
+
+function getAssignmentLane(assignment: Assignment): AssignmentLane {
+  const hasStudentAnswer =
+    Boolean(assignment.student_comment?.trim()) ||
+    Boolean(assignment.student_files?.length);
+  const isDeadlineOverdue =
+    new Date(assignment.deadline).getTime() < Date.now() &&
+    assignment.completion_status !== 'completed' &&
+    !hasStudentAnswer;
+
+  if (assignment.completion_status === 'completed' && assignment.grade) return 'checked';
+  if (assignment.completion_status === 'completed' || hasStudentAnswer) return 'review';
+  if (assignment.completion_status === 'overdue' || isDeadlineOverdue) return 'overdue';
+  if (assignment.completion_status === 'in_progress') return 'in_progress';
+
+  return 'created';
+}
+
+function getAssignmentActionDate(assignment: Assignment, lane = getAssignmentLane(assignment)) {
+  if (lane === 'created') return assignment.created_at;
+  if (lane === 'overdue') return assignment.deadline;
+  return assignment.updated_at ?? assignment.created_at;
+}
+
+function isDateInRange(value: string, start: string, end: string) {
+  const time = new Date(value).getTime();
+  if (Number.isNaN(time)) return false;
+
+  const startTime = start ? new Date(`${start}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY;
+  const endTime = end ? new Date(`${end}T23:59:59`).getTime() : Number.POSITIVE_INFINITY;
+
+  return time >= startTime && time <= endTime;
+}
+
 export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
@@ -93,8 +145,16 @@ export default function AssignmentsPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<CompletionStatus | 'all'>('all');
-  const [relationFilter, setRelationFilter] = useState<'all' | string>('all');
+  const [subjectFilter, setSubjectFilter] = useState<'all' | string>('all');
+  const [studentFilter, setStudentFilter] = useState<'all' | string>('all');
+  const [periodStart, setPeriodStart] = useState(defaultPeriodStart);
+  const [periodEnd, setPeriodEnd] = useState(defaultPeriodEnd);
+  const [checkedArchiveOpen, setCheckedArchiveOpen] = useState(false);
+  const [archiveSearch, setArchiveSearch] = useState('');
+  const [archiveSubjectFilter, setArchiveSubjectFilter] = useState<'all' | string>('all');
+  const [archiveStudentFilter, setArchiveStudentFilter] = useState<'all' | string>('all');
+  const [archiveStart, setArchiveStart] = useState(defaultPeriodStart);
+  const [archiveEnd, setArchiveEnd] = useState(defaultPeriodEnd);
   const [newTutorStudentId, setNewTutorStudentId] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
@@ -108,7 +168,6 @@ export default function AssignmentsPage() {
   const [assignmentGradeCommentDraft, setAssignmentGradeCommentDraft] = useState('');
   const [assignmentCommentSaving, setAssignmentCommentSaving] = useState(false);
   const [expandedColumnKey, setExpandedColumnKey] = useState<string | null>(null);
-  const [statusPreviewLimit] = useState(5);
 
   const relationOptions = useMemo(
     () =>
@@ -126,12 +185,29 @@ export default function AssignmentsPage() {
     [students, subjects, tutorStudents]
   );
 
+  const studentOptions = useMemo(
+    () =>
+      [...students]
+        .filter((student) => tutorStudents.some((relation) => relation.student_id === student.id))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name, 'ru-RU')),
+    [students, tutorStudents]
+  );
+
+  const subjectOptions = useMemo(
+    () =>
+      [...subjects]
+        .filter((subject) => tutorStudents.some((relation) => relation.subject_id === subject.id))
+        .sort((a, b) => a.name.localeCompare(b.name, 'ru-RU')),
+    [subjects, tutorStudents]
+  );
+
   const filteredAssignments = useMemo(
     () =>
       assignments.filter((assignment) => {
         const relation = tutorStudents.find((item) => item.id === assignment.tutor_student_id);
         const student = students.find((item) => item.id === relation?.student_id);
         const subject = subjects.find((item) => item.id === relation?.subject_id);
+        const lane = getAssignmentLane(assignment);
         const topicTitle = topics.find((topic) => topic.id === assignment.topic_id)?.title ?? 'Без темы';
         const query = search.trim().toLowerCase();
         const haystack = [
@@ -143,13 +219,24 @@ export default function AssignmentsPage() {
         ]
           .join(' ')
           .toLowerCase();
-        const byStatus =
-          statusFilter === 'all' || assignment.completion_status === statusFilter;
-        const byRelation =
-          relationFilter === 'all' || String(assignment.tutor_student_id) === relationFilter;
-        return (!query || haystack.includes(query)) && byStatus && byRelation;
+        const bySubject = subjectFilter === 'all' || String(relation?.subject_id) === subjectFilter;
+        const byStudent = studentFilter === 'all' || String(relation?.student_id) === studentFilter;
+        const byPeriod = isDateInRange(getAssignmentActionDate(assignment, lane), periodStart, periodEnd);
+
+        return (!query || haystack.includes(query)) && bySubject && byStudent && byPeriod;
       }),
-    [assignments, relationFilter, search, statusFilter, students, subjects, topics, tutorStudents]
+    [
+      assignments,
+      periodEnd,
+      periodStart,
+      search,
+      studentFilter,
+      students,
+      subjectFilter,
+      subjects,
+      topics,
+      tutorStudents,
+    ]
   );
 
   const selectedAssignment = useMemo(
@@ -404,201 +491,627 @@ export default function AssignmentsPage() {
   };
 
   const assignmentColumns = useMemo<AssignmentColumn[]>(() => {
-    const now = Date.now();
-    const needReview: Assignment[] = [];
-    const active: Assignment[] = [];
-    const overdue: Assignment[] = [];
-    const checked: Assignment[] = [];
+    const sortByActionDate = (items: Assignment[]) =>
+      [...items].sort((a, b) =>
+        getAssignmentActionDate(a).localeCompare(getAssignmentActionDate(b))
+      );
 
-    filteredAssignments.forEach((assignment) => {
-      const isDeadlineOverdue =
-        new Date(assignment.deadline).getTime() < now &&
-        assignment.completion_status !== 'completed';
-      const hasStudentAnswer =
-        Boolean(assignment.student_comment?.trim()) ||
-        Boolean(assignment.student_files?.length);
+    return ACTIVE_LANES.map((lane) => {
+      const meta = LANE_META[lane];
 
-      if (assignment.completion_status === 'overdue' || isDeadlineOverdue) {
-        overdue.push(assignment);
-        return;
-      }
-
-      if (assignment.completion_status === 'completed') {
-        if (assignment.grade) {
-          checked.push(assignment);
-        } else {
-          needReview.push(assignment);
-        }
-        return;
-      }
-
-      if (hasStudentAnswer) {
-        needReview.push(assignment);
-        return;
-      }
-
-      active.push(assignment);
+      return {
+        key: lane,
+        title: meta.title,
+        color: meta.color,
+        soft: meta.soft,
+        items: sortByActionDate(
+          filteredAssignments.filter((assignment) => getAssignmentLane(assignment) === lane)
+        ),
+      };
     });
+  }, [filteredAssignments]);
 
-    const sortByDeadline = (items: Assignment[]) =>
-      [...items].sort((a, b) => a.deadline.localeCompare(b.deadline));
+  const checkedAssignments = useMemo(
+    () =>
+      filteredAssignments
+        .filter((assignment) => getAssignmentLane(assignment) === 'checked')
+        .sort((a, b) => getAssignmentActionDate(b, 'checked').localeCompare(getAssignmentActionDate(a, 'checked'))),
+    [filteredAssignments]
+  );
 
-    return [
+  const archiveAssignments = useMemo(
+    () =>
+      assignments
+        .filter((assignment) => {
+          if (getAssignmentLane(assignment) !== 'checked') return false;
+
+          const relation = tutorStudents.find((item) => item.id === assignment.tutor_student_id);
+          const student = students.find((item) => item.id === relation?.student_id);
+          const subject = subjects.find((item) => item.id === relation?.subject_id);
+          const topicTitle = topics.find((topic) => topic.id === assignment.topic_id)?.title ?? 'Без темы';
+          const query = archiveSearch.trim().toLowerCase();
+          const haystack = [
+            assignment.title ?? '',
+            assignment.description,
+            topicTitle,
+            student?.full_name ?? '',
+            subject?.name ?? '',
+          ]
+            .join(' ')
+            .toLowerCase();
+          const bySubject =
+            archiveSubjectFilter === 'all' || String(relation?.subject_id) === archiveSubjectFilter;
+          const byStudent =
+            archiveStudentFilter === 'all' || String(relation?.student_id) === archiveStudentFilter;
+          const byPeriod = isDateInRange(
+            getAssignmentActionDate(assignment, 'checked'),
+            archiveStart,
+            archiveEnd
+          );
+
+          return (!query || haystack.includes(query)) && bySubject && byStudent && byPeriod;
+        })
+        .sort((a, b) => getAssignmentActionDate(b, 'checked').localeCompare(getAssignmentActionDate(a, 'checked'))),
+    [
+      archiveEnd,
+      archiveSearch,
+      archiveStart,
+      archiveStudentFilter,
+      archiveSubjectFilter,
+      assignments,
+      students,
+      subjects,
+      topics,
+      tutorStudents,
+    ]
+  );
+
+  const kpiCards = useMemo(
+    () => [
       {
-        key: 'review',
-        title: 'Нужно проверить',
+        key: 'total',
+        title: 'Всего заданий',
+        value: filteredAssignments.length,
+        icon: '□',
         color: '#2AABEE',
-        items: sortByDeadline(needReview),
+        soft: '#EFF9FF',
       },
       {
-        key: 'active',
+        key: 'in_progress',
         title: 'В работе',
-        color: '#2AABEE',
-        status: 'in_progress',
-        items: sortByDeadline(active),
+        value: assignmentColumns.find((column) => column.key === 'in_progress')?.items.length ?? 0,
+        icon: '↗',
+        color: '#4CAF50',
+        soft: '#F1FBF2',
+      },
+      {
+        key: 'review',
+        title: 'На проверке',
+        value: assignmentColumns.find((column) => column.key === 'review')?.items.length ?? 0,
+        icon: '↑',
+        color: '#FF9800',
+        soft: '#FFF8EE',
       },
       {
         key: 'overdue',
         title: 'Просрочено',
+        value: assignmentColumns.find((column) => column.key === 'overdue')?.items.length ?? 0,
+        icon: '!',
         color: '#F44336',
-        status: 'overdue',
-        items: sortByDeadline(overdue),
+        soft: '#FFF2F1',
       },
       {
         key: 'checked',
         title: 'Проверено',
-        color: '#4CAF50',
-        status: 'completed',
-        items: sortByDeadline(checked),
+        value: checkedAssignments.length,
+        icon: '✓',
+        color: '#9C27B0',
+        soft: '#F9F0FF',
       },
-    ];
-  }, [filteredAssignments]);
+    ],
+    [assignmentColumns, checkedAssignments.length, filteredAssignments.length]
+  );
 
-  const renderAssignmentCard = (assignment: Assignment) => {
+  const renderAssignmentCard = (
+    assignment: Assignment,
+    laneOverride?: AssignmentLane,
+    mode: AssignmentCardMode = 'kanban'
+  ) => {
+    const lane = laneOverride ?? getAssignmentLane(assignment);
+    const meta = LANE_META[lane];
     const { student, subject } = getRelationMeta(assignment.tutor_student_id);
-    const color = STATUS_COLORS[assignment.completion_status];
-    const attachments = normalizeAttachments(assignment.attachments);
-    const attachmentCount = (attachments.links?.length ?? 0) + (attachments.files?.length ?? 0);
-    const hasAnswer = Boolean(assignment.student_comment?.trim()) || Boolean(assignment.student_files?.length);
-    const deadline = new Date(assignment.deadline);
-    const isDeadlineOverdue =
-      deadline.getTime() < Date.now() && assignment.completion_status !== 'completed';
+    const topicTitle = getTopicTitle(assignment.topic_id);
+    const assignmentTitle = assignment.title?.trim() || topicTitle || 'Задание без заголовка';
+    const classLabel = student?.grade ? `${student.grade} класс` : 'класс';
+    const actionDate = formatDateTime(getAssignmentActionDate(assignment, lane));
+    const isArchive = mode === 'archive';
 
     return (
       <article
         key={assignment.id}
+        className={`assignment-card assignment-card-${mode}`}
         onClick={() => setSelectedAssignmentId(assignment.id)}
-        style={{
-          border: '1px solid rgba(24,33,47,0.1)',
-          borderLeft: `5px solid ${isDeadlineOverdue ? '#F44336' : color}`,
-          borderRadius: 16,
-          padding: '12px 13px',
-          background: '#fff',
-          boxShadow: '0 10px 22px rgba(15,23,42,0.05)',
-          cursor: 'pointer',
-          display: 'grid',
-          gap: 10,
-        }}
+        style={{ borderLeftColor: meta.color }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
-          <div style={{ minWidth: 0 }}>
-            <h4 style={{ fontSize: 16, lineHeight: 1.15, marginBottom: 5 }}>
-              {assignment.title || 'Задание без заголовка'}
-            </h4>
-            <div style={{ color: '#5d6778', fontSize: 13, lineHeight: 1.35 }}>
-              {student?.full_name ?? 'Ученик'} • {subject?.name ?? 'Без предмета'}
-            </div>
-          </div>
-          <button
-            type="button"
-            title="Удалить ДЗ"
-            onClick={(event) => {
-              event.stopPropagation();
-              handleDeleteAssignment(assignment);
-            }}
-            style={{
-              minWidth: 34,
-              width: 34,
-              height: 34,
-              padding: 0,
-              borderRadius: 999,
-              background: 'rgba(166,63,59,0.92)',
-              boxShadow: 'none',
-              fontSize: 15,
-              display: 'inline-grid',
-              placeItems: 'center',
-              flexShrink: 0,
-            }}
-          >
-            🗑
-          </button>
+        <div className="assignment-card-head">
+          <h4>{student?.full_name ?? 'Ученик'}</h4>
+          <span className="assignment-class-badge" style={{ background: meta.soft, color: meta.color }}>
+            {classLabel}
+          </span>
         </div>
 
-        <div style={{ display: 'grid', gap: 5 }}>
-          <div style={{ color: isDeadlineOverdue ? '#F44336' : '#435066', fontSize: 12, fontWeight: 800 }}>
-            до {deadline.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}, {deadline.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-          </div>
-          <div style={{ color: '#687486', fontSize: 12, lineHeight: 1.35 }}>
-            {getTopicTitle(assignment.topic_id)}
-          </div>
-        </div>
+        <div className="assignment-subject">{subject?.name ?? 'Без предмета'}</div>
+        <div className="assignment-title">{assignmentTitle}</div>
 
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ ...badgeStyle, padding: '5px 8px', fontSize: 11 }}>
-            {STATUS_LABELS[assignment.completion_status]}
+        <div className="assignment-card-footer">
+          <span className={lane === 'overdue' ? 'assignment-date assignment-date-danger' : 'assignment-date'}>
+            {meta.actionLabel}: {actionDate}
           </span>
-          <span style={{ ...badgeStyle, padding: '5px 8px', fontSize: 11 }}>
-            Ответ: {hasAnswer ? 'есть' : 'нет'}
-          </span>
-          {attachmentCount > 0 && (
-            <span style={{ ...badgeStyle, padding: '5px 8px', fontSize: 11 }}>
-              Файлы: {attachmentCount}
-            </span>
+          {(lane === 'checked' || isArchive) && assignment.grade && (
+            <span className="assignment-grade-badge">{assignment.grade}</span>
           )}
-          {assignment.grade && (
-            <span style={{ ...badgeStyle, padding: '5px 8px', fontSize: 11, background: 'rgba(47,125,99,0.1)', color: '#4CAF50', fontWeight: 800 }}>
-              {assignment.grade}
-            </span>
-          )}
+          {isArchive && <span className="assignment-open-link">Открыть</span>}
         </div>
       </article>
     );
   };
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div className="assignments-page-shell">
+      <style>
+        {`
+          .assignments-page-shell {
+            display: grid;
+            gap: 20px;
+          }
+
+          .assignments-controls {
+            display: grid;
+            grid-template-columns: minmax(260px, 1.55fr) minmax(170px, 0.85fr) minmax(170px, 0.85fr) minmax(270px, 1fr) auto;
+            gap: 14px;
+            align-items: center;
+          }
+
+          .assignments-control,
+          .assignments-period-control {
+            min-height: 54px;
+            width: 100%;
+            border: 1px solid #E8EDF5;
+            border-radius: 16px;
+            background: #FFFFFF;
+            color: #1A1A1A;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04);
+          }
+
+          .assignments-control {
+            padding: 0 16px;
+            font-size: 15px;
+            outline: none;
+          }
+
+          .assignments-search {
+            padding-left: 44px;
+          }
+
+          .assignments-search-wrap {
+            position: relative;
+          }
+
+          .assignments-search-icon {
+            position: absolute;
+            left: 17px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #667085;
+            font-size: 20px;
+            pointer-events: none;
+          }
+
+          .assignments-period-control {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+            gap: 8px;
+            align-items: center;
+            padding: 0 14px;
+            color: #566173;
+          }
+
+          .assignments-period-control input {
+            min-width: 0;
+            height: 38px;
+            border: 0;
+            padding: 0;
+            background: transparent;
+            color: #1A1A1A;
+            font-weight: 700;
+          }
+
+          .assignments-create-button {
+            min-height: 54px;
+            padding: 0 22px;
+            border-radius: 16px;
+            background: #2AABEE;
+            box-shadow: 0 14px 28px rgba(42, 171, 238, 0.26);
+            white-space: nowrap;
+          }
+
+          .assignments-kpi-grid,
+          .assignments-board-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 14px;
+            align-items: stretch;
+          }
+
+          .assignment-kpi-card,
+          .assignment-board-block {
+            border: 1px solid #E8EDF5;
+            background: #FFFFFF;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.055);
+          }
+
+          .assignment-kpi-card {
+            min-height: 112px;
+            border-radius: 22px;
+            padding: 20px;
+            display: flex;
+            gap: 18px;
+            align-items: center;
+          }
+
+          .assignment-kpi-icon {
+            width: 54px;
+            height: 54px;
+            border-radius: 999px;
+            display: inline-grid;
+            place-items: center;
+            flex: 0 0 54px;
+            font-size: 25px;
+            font-weight: 900;
+          }
+
+          .assignment-kpi-value {
+            font-size: 32px;
+            line-height: 1;
+            font-weight: 950;
+            letter-spacing: 0;
+            color: #101828;
+          }
+
+          .assignment-kpi-title {
+            margin-top: 8px;
+            color: #1A1A1A;
+            font-size: 15px;
+            font-weight: 800;
+          }
+
+          .assignment-board-block {
+            min-height: 626px;
+            border-radius: 22px;
+            padding: 18px;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            gap: 14px;
+          }
+
+          .assignment-column-title,
+          .checked-panel-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+            color: #101828;
+            font-size: 17px;
+            line-height: 1.2;
+            font-weight: 950;
+          }
+
+          .assignment-status-dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 999px;
+            flex: 0 0 11px;
+          }
+
+          .assignment-card-list {
+            display: grid;
+            align-content: start;
+            gap: 12px;
+          }
+
+          .assignment-empty-spacer {
+            min-height: 360px;
+          }
+
+          .assignment-card {
+            border: 1px solid #E8EDF5;
+            border-left: 4px solid #2AABEE;
+            border-radius: 17px;
+            padding: 15px 15px 14px;
+            background: #FFFFFF;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045);
+            cursor: pointer;
+            display: grid;
+            gap: 9px;
+            transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+          }
+
+          .assignment-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+            border-color: #DDE6F3;
+          }
+
+          .assignment-card-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+          }
+
+          .assignment-card-head h4 {
+            min-width: 0;
+            margin: 0;
+            color: #101828;
+            font-size: 15px;
+            line-height: 1.25;
+            font-weight: 950;
+          }
+
+          .assignment-class-badge {
+            flex: 0 0 auto;
+            padding: 5px 8px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 850;
+            line-height: 1;
+          }
+
+          .assignment-subject {
+            color: #475467;
+            font-size: 14px;
+            line-height: 1.35;
+          }
+
+          .assignment-title {
+            color: #101828;
+            font-size: 15px;
+            line-height: 1.35;
+            font-weight: 900;
+          }
+
+          .assignment-card-footer {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+          }
+
+          .assignment-date {
+            min-width: 0;
+            flex: 1 1 auto;
+            color: #566173;
+            font-size: 13px;
+            line-height: 1.35;
+            font-weight: 750;
+          }
+
+          .assignment-date-danger {
+            color: #F44336;
+          }
+
+          .assignment-grade-badge {
+            min-width: 30px;
+            height: 30px;
+            border-radius: 999px;
+            display: inline-grid;
+            place-items: center;
+            background: #F1DFFF;
+            color: #7B1FA2;
+            font-size: 15px;
+            font-weight: 950;
+            flex: 0 0 auto;
+          }
+
+          .assignment-open-link {
+            color: #7B1FA2;
+            font-size: 12px;
+            font-weight: 900;
+            flex: 0 0 auto;
+          }
+
+          .assignment-show-more {
+            align-self: end;
+            justify-self: center;
+            min-height: 38px;
+            padding: 0 12px;
+            border: 0;
+            background: transparent;
+            color: #2AABEE;
+            box-shadow: none;
+            font-size: 14px;
+            font-weight: 900;
+          }
+
+          .checked-panel-list {
+            display: grid;
+            align-content: start;
+            gap: 12px;
+          }
+
+          .checked-archive-button {
+            min-height: 46px;
+            border-radius: 14px;
+            border: 1px solid rgba(156, 39, 176, 0.22);
+            background: #F9F0FF;
+            color: #7B1FA2;
+            box-shadow: none;
+            font-weight: 900;
+          }
+
+          .assignment-archive-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 900;
+            display: grid;
+            justify-items: end;
+            background: rgba(15, 23, 42, 0.28);
+            backdrop-filter: blur(3px);
+          }
+
+          .assignment-archive-drawer {
+            width: min(760px, 100%);
+            height: 100vh;
+            overflow-y: auto;
+            padding: 24px;
+            background: #F5F7FB;
+            box-shadow: -28px 0 70px rgba(15, 23, 42, 0.18);
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 18px;
+          }
+
+          .assignment-archive-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+          }
+
+          .assignment-archive-header h2 {
+            margin: 0;
+            color: #101828;
+            font-size: 26px;
+            line-height: 1.1;
+          }
+
+          .assignment-archive-close {
+            min-width: 42px;
+            width: 42px;
+            height: 42px;
+            padding: 0;
+            border-radius: 999px;
+            background: #172033;
+            box-shadow: none;
+          }
+
+          .assignment-archive-filters {
+            display: grid;
+            grid-template-columns: minmax(220px, 1.3fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr);
+            gap: 10px;
+          }
+
+          .assignment-archive-period {
+            grid-column: 1 / -1;
+          }
+
+          .assignment-archive-list {
+            display: grid;
+            align-content: start;
+            gap: 12px;
+          }
+
+          .assignment-archive-empty,
+          .assignments-loading {
+            border: 1px solid #E8EDF5;
+            border-radius: 22px;
+            padding: 24px;
+            background: #FFFFFF;
+            color: #667085;
+          }
+
+          @media (max-width: 1280px) {
+            .assignments-controls {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .assignments-create-button {
+              width: 100%;
+            }
+
+            .assignments-kpi-grid,
+            .assignments-board-grid {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+          }
+
+          @media (max-width: 720px) {
+            .assignments-controls,
+            .assignments-kpi-grid,
+            .assignments-board-grid,
+            .assignment-archive-filters {
+              grid-template-columns: 1fr;
+            }
+
+            .assignments-period-control {
+              grid-template-columns: 1fr;
+              padding: 10px 14px;
+            }
+
+            .assignment-board-block {
+              min-height: auto;
+            }
+
+            .assignment-empty-spacer {
+              min-height: 80px;
+            }
+          }
+        `}
+      </style>
       <h1 className="page-heading">Задания</h1>
 
-      <section className="mentor-panel toolbar-panel" style={{ gridTemplateColumns: 'minmax(260px, 1.4fr) minmax(170px, 0.6fr) minmax(220px, 0.8fr) auto' }}>
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Поиск по заданиям..."
-        />
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CompletionStatus | 'all')}>
-          <option value="all">Все статусы</option>
-          <option value="assigned">Назначено</option>
-          <option value="in_progress">В работе</option>
-          <option value="completed">Выполнено</option>
-          <option value="overdue">Просрочено</option>
-        </select>
-        <select value={relationFilter} onChange={(event) => setRelationFilter(event.target.value)}>
-          <option value="all">Все ученики</option>
-          {relationOptions.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.label}
+      <section className="assignments-controls">
+        <label className="assignments-search-wrap">
+          <span className="assignments-search-icon">⌕</span>
+          <input
+            className="assignments-control assignments-search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Поиск по заданиям..."
+          />
+        </label>
+
+        <select
+          className="assignments-control"
+          value={subjectFilter}
+          onChange={(event) => setSubjectFilter(event.target.value)}
+        >
+          <option value="all">Все предметы</option>
+          {subjectOptions.map((subject) => (
+            <option key={subject.id} value={String(subject.id)}>
+              {subject.name}
             </option>
           ))}
         </select>
-        <button type="button" title="Создать задание" onClick={() => setCreateModalOpen(true)} className="add-trigger">
-          +
+
+        <select
+          className="assignments-control"
+          value={studentFilter}
+          onChange={(event) => setStudentFilter(event.target.value)}
+        >
+          <option value="all">Все ученики</option>
+          {studentOptions.map((student) => (
+            <option key={student.id} value={String(student.id)}>
+              {student.full_name}
+            </option>
+          ))}
+        </select>
+
+        <label className="assignments-period-control">
+          <span>Период:</span>
+          <input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} />
+          <span>—</span>
+          <input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} />
+        </label>
+
+        <button type="button" onClick={() => setCreateModalOpen(true)} className="assignments-create-button">
+          + Создать задание
         </button>
       </section>
 
-      <div style={{ display: 'grid', gap: 16, alignItems: 'start' }}>
-        {createModalOpen && (
-          <div onClick={() => setCreateModalOpen(false)} className="modal-overlay">
-            <div onClick={(event) => event.stopPropagation()} className="app-modal wide">
+      {createModalOpen && (
+        <div onClick={() => setCreateModalOpen(false)} className="modal-overlay">
+          <div onClick={(event) => event.stopPropagation()} className="app-modal wide">
           <div className="modal-header">
             <div>
               <h3 className="modal-title">Создать задание</h3>
@@ -713,133 +1226,153 @@ export default function AssignmentsPage() {
           )}
             </div>
           </div>
-        )}
+      )}
 
-        <section className="metric-grid">
-          <div className="metric-card">
-            <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>ДЗ</span>
-            <div><div className="metric-value">{assignments.length} задания</div><div className="metric-label">Всего заданий</div></div>
-          </div>
-          <div className="metric-card">
-            <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>!</span>
-            <div><div className="metric-value">{assignmentColumns[0]?.items.length ?? 0} нужно проверить</div><div className="metric-label">Требуют проверки</div></div>
-          </div>
-          <div className="metric-card">
-            <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.12)', color: '#4CAF50' }}>✓</span>
-            <div><div className="metric-value">{assignmentColumns[3]?.items.length ?? 0} проверено</div><div className="metric-label">Успешно проверено</div></div>
-          </div>
-        </section>
+      {loading ? (
+        <section className="assignments-loading">Загрузка заданий...</section>
+      ) : (
+        <>
+          <section className="assignments-kpi-grid">
+            {kpiCards.map((card) => (
+              <article key={card.key} className="assignment-kpi-card">
+                <span className="assignment-kpi-icon" style={{ background: card.soft, color: card.color }}>
+                  {card.icon}
+                </span>
+                <div>
+                  <div className="assignment-kpi-value">{card.value}</div>
+                  <div className="assignment-kpi-title">{card.title}</div>
+                </div>
+              </article>
+            ))}
+          </section>
 
-        <section className="mentor-panel" style={{ padding: 16 }}>
-          {loading ? (
-            <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка заданий...</p>
-          ) : (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
-                gap: 12,
-                alignItems: 'start',
-              }}
-            >
-              {assignmentColumns.map((column) => {
-                const isExpanded = expandedColumnKey === column.key;
-                const visibleItems = isExpanded ? column.items : column.items.slice(0, statusPreviewLimit);
+          <section className="assignments-board-grid">
+            {assignmentColumns.map((column) => {
+              const isExpanded = expandedColumnKey === column.key;
+              const visibleItems = isExpanded
+                ? column.items
+                : column.items.slice(0, KANBAN_PREVIEW_LIMIT);
+              const hiddenCount = column.items.length - KANBAN_PREVIEW_LIMIT;
 
-                return (
-                  <section
-                    key={column.key}
-                    style={{
-                      borderRadius: 20,
-                      background: 'linear-gradient(180deg, rgba(23,32,51,0.035), rgba(23,32,51,0.018))',
-                      border: '1px solid rgba(24,33,47,0.07)',
-                      padding: 14,
-                      minHeight: 420,
-                      display: 'grid',
-                      gridTemplateRows: 'auto 1fr',
-                      gap: 12,
-                      alignContent: 'start',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-                          <span style={{ width: 9, height: 9, borderRadius: 999, background: column.color }} />
-                          <h4 style={{ fontSize: 16, marginBottom: 0 }}>{column.title}</h4>
-                        </div>
-                      </div>
-                      <span style={{ padding: '5px 8px', borderRadius: 999, background: 'rgba(255,255,255,0.95)', color: '#1f2a3b', fontSize: 12, fontWeight: 900 }}>
-                        {column.items.length}
-                      </span>
-                    </div>
+              return (
+                <section key={column.key} className="assignment-board-block">
+                  <h3 className="assignment-column-title">
+                    <span className="assignment-status-dot" style={{ background: column.color }} />
+                    {column.title}
+                  </h3>
 
-                    {column.items.length === 0 ? (
-                      <div
-                        style={{
-                          minHeight: 250,
-                          borderRadius: 18,
-                          border: '1px dashed rgba(24,33,47,0.13)',
-                          background: 'rgba(255,255,255,0.62)',
-                          color: '#7a8595',
-                          display: 'grid',
-                          placeItems: 'center',
-                          textAlign: 'center',
-                          padding: 18,
-                        }}
-                      >
-                        <div>
-                          <div style={{ width: 54, height: 54, borderRadius: 999, margin: '0 auto 12px', display: 'grid', placeItems: 'center', background: `${column.color}14`, color: column.color, fontSize: 24 }}>
-                            {column.key === 'review' ? '▣' : column.key === 'active' ? '✈' : column.key === 'overdue' ? '◷' : '✓'}
-                          </div>
-                          <div style={{ color: '#1f2a3b', fontWeight: 900, marginBottom: 6 }}>
-                            {column.key === 'overdue' ? 'Нет просроченных' : column.key === 'checked' ? 'Больше нет заданий' : 'Пока пусто'}
-                          </div>
-                          <div style={{ fontSize: 13, lineHeight: 1.45 }}>
-                            {column.key === 'review'
-                              ? 'Задания появятся здесь после ответа ученика.'
-                              : column.key === 'active'
-                                ? 'Здесь будут задания, над которыми работают ученики.'
-                                : column.key === 'overdue'
-                                  ? 'Отлично, дедлайны под контролем.'
-                                  : 'Все задания в этой колонке проверены.'}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
-                        {visibleItems.map(renderAssignmentCard)}
-                        {column.items.length > statusPreviewLimit && (
-                          <button
-                            type="button"
-                            onClick={() => setExpandedColumnKey(isExpanded ? null : column.key)}
-                            style={{
-                              justifySelf: 'start',
-                              background: 'transparent',
-                              color: column.color,
-                              border: `1px solid ${column.color}33`,
-                              boxShadow: 'none',
-                              padding: '8px 12px',
-                              borderRadius: 999,
-                              fontSize: 12,
-                              fontWeight: 800,
-                            }}
-                          >
-                            {isExpanded ? 'Свернуть' : `Смотреть все (${column.items.length})`}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </section>
-                );
-              })}
+                  <div className="assignment-card-list">
+                    {visibleItems.map((assignment) => renderAssignmentCard(assignment, column.key))}
+                    {column.items.length === 0 && <div className="assignment-empty-spacer" />}
+                  </div>
+
+                  {hiddenCount > 0 && (
+                    <button
+                      type="button"
+                      className="assignment-show-more"
+                      onClick={() => setExpandedColumnKey(isExpanded ? null : column.key)}
+                    >
+                      {isExpanded ? 'Свернуть' : `Показать ещё ${hiddenCount}`}
+                    </button>
+                  )}
+                </section>
+              );
+            })}
+
+            <section className="assignment-board-block checked-panel">
+              <h3 className="checked-panel-title">
+                <span className="assignment-status-dot" style={{ background: '#9C27B0' }} />
+                Проверенные задания
+              </h3>
+
+              <div className="checked-panel-list">
+                {checkedAssignments
+                  .slice(0, 3)
+                  .map((assignment) => renderAssignmentCard(assignment, 'checked', 'checked'))}
+                {checkedAssignments.length === 0 && <div className="assignment-empty-spacer" />}
+              </div>
+
+              <button
+                type="button"
+                className="checked-archive-button"
+                onClick={() => setCheckedArchiveOpen(true)}
+              >
+                Открыть архив проверенных заданий
+              </button>
+            </section>
+          </section>
+        </>
+      )}
+
+      {checkedArchiveOpen && (
+        <div className="assignment-archive-overlay" onClick={() => setCheckedArchiveOpen(false)}>
+          <aside className="assignment-archive-drawer" onClick={(event) => event.stopPropagation()}>
+            <div className="assignment-archive-header">
+              <div>
+                <h2>Архив проверенных заданий</h2>
+              </div>
+              <button
+                type="button"
+                className="assignment-archive-close"
+                onClick={() => setCheckedArchiveOpen(false)}
+              >
+                ×
+              </button>
             </div>
-          )}
-        </section>
-      </div>
+
+            <div className="assignment-archive-filters">
+              <input
+                className="assignments-control"
+                value={archiveSearch}
+                onChange={(event) => setArchiveSearch(event.target.value)}
+                placeholder="Поиск по заданиям..."
+              />
+              <select
+                className="assignments-control"
+                value={archiveSubjectFilter}
+                onChange={(event) => setArchiveSubjectFilter(event.target.value)}
+              >
+                <option value="all">Все предметы</option>
+                {subjectOptions.map((subject) => (
+                  <option key={subject.id} value={String(subject.id)}>
+                    {subject.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="assignments-control"
+                value={archiveStudentFilter}
+                onChange={(event) => setArchiveStudentFilter(event.target.value)}
+              >
+                <option value="all">Все ученики</option>
+                {studentOptions.map((student) => (
+                  <option key={student.id} value={String(student.id)}>
+                    {student.full_name}
+                  </option>
+                ))}
+              </select>
+              <label className="assignments-period-control assignment-archive-period">
+                <span>Период:</span>
+                <input type="date" value={archiveStart} onChange={(event) => setArchiveStart(event.target.value)} />
+                <span>—</span>
+                <input type="date" value={archiveEnd} onChange={(event) => setArchiveEnd(event.target.value)} />
+              </label>
+            </div>
+
+            <div className="assignment-archive-list">
+              {archiveAssignments.map((assignment) => renderAssignmentCard(assignment, 'checked', 'archive'))}
+              {archiveAssignments.length === 0 && (
+                <div className="assignment-archive-empty">Проверенных заданий по выбранным фильтрам нет.</div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
 
       {selectedAssignment && (() => {
         const { student, subject } = getRelationMeta(selectedAssignment.tutor_student_id);
-        const color = STATUS_COLORS[selectedAssignment.completion_status];
+        const selectedLane = getAssignmentLane(selectedAssignment);
+        const color = LANE_META[selectedLane].color;
 
         return (
           <div onClick={() => setSelectedAssignmentId(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.34)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 24, zIndex: 1000 }}>
@@ -848,7 +1381,7 @@ export default function AssignmentsPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                   <div>
                     <div style={{ display: 'inline-flex', padding: '8px 12px', borderRadius: 999, background: color, color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
-                      {STATUS_LABELS[selectedAssignment.completion_status]}
+                      {LANE_META[selectedLane].title}
                     </div>
                     <h3 style={{ fontSize: 24, lineHeight: 1.02, marginBottom: 6 }}>{selectedAssignment.title || 'Задание без заголовка'}</h3>
                     <p style={{ color: '#5d6778', marginBottom: 0 }}>{student?.full_name ?? 'Ученик'} • {subject?.name ?? 'Без предмета'}</p>
@@ -876,7 +1409,7 @@ export default function AssignmentsPage() {
                     ['Дедлайн', new Date(selectedAssignment.deadline).toLocaleString('ru-RU')],
                     ['Тема', getTopicTitle(selectedAssignment.topic_id)],
                     ['Оценка', selectedAssignment.grade ? String(selectedAssignment.grade) : 'Не выставлена'],
-                    ['Статус', STATUS_LABELS[selectedAssignment.completion_status]],
+                    ['Статус', LANE_META[selectedLane].title],
                   ].map(([label, value]) => (
                     <div key={label} style={{ padding: 12, borderRadius: 14, background: 'rgba(23,32,51,0.04)', border: '1px solid rgba(24,33,47,0.06)' }}>
                       <div style={{ fontSize: 13, color: '#768294', marginBottom: 6 }}>{label}</div>

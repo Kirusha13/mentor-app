@@ -1,5 +1,7 @@
 import { apiClient } from './client';
 
+const LOGIN_TIMEOUT_MS = 30_000;
+
 export interface TelegramAuthData {
   id: number;
   first_name: string;
@@ -20,6 +22,10 @@ export const loginWithTelegram = async (
   data: TelegramAuthData
 ): Promise<LoginResponse> => {
   const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const response = await apiClient.post('/auth/login', { ...data, client_timezone: detectedTz });
+  const response = await apiClient.post(
+    '/auth/login',
+    { ...data, client_timezone: detectedTz },
+    { timeout: LOGIN_TIMEOUT_MS }
+  );
   return response.data;
 };
