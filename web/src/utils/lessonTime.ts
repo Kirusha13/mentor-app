@@ -8,6 +8,12 @@ export function lessonDate(lesson: Pick<Lesson, 'starts_at'>): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** DD.MM.YYYY в локальной зоне пользователя */
+export function lessonDateRu(lesson: Pick<Lesson, 'starts_at'>): string {
+  const date = new Date(lesson.starts_at);
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
+}
+
 /** HH:MM:SS в локальной зоне пользователя */
 export function lessonStartTime(lesson: Pick<Lesson, 'starts_at'>): string {
   const date = new Date(lesson.starts_at);

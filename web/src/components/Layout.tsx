@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { getLessons } from '../api/lessons';
 import { getTutorProfile } from '../api/tutor';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -150,6 +151,7 @@ export default function Layout({ children }: LayoutProps) {
   const isMobile = useMediaQuery('(max-width: 820px)');
   const [tutorLabel, setTutorLabel] = useState('Репетитор');
   const [tutorSubtitle, setTutorSubtitle] = useState('Личный кабинет');
+  const [requestCount, setRequestCount] = useState(0);
   const initials = useMemo(() => getInitials(tutorLabel), [tutorLabel]);
   const isProfileActive = location.pathname.startsWith('/profile');
 
@@ -179,7 +181,25 @@ export default function Layout({ children }: LayoutProps) {
       }
     };
 
+    const loadRequestCount = async () => {
+      try {
+        const lessons = await getLessons();
+        if (!cancelled) {
+          const count = lessons.filter(
+            (l) =>
+              l.conduct_status === 'booking_pending' ||
+              l.conduct_status === 'reschedule_pending' ||
+              l.payment_status === 'payment_pending'
+          ).length;
+          setRequestCount(count);
+        }
+      } catch {
+        // не критично — бейдж просто не покажется
+      }
+    };
+
     void loadTutorProfile();
+    void loadRequestCount();
 
     return () => {
       cancelled = true;
@@ -347,6 +367,27 @@ export default function Layout({ children }: LayoutProps) {
                       <NavIcon name={item.icon} />
                     </span>
                     <span>{item.label}</span>
+                    {item.to === '/schedule' && requestCount > 0 && (
+                      <span
+                        style={{
+                          marginLeft: 'auto',
+                          background: '#e53e3e',
+                          color: '#fff',
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 800,
+                          minWidth: 18,
+                          height: 18,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '0 5px',
+                          lineHeight: 1,
+                        }}
+                      >
+                        {requestCount}
+                      </span>
+                    )}
                   </NavLink>
                 ))}
               </div>
