@@ -25,7 +25,9 @@ function formatDateFull(dateStr: string): string {
 }
 
 function slotDurationMinutes(slot: AvailableSlot): number {
-  return (new Date(slot.ends_at).getTime() - new Date(slot.starts_at).getTime()) / 60000;
+  const [sh, sm] = slot.start_time.slice(0, 5).split(':').map(Number);
+  const [eh, em] = slot.end_time.slice(0, 5).split(':').map(Number);
+  return (eh * 60 + em) - (sh * 60 + sm);
 }
 
 function formatDuration(mins: number): string {
@@ -166,8 +168,9 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
             try {
               await bookLesson({
                 tutor_student_id: selectedTS.id,
-                starts_at: selectedSlot.starts_at,
-                ends_at: selectedSlot.ends_at,
+                lesson_date: selectedSlot.lesson_date,
+                start_time: selectedSlot.start_time,
+                end_time: selectedSlot.end_time,
               });
               Alert.alert('Запрос отправлен', 'Репетитор рассмотрит ваш запрос и подтвердит занятие.', [{ text: 'OK', onPress: onSuccess }]);
             } catch (e: any) {
@@ -329,7 +332,7 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
                 <Text style={s.emptyText}>Нет доступных слотов на эту дату</Text>
               ) : (
                 dateSlots.map((slot, i) => {
-                  const isSelected = selectedSlot?.starts_at === slot.starts_at;
+                  const isSelected = selectedSlot?.lesson_date === slot.lesson_date && selectedSlot?.start_time === slot.start_time;
                   const mins = slotDurationMinutes(slot);
                   return (
                     <TouchableOpacity

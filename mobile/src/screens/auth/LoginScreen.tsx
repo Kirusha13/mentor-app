@@ -237,7 +237,7 @@ export default function LoginScreen() {
             <View style={styles.tgBtnInner}>
               <Ionicons name="paper-plane" size={20} color="#fff" />
               <Text style={styles.tgBtnText}>
-                {showTokenInput ? 'Зарегистрироваться через Telegram' : 'Войти через Telegram'}
+                {showTokenInput ? 'Подключить Telegram' : 'Войти через Telegram'}
               </Text>
             </View>
           )}
