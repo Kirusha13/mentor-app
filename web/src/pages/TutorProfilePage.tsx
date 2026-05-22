@@ -60,15 +60,15 @@ function fieldCard(label: string, value: string) {
       key={label}
       style={{
         display: 'grid',
-        gap: 5,
-        padding: '12px 14px',
-        borderRadius: 16,
+        gap: 3,
+        padding: '10px 12px',
+        borderRadius: 14,
         background: 'rgba(23,32,51,0.035)',
         border: '1px solid rgba(24,33,47,0.07)',
       }}
     >
-      <div style={{ ...mutedTextStyle, fontSize: 13 }}>{label}</div>
-      <div style={{ color: '#1f2a3b', fontSize: 16, fontWeight: 800 }}>{value}</div>
+      <div style={{ ...mutedTextStyle, fontSize: 12 }}>{label}</div>
+      <div style={{ color: '#1f2a3b', fontSize: 15, fontWeight: 800 }}>{value}</div>
     </div>
   );
 }
@@ -399,7 +399,7 @@ export default function TutorProfilePage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)', gap: 16, height: '100%', minHeight: 0, overflow: 'hidden' }}>
+    <div style={{ display: 'grid', gridTemplateRows: 'auto auto', alignContent: 'start', gap: 16, height: '100%', minHeight: 0, overflow: 'hidden' }}>
       <section
         style={{
           ...panelStyle,
@@ -467,24 +467,26 @@ export default function TutorProfilePage() {
         </div>
       </section>
 
-      <article style={{ ...panelStyle, display: 'grid', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 0.9fr) minmax(420px, 1.1fr)', gap: 16, minHeight: 0, overflow: 'visible', alignItems: 'start' }}>
+      <article style={{ ...panelStyle, display: 'grid', alignContent: 'start', gap: 12, minHeight: 0, padding: 16 }}>
         <div
           style={{
-            display: 'flex',
+            display: 'grid',
+            gridTemplateColumns: 'minmax(180px, 1fr) auto',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 12,
-            flexWrap: 'wrap',
+            minHeight: 48,
           }}
         >
           <div>
-            <div style={{ fontSize: 21, fontWeight: 900, color: '#1f2a3b', marginBottom: 4 }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#1f2a3b', marginBottom: 2, lineHeight: 1.1 }}>
               Данные профиля
             </div>
-            <div style={mutedTextStyle}>Имя и телефон, которые используются в кабинете.</div>
+            <div style={{ ...mutedTextStyle, fontSize: 13 }}>Имя и телефон, которые используются в кабинете.</div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <button
               type="button"
               title="Открыть уровни обучения"
@@ -524,17 +526,17 @@ export default function TutorProfilePage() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
           {fieldCard('Дата регистрации', formatDateTime(profile.registered_at))}
         </div>
 
-        <div style={{ display: 'grid', gap: 12 }}>
-          <label style={{ display: 'grid', gap: 6 }}>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <label style={{ display: 'grid', gap: 5 }}>
             <span style={mutedTextStyle}>Полное имя</span>
             <input value={fullName} onChange={(event) => setFullName(event.target.value)} disabled={!editing} />
           </label>
 
-          <label style={{ display: 'grid', gap: 6 }}>
+          <label style={{ display: 'grid', gap: 5 }}>
             <span style={mutedTextStyle}>Телефон</span>
             <input
               value={phoneNumber}
@@ -546,20 +548,21 @@ export default function TutorProfilePage() {
         </div>
       </article>
 
-      <article style={{ ...panelStyle, display: 'grid', gap: 16, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin' }}>
+      <article style={{ ...panelStyle, display: 'grid', alignContent: 'start', gap: 12, minHeight: 0, overflow: 'visible', padding: 16 }}>
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(180px, 1fr) minmax(280px, auto)',
-            alignItems: 'end',
+            gridTemplateColumns: 'minmax(180px, 1fr) minmax(270px, auto)',
+            alignItems: 'center',
             gap: 12,
+            minHeight: 48,
           }}
         >
           <div>
-            <div style={{ fontSize: 21, fontWeight: 900, color: '#1f2a3b', marginBottom: 4 }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#1f2a3b', marginBottom: 2, lineHeight: 1.1 }}>
               Предметы
             </div>
-            <div style={mutedTextStyle}>Всего предметов: {subjects.length}</div>
+            <div style={{ ...mutedTextStyle, fontSize: 13 }}>Всего предметов: {subjects.length}</div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 260px) 42px', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
@@ -594,7 +597,7 @@ export default function TutorProfilePage() {
             Предметы не найдены.
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: 14 }}>
+          <div style={{ display: 'grid', gap: 10 }}>
             {filteredSubjects.map((subject) => {
               const isEditing = editingSubjectId === subject.id;
 
@@ -603,8 +606,8 @@ export default function TutorProfilePage() {
                   key={subject.id}
                   style={{
                     border: '1px solid rgba(24,33,47,0.08)',
-                    borderRadius: '20px',
-                    padding: '18px',
+                    borderRadius: '18px',
+                    padding: '14px',
                     background: '#fff',
                     boxShadow: '0 10px 24px rgba(15,23,42,0.05)',
                   }}
@@ -613,8 +616,8 @@ export default function TutorProfilePage() {
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
-                      gap: 16,
-                      alignItems: 'flex-start',
+                      gap: 12,
+                      alignItems: 'center',
                       flexWrap: 'wrap',
                     }}
                   >
@@ -635,8 +638,8 @@ export default function TutorProfilePage() {
                         </div>
                       ) : (
                         <>
-                          <h4 style={{ fontSize: 22, marginBottom: 10 }}>{subject.name}</h4>
-                          <p style={{ color: '#435066', marginBottom: 8 }}>
+                          <h4 style={{ fontSize: 19, lineHeight: 1.15, marginBottom: 6 }}>{subject.name}</h4>
+                          <p style={{ color: '#435066', marginBottom: 4, fontSize: 14 }}>
                             <span style={{ fontWeight: 700 }}>Ставка:</span> {subject.default_rate || '—'} ₽/ч
                           </p>
                           <p
@@ -644,7 +647,8 @@ export default function TutorProfilePage() {
                               color: '#687486',
                               marginBottom: 0,
                               wordBreak: 'break-all',
-                              fontSize: 16,
+                              fontSize: 13,
+                              lineHeight: 1.35,
                             }}
                           >
                             <span style={{ fontWeight: 700, color: '#435066' }}>Token:</span> {subject.invitation_token || '—'}
@@ -707,6 +711,7 @@ export default function TutorProfilePage() {
           </div>
         )}
       </article>
+      </div>
 
       {levelsModalOpen && (
         <div onClick={() => setLevelsModalOpen(false)} className="modal-overlay">
