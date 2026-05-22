@@ -84,31 +84,8 @@ function parseStudyLevel(value: string): string[] | null {
   return items.length ? items : null;
 }
 
-function getMaterialTitle(material: Material) {
-  if (material.content_text?.trim()) {
-    return material.content_text.trim().split('\n')[0].slice(0, 72);
-  }
-
-  if (material.content_url?.trim()) {
-    try {
-      const url = new URL(material.content_url);
-      const lastPathPart = decodeURIComponent(url.pathname.split('/').filter(Boolean).at(-1) ?? '');
-      return lastPathPart || url.hostname;
-    } catch {
-      return material.content_url;
-    }
-  }
-
-  return 'Материал без названия';
-}
-
-function getMaterialSubtitle(material: Material) {
-  if (material.content_text?.trim()) {
-    const lines = material.content_text.trim().split('\n').filter(Boolean);
-    return lines[1] ?? 'Текстовый материал';
-  }
-
-  return material.content_url ?? 'Без ссылки';
+function getMaterialContentPreview(material: Material) {
+  return material.content_text?.trim() || material.content_url?.trim() || 'Материал без содержимого';
 }
 
 export default function MaterialsPage() {
@@ -779,7 +756,7 @@ export default function MaterialsPage() {
             ) : (
               <div style={{ display: 'grid', alignContent: 'start', border: '1px solid rgba(24,33,47,0.08)', borderRadius: 18, overflow: 'auto', minHeight: 0, scrollbarWidth: 'thin' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr auto' : 'minmax(260px, 1fr) 150px 90px 120px 132px', gap: 12, alignItems: 'center', padding: '12px 14px', background: 'rgba(248,250,252,0.9)', color: '#687486', fontSize: 12, fontWeight: 800 }}>
-                  <span>Название материала</span>
+                  <span>Содержимое материала</span>
                   {!isMobile && <span>Тип</span>}
                   {!isMobile && <span>Размер</span>}
                   {!isMobile && <span>Добавлен</span>}
@@ -819,11 +796,20 @@ export default function MaterialsPage() {
                           {material.format === 'link' ? '↗' : material.format === 'image' ? '▧' : '▤'}
                         </span>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ color: '#1f2a3b', fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {getMaterialTitle(material)}
-                          </div>
-                          <div style={{ color: '#687486', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {getMaterialSubtitle(material)}
+                          <div
+                            title={getMaterialContentPreview(material)}
+                            style={{
+                              color: '#1f2a3b',
+                              fontWeight: 900,
+                              overflow: 'hidden',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              wordBreak: 'break-word',
+                              lineHeight: 1.25,
+                            }}
+                          >
+                            {getMaterialContentPreview(material)}
                           </div>
                           {isMobile && (
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>

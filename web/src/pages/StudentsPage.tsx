@@ -1,9 +1,8 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getStudentContacts, type StudentContact } from '../api/contacts';
-import { getAssignments, type Assignment } from '../api/assignments';
 import { getLessons, type Lesson } from '../api/lessons';
-import { createStudent, getStudents, updateStudent, type Student } from '../api/students';
+import { createStudent, getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTutorLevels, type TutorLevel } from '../api/tutorLevels';
 import {
@@ -69,7 +68,6 @@ export default function StudentsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tutorLevels, setTutorLevels] = useState<TutorLevel[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [contactsByStudent, setContactsByStudent] = useState<Record<number, StudentContact[]>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -91,7 +89,6 @@ export default function StudentsPage() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [detailRate, setDetailRate] = useState('');
   const [detailStatus, setDetailStatus] = useState<TutorStudentStatus>('active');
-  const [detailGrade, setDetailGrade] = useState('');
   const [detailLevelIds, setDetailLevelIds] = useState<number[]>([]);
   const [savingTutorStudent, setSavingTutorStudent] = useState(false);
 
@@ -99,20 +96,18 @@ export default function StudentsPage() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [studentsData, tutorStudentsData, subjectsData, levelData, lessonData, assignmentData] = await Promise.all([
+        const [studentsData, tutorStudentsData, subjectsData, levelData, lessonData] = await Promise.all([
           getStudents(),
           getTutorStudents(),
           getSubjects(),
           getTutorLevels(),
           getLessons(),
-          getAssignments(),
         ]);
         setStudents(studentsData);
         setTutorStudents(tutorStudentsData);
         setSubjects(subjectsData);
         setTutorLevels(levelData);
         setLessons(lessonData);
-        setAssignments(assignmentData);
         const contactsEntries = await Promise.all(studentsData.map(async (student) => [student.id, await getStudentContacts(student.id)] as const));
         setContactsByStudent(Object.fromEntries(contactsEntries));
       } catch (error) {
@@ -181,30 +176,11 @@ export default function StudentsPage() {
 
   const activeGroups = useMemo(() => groupCards(activeCards), [activeCards]);
   const inactiveGroups = useMemo(() => groupCards(inactiveCards), [inactiveCards]);
-  const selectedRelationIds = useMemo(
-    () => new Set(selectedStudentCards.map((card) => card.tutorStudent.id)),
-    [selectedStudentCards]
-  );
-  const selectedStudentLessons = useMemo(
-    () => lessons.filter((lesson) => lesson.tutor_student_id !== null && selectedRelationIds.has(lesson.tutor_student_id)),
-    [lessons, selectedRelationIds]
-  );
-  const selectedStudentAssignments = useMemo(
-    () => assignments.filter((assignment) => selectedRelationIds.has(assignment.tutor_student_id)),
-    [assignments, selectedRelationIds]
-  );
-  const selectedConductedLessons = selectedStudentLessons.filter((lesson) => lesson.conduct_status === 'conducted');
-  const lessonGrades = selectedConductedLessons.map((lesson) => lesson.grade).filter((grade): grade is number => grade !== null);
-  const assignmentGrades = selectedStudentAssignments.map((assignment) => assignment.grade).filter((grade): grade is number => grade !== null);
-  const averageLessonGrade = lessonGrades.length ? lessonGrades.reduce((sum, grade) => sum + grade, 0) / lessonGrades.length : null;
-  const averageAssignmentGrade = assignmentGrades.length ? assignmentGrades.reduce((sum, grade) => sum + grade, 0) / assignmentGrades.length : null;
-  const completedAssignmentsCount = selectedStudentAssignments.filter((assignment) => assignment.completion_status === 'completed').length;
 
   useEffect(() => {
-    if (!selectedCard) { setDetailRate(''); setDetailStatus('active'); setDetailGrade(''); setDetailLevelIds([]); return; }
+    if (!selectedCard) { setDetailRate(''); setDetailStatus('active'); setDetailLevelIds([]); return; }
     setDetailRate(String(selectedCard.tutorStudent.hourly_rate));
     setDetailStatus(selectedCard.tutorStudent.status);
-    setDetailGrade(selectedCard.student.grade ? String(selectedCard.student.grade) : '');
     setDetailLevelIds(selectedCard.tutorStudent.level_ids ?? []);
   }, [selectedCard]);
 
@@ -233,20 +209,10 @@ export default function StudentsPage() {
     if (!selectedCard) return;
     const rate = Number(detailRate);
     if (!Number.isFinite(rate) || rate <= 0) { alert('\u0421\u0442\u0430\u0432\u043a\u0430 \u0434\u043e\u043b\u0436\u043d\u0430 \u0431\u044b\u0442\u044c \u0447\u0438\u0441\u043b\u043e\u043c \u0431\u043e\u043b\u044c\u0448\u0435 \u043d\u0443\u043b\u044f'); return; }
-    const trimmedGrade = detailGrade.trim();
-    const parsedGrade = trimmedGrade ? Number(trimmedGrade) : undefined;
-    if (trimmedGrade && (parsedGrade === undefined || !Number.isInteger(parsedGrade) || parsedGrade < 1 || parsedGrade > 11)) {
-      alert('\u041a\u043b\u0430\u0441\u0441 \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u0446\u0435\u043b\u044b\u043c \u0447\u0438\u0441\u043b\u043e\u043c \u043e\u0442 1 \u0434\u043e 11');
-      return;
-    }
     try {
       setSavingTutorStudent(true);
-      const [updatedTutorStudent, updatedStudent] = await Promise.all([
-        updateTutorStudent(selectedCard.tutorStudent.id, { hourly_rate: rate, status: detailStatus, level_ids: detailLevelIds }),
-        updateStudent(selectedCard.student.id, { grade: parsedGrade }),
-      ]);
+      const updatedTutorStudent = await updateTutorStudent(selectedCard.tutorStudent.id, { hourly_rate: rate, status: detailStatus, level_ids: detailLevelIds });
       setTutorStudents((prev) => prev.map((item) => item.id === updatedTutorStudent.id ? updatedTutorStudent : item));
-      setStudents((prev) => prev.map((item) => item.id === updatedStudent.id ? updatedStudent : item));
       alert('\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u0443\u0447\u0435\u043d\u0438\u043a\u0430 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b');
     } catch (error) {
       console.error('Update student error:', error);
@@ -466,7 +432,7 @@ export default function StudentsPage() {
           <div
             onClick={(event) => event.stopPropagation()}
             className="app-modal wide"
-            style={{ width: 'min(1180px, 100%)' }}
+            style={{ width: 'min(940px, calc(100vw - 48px))' }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
               <div>
@@ -519,37 +485,18 @@ export default function StudentsPage() {
               <div style={{ display: 'grid', gap: 12 }}>
                 <section style={{ ...panelStyle, padding: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
-                    <div style={{ fontWeight: 800, color: '#1f2a3b' }}>Краткая статистика</div>
+                    <div style={{ fontWeight: 800, color: '#1f2a3b' }}>Предмет и параметры</div>
                     <button
                       type="button"
                       title="Открыть полное портфолио"
                       onClick={() => navigate(`/portfolio?student_id=${selectedCard.student.id}`)}
-                      style={{ background: '#2AABEE', boxShadow: 'none', padding: '10px 14px' }}
+                      className="modal-secondary"
                     >
                       Портфолио
                     </button>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(132px, 1fr))', gap: 8 }}>
-                    {[
-                      ['Проведено занятий', selectedConductedLessons.length],
-                      ['Оценка занятий', averageLessonGrade === null ? '—' : averageLessonGrade.toFixed(1)],
-                      ['Оценка ДЗ', averageAssignmentGrade === null ? '—' : averageAssignmentGrade.toFixed(1)],
-                      ['Выполнено ДЗ', `${completedAssignmentsCount}/${selectedStudentAssignments.length}`],
-                    ].map(([label, value]) => (
-                      <div
-                        key={label}
-                        style={{ padding: 10, borderRadius: 14, background: 'rgba(23,32,51,0.04)', border: '1px solid rgba(24,33,47,0.06)' }}
-                      >
-                        <div style={{ ...mutedTextStyle, marginBottom: 5 }}>{label}</div>
-                        <div style={{ color: '#1f2a3b', fontSize: 20, fontWeight: 900 }}>{value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
 
-                <section style={{ ...panelStyle, padding: 12 }}>
-                  <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 10 }}>Предметы ученика</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                     {selectedStudentCards.map((card) => (
                       <button
                         key={card.tutorStudent.id}
@@ -565,12 +512,7 @@ export default function StudentsPage() {
                       </button>
                     ))}
                   </div>
-                </section>
-              </div>
 
-              <div style={{ display: 'grid', gap: 12 }}>
-                <section style={{ ...panelStyle, padding: 12 }}>
-                  <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 10 }}>Основные параметры</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8, marginBottom: 10 }}>
                     <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
                       {t.rate}
@@ -583,17 +525,6 @@ export default function StudentsPage() {
                         <option value="paused">paused</option>
                         <option value="completed">completed</option>
                       </select>
-                    </label>
-                    <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-                      {t.grade}
-                      <input
-                        type="number"
-                        min={1}
-                        max={11}
-                        value={detailGrade}
-                        onChange={(event) => setDetailGrade(event.target.value)}
-                        placeholder="1-11"
-                      />
                     </label>
                   </div>
 
@@ -637,7 +568,9 @@ export default function StudentsPage() {
                     {savingTutorStudent ? 'Сохраняем...' : 'Сохранить изменения'}
                   </button>
                 </section>
+              </div>
 
+              <div style={{ display: 'grid', gap: 12 }}>
                 <section style={{ ...panelStyle, padding: 12 }}>
                   <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 8 }}>Контактные лица</div>
                   {selectedCard.contacts.length === 0 ? (
