@@ -112,12 +112,13 @@ function getAssignmentLane(assignment: Assignment): AssignmentLane {
   const isDeadlineOverdue =
     new Date(assignment.deadline).getTime() < Date.now() &&
     assignment.completion_status !== 'completed' &&
+    assignment.completion_status !== 'in_progress' &&
     !hasStudentAnswer;
 
   if (assignment.completion_status === 'completed' && assignment.grade) return 'checked';
   if (assignment.completion_status === 'completed' || hasStudentAnswer) return 'review';
-  if (assignment.completion_status === 'overdue' || isDeadlineOverdue) return 'overdue';
   if (assignment.completion_status === 'in_progress') return 'in_progress';
+  if (assignment.completion_status === 'overdue' || isDeadlineOverdue) return 'overdue';
 
   return 'created';
 }
@@ -1555,7 +1556,7 @@ export default function AssignmentsPage() {
                       const grade = window.prompt('Поставить оценку 1-5');
                       const value = Number(grade);
                       if (!value || value < 1 || value > 5) return;
-                      handlePatchAssignment(selectedAssignment.id, { grade: value });
+                      handlePatchAssignment(selectedAssignment.id, { grade: value, completion_status: 'completed' });
                     }}
                     className="modal-success"
                   >
