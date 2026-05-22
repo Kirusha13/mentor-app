@@ -385,10 +385,6 @@ async def telegram_login_page(request: Request):
       place-items: center;
       min-height: 56px;
       margin: 4px 0 18px;
-      padding: 12px;
-      border-radius: 18px;
-      background: linear-gradient(135deg, #2f8df4, #1f7fe5);
-      box-shadow: 0 14px 30px rgba(47, 141, 244, 0.28);
     }}
 
     .telegram-widget iframe {{
@@ -443,7 +439,6 @@ async def telegram_login_page(request: Request):
     <div class="logo">M</div>
     <p class="brand">MENTOR APP</p>
     <h1>Вход через Telegram</h1>
-    <p class="subtitle">Подтвердите вход в кабинет через ваш Telegram-аккаунт.</p>
 
     <section class="account-preview" aria-label="Выбранный аккаунт">
       <div class="avatar">T</div>
@@ -488,11 +483,6 @@ async def telegram_login_page(request: Request):
       ></script>
     </div>
 
-    <div class="secure">
-      <span>▣</span>
-      <span>Безопасная авторизация. Мы не передаём ваши данные третьим лицам.</span>
-    </div>
-    <p class="hint">Если аккаунт не подходит, закройте окно и выберите другой.</p>
   </main>
 </body>
 </html>"""
