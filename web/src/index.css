@@ -369,23 +369,27 @@ p {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  width: 100%;
+  width: 100vw;
+  height: 100dvh;
   min-height: 100dvh;
   z-index: 1000;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 0;
   border: 0;
   outline: 0;
-  background: rgba(15, 23, 42, 0.56);
-  backdrop-filter: blur(6px);
-  overflow: auto;
+  background: rgba(15, 23, 42, 0.66);
+  backdrop-filter: none;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .app-modal {
-  width: min(640px, 100%);
+  width: min(640px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
   max-height: min(92dvh, calc(100dvh - 48px));
+  margin: 24px;
   overflow: auto;
   display: grid;
   gap: 16px;
@@ -398,12 +402,45 @@ p {
 }
 
 body:has(.modal-overlay),
-body:has(.assignment-archive-overlay) {
+body:has(.assignment-archive-overlay),
+body:has(.portfolio-report-modal) {
   overflow: hidden;
 }
 
+body:has(.modal-overlay) main,
+body:has(.assignment-archive-overlay) main,
+body:has(.portfolio-report-modal) main {
+  padding: 0 !important;
+}
+
+body:has(.modal-overlay) main > div,
+body:has(.assignment-archive-overlay) main > div,
+body:has(.portfolio-report-modal) main > div {
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  padding: 0 !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  overflow: hidden !important;
+}
+
+.assignment-archive-overlay,
+.portfolio-report-modal {
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  padding: 0 !important;
+  background: rgba(15, 23, 42, 0.66) !important;
+  backdrop-filter: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
 .app-modal.wide {
-  width: min(860px, 100%);
+  width: min(860px, calc(100vw - 48px));
 }
 
 .modal-header {
@@ -626,11 +663,11 @@ body:has(.assignment-archive-overlay) {
 }
 
 @media (max-width: 720px) {
-  .modal-overlay {
-    padding: 12px;
-  }
-
   .app-modal {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+    max-height: min(94dvh, calc(100dvh - 24px));
+    margin: 12px;
     padding: 18px;
     border-radius: 20px;
   }
@@ -641,6 +678,10 @@ body:has(.assignment-archive-overlay) {
 
   .slot-days-grid {
     grid-template-columns: 1fr;
+  }
+
+  .slot-day-row {
+    --slot-day-row-columns: 1fr;
   }
 }
 

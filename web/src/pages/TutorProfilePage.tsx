@@ -550,7 +550,7 @@ export default function TutorProfilePage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(180px, 1fr) auto',
+            gridTemplateColumns: 'minmax(180px, 1fr) minmax(280px, auto)',
             alignItems: 'end',
             gap: 12,
           }}
@@ -562,12 +562,12 @@ export default function TutorProfilePage() {
             <div style={mutedTextStyle}>Всего предметов: {subjects.length}</div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 260px) 42px', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
             <input
               value={subjectSearch}
               onChange={(event) => setSubjectSearch(event.target.value)}
               placeholder="Поиск по названию"
-              style={{ maxWidth: 260 }}
+              style={{ width: '100%' }}
             />
             <button
               title="Создать предмет"

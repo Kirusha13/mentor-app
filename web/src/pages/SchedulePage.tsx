@@ -46,6 +46,7 @@ const DEFAULT_GRID_END_HOUR = 22;
 const TIMELINE_SLOT_MINUTES = 30;
 const MIN_EVENT_CARD_HEIGHT = 86;
 const WEEK_DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const SLOT_PLANNER_STORAGE_KEY = 'mentor-app-slot-planner-v1';
 
 function createDefaultSlotDrafts(): SlotDayDraft[] {
   return Array.from({ length: 7 }, () => ({
@@ -53,6 +54,42 @@ function createDefaultSlotDrafts(): SlotDayDraft[] {
     start: '17:00',
     end: '18:00',
   }));
+}
+
+function normalizeSlotDrafts(value: unknown): SlotDayDraft[] {
+  const fallback = createDefaultSlotDrafts();
+  const source = Array.isArray(value) ? value : [];
+
+  return fallback.map((item, index) => {
+    const candidate = source[index] as Partial<SlotDayDraft> | undefined;
+    return {
+      enabled: Boolean(candidate?.enabled),
+      start: typeof candidate?.start === 'string' && candidate.start ? candidate.start : item.start,
+      end: typeof candidate?.end === 'string' && candidate.end ? candidate.end : item.end,
+    };
+  });
+}
+
+function readSlotPlannerStorage() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SLOT_PLANNER_STORAGE_KEY);
+    return raw ? JSON.parse(raw) as { drafts?: unknown; durationMinutes?: unknown } : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadSlotDrafts() {
+  return normalizeSlotDrafts(readSlotPlannerStorage()?.drafts);
+}
+
+function loadSlotDurationMinutes() {
+  const value = readSlotPlannerStorage()?.durationMinutes;
+  return typeof value === 'string' && value.trim() ? value : '60';
 }
 
 function atMidnight(date: Date) {
@@ -242,7 +279,7 @@ function CalendarEventCard({
       onClick={onClick}
       title={
         windowCard
-          ? `${toTime(toStartTime(lesson))} - ${toTime(toEndTime(lesson))}`
+          ? `Свободный слот • ${toTime(toStartTime(lesson))} - ${toTime(toEndTime(lesson))}`
           : `${toTime(toStartTime(lesson))} - ${toTime(toEndTime(lesson))} • ${studentName} • ${subjectLine} • ${statusLabel(lesson.conduct_status)}`
       }
       style={{
@@ -266,6 +303,22 @@ function CalendarEventCard({
       <div style={{ fontSize: timeFontSize, fontWeight: 900, lineHeight: 1.08, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
         {toTime(toStartTime(lesson))} - {toTime(toEndTime(lesson))}
       </div>
+      {windowCard && (
+        <div
+          style={{
+            fontSize: titleFontSize,
+            fontWeight: 900,
+            lineHeight: 1.12,
+            color: '#0f5f89',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          Свободный слот
+        </div>
+      )}
       {!windowCard && (
         <>
           <div
@@ -425,8 +478,8 @@ export default function SchedulePage() {
   const [isCreateLessonOpen, setIsCreateLessonOpen] = useState(false);
   const [isSlotPlannerOpen, setIsSlotPlannerOpen] = useState(false);
   const [slotWeekOffset, setSlotWeekOffset] = useState<0 | 1>(0);
-  const [slotDurationMinutes, setSlotDurationMinutes] = useState('60');
-  const [slotDrafts, setSlotDrafts] = useState<SlotDayDraft[]>(() => createDefaultSlotDrafts());
+  const [slotDurationMinutes, setSlotDurationMinutes] = useState(() => loadSlotDurationMinutes());
+  const [slotDrafts, setSlotDrafts] = useState<SlotDayDraft[]>(() => loadSlotDrafts());
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [selectedMonthDay, setSelectedMonthDay] = useState<string | null>(null);
   const [isEditingLesson, setIsEditingLesson] = useState(false);
@@ -771,10 +824,12 @@ export default function SchedulePage() {
   }, [availableEditTopics, selectedLesson?.topic_id]);
 
   useEffect(() => {
-    if (!isSlotPlannerOpen) return;
-    setSlotDrafts(createDefaultSlotDrafts());
-    setSlotDurationMinutes('60');
-  }, [isSlotPlannerOpen, slotWeekOffset]);
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(
+      SLOT_PLANNER_STORAGE_KEY,
+      JSON.stringify({ drafts: slotDrafts, durationMinutes: slotDurationMinutes })
+    );
+  }, [slotDrafts, slotDurationMinutes]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -1528,7 +1583,7 @@ export default function SchedulePage() {
           <div
             onClick={(event) => event.stopPropagation()}
             className="app-modal wide"
-            style={{ width: 'min(860px, 100%)' }}
+            style={{ width: 'min(860px, calc(100vw - 48px))' }}
           >
             <div className="modal-header">
               <div>
@@ -1633,7 +1688,7 @@ export default function SchedulePage() {
           <div
             onClick={(event) => event.stopPropagation()}
             className="app-modal"
-            style={{ width: 'min(560px, 100%)', padding: 0, gap: 0 }}
+            style={{ width: 'min(560px, calc(100vw - 48px))', padding: 0, gap: 0 }}
           >
             <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid rgba(24,33,47,0.08)', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
               <div>
@@ -1683,6 +1738,11 @@ export default function SchedulePage() {
                           <span style={{ color: color, fontSize: 12, fontWeight: 800 }}>{statusLabel(lesson.conduct_status)}</span>
                         )}
                       </div>
+                      {windowCard && (
+                        <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                          Свободный слот
+                        </div>
+                      )}
                       {!windowCard && (
                         <>
                           <div style={{ fontWeight: 800, marginBottom: 4 }}>
@@ -1790,7 +1850,7 @@ export default function SchedulePage() {
           <div
             onClick={(event) => event.stopPropagation()}
             className="app-modal wide"
-            style={{ width: 'min(1040px, 100%)' }}
+            style={{ width: 'min(1040px, calc(100vw - 48px))' }}
           >
             <div className="modal-header">
               <div>
@@ -1852,57 +1912,56 @@ export default function SchedulePage() {
                 </label>
               </div>
 
-              <div className="slot-days-grid">
+              <div style={{ display: 'grid', gap: 10 }}>
                 {slotDrafts.map((draft, index) => {
                   const dayDate = addDays(slotPlannerWeekStart, index);
                   const enabled = draft.enabled;
                   return (
                     <div
                       key={index}
+                      className="slot-day-row"
                       style={{
                         display: 'grid',
+                        gridTemplateColumns: 'var(--slot-day-row-columns, minmax(170px, 1fr) minmax(130px, 180px) minmax(130px, 180px))',
                         gap: 12,
-                        minHeight: 190,
-                        padding: 16,
-                        borderRadius: 20,
+                        alignItems: 'center',
+                        padding: 14,
+                        borderRadius: 18,
                         background: enabled ? '#eef6ff' : '#fff',
                         border: enabled ? '1px solid rgba(42,171,238,0.35)' : '1px solid rgba(31,42,59,0.1)',
-                        boxShadow: enabled ? '0 14px 30px rgba(42,171,238,0.1)' : '0 10px 26px rgba(15,23,42,0.05)',
+                        boxShadow: enabled ? '0 12px 24px rgba(42,171,238,0.08)' : '0 8px 20px rgba(15,23,42,0.04)',
                       }}
                     >
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 900, color: '#1f2a3b' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 900, color: '#1f2a3b', minWidth: 0 }}>
                         <input
                           type="checkbox"
                           checked={draft.enabled}
                           onChange={(event) => handleSlotDraftChange(index, { enabled: event.target.checked })}
+                          style={{ width: 18, height: 18, flex: '0 0 auto' }}
                         />
-                        {WEEK_DAYS[index]} • {formatDayShort(dayDate)}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {WEEK_DAYS[index]} • {formatDayShort(dayDate)}
+                        </span>
                       </label>
                       <label className="modal-field" style={{ gap: 6, fontSize: 13 }}>
                         С
-                        <div style={{ position: 'relative' }}>
-                          <input
-                            type="time"
-                            value={draft.start}
-                            disabled={!draft.enabled}
-                            onChange={(event) => handleSlotDraftChange(index, { start: event.target.value })}
-                            style={{ paddingRight: 38, background: draft.enabled ? '#fff' : '#f8fafc' }}
-                          />
-                          <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: '#687486', pointerEvents: 'none' }}>◷</span>
-                        </div>
+                        <input
+                          type="time"
+                          value={draft.start}
+                          disabled={!draft.enabled}
+                          onChange={(event) => handleSlotDraftChange(index, { start: event.target.value })}
+                          style={{ background: draft.enabled ? '#fff' : '#f8fafc' }}
+                        />
                       </label>
                       <label className="modal-field" style={{ gap: 6, fontSize: 13 }}>
                         До
-                        <div style={{ position: 'relative' }}>
-                          <input
-                            type="time"
-                            value={draft.end}
-                            disabled={!draft.enabled}
-                            onChange={(event) => handleSlotDraftChange(index, { end: event.target.value })}
-                            style={{ paddingRight: 38, background: draft.enabled ? '#fff' : '#f8fafc' }}
-                          />
-                          <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: '#687486', pointerEvents: 'none' }}>◷</span>
-                        </div>
+                        <input
+                          type="time"
+                          value={draft.end}
+                          disabled={!draft.enabled}
+                          onChange={(event) => handleSlotDraftChange(index, { end: event.target.value })}
+                          style={{ background: draft.enabled ? '#fff' : '#f8fafc' }}
+                        />
                       </label>
                     </div>
                   );
@@ -1950,7 +2009,7 @@ export default function SchedulePage() {
             <div
               onClick={(event) => event.stopPropagation()}
               className="app-modal"
-              style={{ width: 'min(560px, 100%)', padding: 0, gap: 0, overflow: 'hidden' }}
+              style={{ width: 'min(560px, calc(100vw - 48px))', padding: 0, gap: 0, overflow: 'hidden' }}
             >
               <div style={{ padding: '22px 24px 18px', background: `${currentStatusColor}12`, borderBottom: '1px solid rgba(24,33,47,0.08)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
@@ -2001,7 +2060,7 @@ export default function SchedulePage() {
                         setIsEditingLesson((prev) => !prev);
                         setIsReschedulingLesson(false);
                       }}
-                      className={`icon-button ${isEditingLesson ? 'icon-button-dark' : 'icon-button-primary'}`}
+                      className="icon-button icon-button-dark"
                     >
                       ✎
                     </button>
