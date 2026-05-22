@@ -26,6 +26,7 @@ class StudentRegisterData(TelegramAuthData):
     invitation_token: str
     full_name: str
     phone_number: str
+    grade: int | None = None
 
 
 class StudentLoginData(TelegramAuthData):

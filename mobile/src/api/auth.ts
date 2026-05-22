@@ -28,12 +28,14 @@ export async function studentRegister(
   invitation_token: string,
   full_name: string,
   phone_number: string,
+  grade?: number,
 ): Promise<string> {
   const res = await client.post('/student/auth/register', {
     ...data,
     invitation_token,
     full_name,
     phone_number,
+    ...(grade !== undefined && { grade }),
     client_timezone: detectTimezone(),
   });
   return res.data.access_token;

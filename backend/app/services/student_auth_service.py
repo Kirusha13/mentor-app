@@ -13,7 +13,7 @@ from app.services.student_service import get_student_by_telegram_id
 
 
 async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
-    tg_dict = data.model_dump(exclude={"invitation_token", "full_name", "phone_number", "client_timezone"})
+    tg_dict = data.model_dump(exclude={"invitation_token", "full_name", "phone_number", "grade", "client_timezone"})
     if not verify_telegram_data(tg_dict):
         raise ValueError("invalid_telegram_hash")
 
@@ -36,6 +36,7 @@ async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
             full_name=data.full_name,
             telegram_id=data.id,
             phone_number=data.phone_number,
+            grade=data.grade,
             avatar_url=data.photo_url,
             started_at=now,
             last_visited_at=now,

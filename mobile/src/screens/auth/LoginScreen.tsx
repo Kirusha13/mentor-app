@@ -31,6 +31,7 @@ export default function LoginScreen() {
   const [tgData, setTgData] = useState<TelegramAuthData | null>(null);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [grade, setGrade] = useState('');
   const [loading, setLoading] = useState(false);
 
   const tgHandledRef = useRef(false);
@@ -138,10 +139,15 @@ export default function LoginScreen() {
       Alert.alert('Ошибка', 'Заполните все поля');
       return;
     }
+    const parsedGrade = grade.trim() ? parseInt(grade.trim(), 10) : undefined;
+    if (grade.trim() && (isNaN(parsedGrade!) || parsedGrade! < 1 || parsedGrade! > 11)) {
+      Alert.alert('Ошибка', 'Класс должен быть числом от 1 до 11');
+      return;
+    }
     if (!tgData) return;
     setLoading(true);
     try {
-      const token = await studentRegister(tgData, inviteToken, fullName.trim(), phone.trim());
+      const token = await studentRegister(tgData, inviteToken, fullName.trim(), phone.trim(), parsedGrade);
       await signIn(token);
     } catch (e: any) {
       Alert.alert('Ошибка', e?.response?.data?.detail ?? 'Ошибка регистрации');
@@ -175,6 +181,17 @@ export default function LoginScreen() {
             placeholder="+79001234567"
             placeholderTextColor="#bbb"
             keyboardType="phone-pad"
+          />
+
+          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Класс обучения</Text>
+          <TextInput
+            style={styles.input}
+            value={grade}
+            onChangeText={setGrade}
+            placeholder="Например: 9"
+            placeholderTextColor="#bbb"
+            keyboardType="number-pad"
+            maxLength={2}
           />
 
           <TouchableOpacity style={styles.tgBtn} onPress={handleRegisterSubmit} disabled={loading}>
