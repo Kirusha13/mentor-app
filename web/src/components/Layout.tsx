@@ -1,6 +1,5 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { getPendingCount } from '../api/lessons';
 import { getTutorProfile } from '../api/tutor';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -149,11 +148,9 @@ export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 820px)');
-  const [pendingCount, setPendingCount] = useState(0);
   const [tutorLabel, setTutorLabel] = useState('Репетитор');
   const [tutorSubtitle, setTutorSubtitle] = useState('Личный кабинет');
   const initials = useMemo(() => getInitials(tutorLabel), [tutorLabel]);
-  const isRequestsActive = location.pathname.startsWith('/requests');
   const isProfileActive = location.pathname.startsWith('/profile');
 
   const handleLogout = () => {
@@ -163,31 +160,6 @@ export default function Layout({ children }: LayoutProps) {
     logout();
     navigate('/login', { replace: true });
   };
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadPendingCount = async () => {
-      try {
-        const result = await getPendingCount();
-        if (!cancelled) {
-          setPendingCount(result.count ?? 0);
-        }
-      } catch {
-        if (!cancelled) {
-          setPendingCount(0);
-        }
-      }
-    };
-
-    void loadPendingCount();
-    const intervalId = window.setInterval(loadPendingCount, 60_000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -217,7 +189,8 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div
       style={{
-        minHeight: '100vh',
+        height: isMobile ? 'auto' : '100dvh',
+        minHeight: isMobile ? '100vh' : '100dvh',
         display: 'grid',
         gridTemplateColumns: isMobile
           ? '1fr'
@@ -225,6 +198,7 @@ export default function Layout({ children }: LayoutProps) {
             ? '238px minmax(0, 1fr)'
             : '286px minmax(0, 1fr)',
         background: 'transparent',
+        overflow: isMobile ? 'visible' : 'hidden',
       }}
     >
       <aside
@@ -240,7 +214,8 @@ export default function Layout({ children }: LayoutProps) {
             : '18px 0 42px rgba(15, 23, 42, 0.16)',
           position: isMobile ? 'relative' : 'sticky',
           top: 0,
-          height: isMobile ? 'auto' : '100vh',
+          height: isMobile ? 'auto' : '100dvh',
+          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
           gap: 18,
@@ -290,54 +265,6 @@ export default function Layout({ children }: LayoutProps) {
               {initials || 'Р'}
             </button>
 
-            <button
-              type="button"
-              onClick={() => navigate('/requests')}
-              title="Запросы и уведомления"
-              style={{
-                ...sidebarButtonBase,
-                position: 'relative',
-                width: 44,
-                height: 44,
-                border: isRequestsActive
-                  ? '1px solid rgba(255,255,255,0.18)'
-                  : '1px solid rgba(255,255,255,0.1)',
-                background: isRequestsActive
-                  ? 'linear-gradient(180deg, rgba(42,171,238,0.96) 0%, rgba(34,158,217,0.96) 100%)'
-                  : 'linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
-                fontSize: 18,
-                fontWeight: 800,
-                boxShadow: isRequestsActive
-                  ? '0 10px 24px rgba(42,171,238,0.24)'
-                  : '0 8px 18px rgba(7, 11, 20, 0.18)',
-              }}
-            >
-              <span aria-hidden="true">!</span>
-              {pendingCount > 0 ? (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: -4,
-                    right: -2,
-                    minWidth: 20,
-                    height: 20,
-                    padding: '0 5px',
-                    borderRadius: 999,
-                    background: '#F44336',
-                    color: '#fff',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 11,
-                    fontWeight: 800,
-                    boxShadow: '0 8px 18px rgba(217,75,75,0.28)',
-                  }}
-                >
-                  {pendingCount > 99 ? '99+' : pendingCount}
-                </span>
-              ) : null}
-            </button>
-
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.05 }}>{tutorLabel}</div>
               <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13 }}>{tutorSubtitle}</div>
@@ -345,7 +272,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </div>
 
-        <nav style={{ display: 'grid', gap: 16, overflowY: 'auto', paddingRight: 2 }}>
+        <nav style={{ display: 'grid', gap: 16, overflowY: 'auto', paddingRight: 2, minHeight: 0 }}>
           {NAV_GROUPS.map((group) => (
             <div
               key={group.title}
@@ -473,17 +400,24 @@ export default function Layout({ children }: LayoutProps) {
         style={{
           minWidth: 0,
           padding: isMobile ? '12px' : isTablet ? '14px' : '16px 18px 20px',
+          height: isMobile ? 'auto' : '100dvh',
+          minHeight: 0,
+          overflow: isMobile ? 'visible' : 'hidden',
+          display: 'grid',
         }}
       >
         <div
           style={{
-            minHeight: isMobile ? 'auto' : 'calc(100vh - 36px)',
+            height: isMobile ? 'auto' : isTablet ? 'calc(100dvh - 28px)' : 'calc(100dvh - 36px)',
+            minHeight: isMobile ? 'auto' : 0,
             borderRadius: isMobile ? 18 : 28,
             background: 'rgba(255,255,255,0.72)',
             border: '1px solid rgba(255,255,255,0.78)',
             boxShadow: '0 26px 70px rgba(21, 32, 51, 0.08)',
             backdropFilter: 'blur(18px)',
             padding: isMobile ? 12 : isTablet ? 16 : 22,
+            overflow: isMobile ? 'visible' : 'hidden',
+            display: 'grid',
           }}
         >
           {children}

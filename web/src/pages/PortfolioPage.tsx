@@ -1,4 +1,4 @@
-﻿import html2canvas from 'html2canvas';
+import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -7,22 +7,33 @@ import { getLessons, type Lesson } from '../api/lessons';
 import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTopics, type TheoryTopic } from '../api/topics';
-import { getTutorProfile, type TutorProfile } from '../api/tutor';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
-import { useMediaQuery } from '../hooks/useMediaQuery';
 import { lessonDate } from '../utils/lessonTime';
 import { getMediaUrl } from '../utils/media';
 
+const COLORS = {
+  primary: '#2AABEE',
+  background: '#F5F7FB',
+  surface: '#FFFFFF',
+  text: '#1A1A1A',
+  secondary: '#666666',
+  border: '#E8EDF5',
+  success: '#4CAF50',
+  warning: '#FF9800',
+  danger: '#F44336',
+  purple: '#9C27B0',
+} as const;
+
 const panelStyle = {
-  background: 'rgba(255,255,255,0.88)',
-  padding: '16px',
-  borderRadius: '22px',
-  border: '1px solid rgba(24,33,47,0.08)',
-  boxShadow: 'var(--shadow-card)',
+  background: COLORS.surface,
+  padding: '18px',
+  borderRadius: '24px',
+  border: `1px solid ${COLORS.border}`,
+  boxShadow: '0 18px 44px rgba(20, 32, 56, 0.07)',
 } as const;
 
 const mutedTextStyle = {
-  color: '#687486',
+  color: COLORS.secondary,
   fontSize: 14,
 } as const;
 
@@ -33,6 +44,24 @@ type TopicProgress = {
   completedAssignments: number;
   averageGrade: number | null;
   progressPercent: number;
+  activityCount: number;
+};
+
+type ProgressPoint = {
+  label: string;
+  averageGradePercent: number;
+  homeworkPercent: number;
+  overallProgress: number;
+};
+
+type AttendanceStatus = 'conducted' | 'rescheduled' | 'absence' | 'none';
+
+type CalendarCell = {
+  key: string;
+  date: string | null;
+  day: number | null;
+  status: AttendanceStatus;
+  lessonCount: number;
 };
 
 function average(values: number[]) {
@@ -81,8 +110,17 @@ function formatMonthLabel(month: string) {
   );
 }
 
-function formatReportDate(date: Date) {
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
+function formatPeriodRange(month: string) {
+  const { start, end } = monthRange(month);
+  const startLabel = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(start);
+  const endLabel = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(end);
+  return `${startLabel} — ${endLabel}`;
+}
+
+function formatShortDate(date: Date) {
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' })
+    .format(date)
+    .replace('.', '');
 }
 
 function getInitials(name: string) {
@@ -94,10 +132,16 @@ function getInitials(name: string) {
     .join('');
 }
 
+function formatStudentGrade(student: Student | null) {
+  if (!student?.grade) return 'Класс не указан';
+  return `${student.grade} класс`;
+}
+
 function topicBarColor(value: number) {
-  if (value >= 70) return '#4CAF50';
-  if (value >= 45) return '#FF9800';
-  return '#F44336';
+  if (value >= 70) return COLORS.success;
+  if (value >= 45) return COLORS.primary;
+  if (value >= 25) return COLORS.warning;
+  return COLORS.danger;
 }
 
 function parsePortfolioDate(date: string | null | undefined) {
@@ -154,25 +198,151 @@ function buildStats(lessons: Lesson[], assignments: Assignment[], topicPercent: 
   };
 }
 
-function deltaText(current: number | null, previous: number | null, suffix = '') {
-  if (current === null || previous === null) return 'Недостаточно данных';
+function formatDelta(current: number | null, previous: number | null, suffix = '') {
+  if (current === null || previous === null) return 'нет данных';
   const diff = current - previous;
-  if (Math.abs(diff) < 0.05) return 'Без изменений';
-  return `${diff > 0 ? '+' : ''}${diff.toFixed(1)}${suffix}`;
+  if (Math.abs(diff) < 0.05) return '0';
+  return `${diff > 0 ? '+' : ''}${diff.toFixed(suffix === '%' ? 0 : 1)}${suffix}`;
 }
 
-function compactDeltaText(current: number | null, previous: number | null, suffix = '') {
-  const value = deltaText(current, previous, suffix);
-  if (value === 'Недостаточно данных') return 'нет данных';
-  if (value === 'Без изменений') return '0';
-  return `${value.startsWith('-') ? '↓' : '↑'} ${value}`;
+function formatCountDelta(current: number, previous: number) {
+  const diff = current - previous;
+  if (diff === 0) return '0';
+  return `${diff > 0 ? '+' : ''}${diff}`;
 }
 
-function wrapRadarLabel(label: string) {
-  if (label.length <= 13) return [label];
-  const words = label.split(' ');
-  if (words.length > 1) return words;
-  return [label.slice(0, 13), label.slice(13)];
+function deltaTone(delta: string) {
+  if (delta === 'нет данных' || delta === '0') return 'neutral';
+  return delta.startsWith('-') ? 'bad' : 'good';
+}
+
+function statusForDay(lessons: Lesson[]): AttendanceStatus {
+  if (lessons.some((lesson) => lesson.conduct_status === 'conducted')) return 'conducted';
+  if (lessons.some((lesson) => lesson.conduct_status === 'rescheduled' || lesson.conduct_status === 'reschedule_pending')) {
+    return 'rescheduled';
+  }
+  if (
+    lessons.some(
+      (lesson) =>
+        lesson.conduct_status === 'cancelled' ||
+        lesson.conduct_status === 'booking_rejected' ||
+        lesson.conduct_status === 'reschedule_rejected'
+    )
+  ) {
+    return 'absence';
+  }
+  return 'none';
+}
+
+function buildCalendarCells(month: string, lessons: Lesson[]): CalendarCell[] {
+  const { start, end } = monthRange(month);
+  const offset = (start.getDay() + 6) % 7;
+  const cells: CalendarCell[] = Array.from({ length: offset }, (_, index) => ({
+    key: `blank-start-${index}`,
+    date: null,
+    day: null,
+    status: 'none',
+    lessonCount: 0,
+  }));
+
+  for (let day = 1; day <= end.getDate(); day += 1) {
+    const date = `${month}-${String(day).padStart(2, '0')}`;
+    const dayLessons = lessons.filter((lesson) => lessonDate(lesson) === date);
+    cells.push({
+      key: date,
+      date,
+      day,
+      status: statusForDay(dayLessons),
+      lessonCount: dayLessons.length,
+    });
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push({
+      key: `blank-end-${cells.length}`,
+      date: null,
+      day: null,
+      status: 'none',
+      lessonCount: 0,
+    });
+  }
+
+  return cells;
+}
+
+function buildProgressRows(
+  month: string,
+  lessons: Lesson[],
+  assignments: Assignment[],
+  topicPercent: number
+): ProgressPoint[] {
+  const { start, end } = monthRange(month);
+  const lastDay = end.getDate();
+  const checkpoints = [7, 14, 21, lastDay].filter((day, index, days) => day <= lastDay && days.indexOf(day) === index);
+
+  return checkpoints.map((day) => {
+    const checkpoint = new Date(start.getFullYear(), start.getMonth(), day, 23, 59, 59, 999);
+    const pointLessons = lessons.filter((lesson) => {
+      const value = parsePortfolioDate(lessonDate(lesson));
+      return Boolean(value && value <= checkpoint);
+    });
+    const pointAssignments = assignments.filter((assignment) => {
+      const value = parsePortfolioDate(assignment.deadline);
+      return Boolean(value && value <= checkpoint);
+    });
+    const stats = buildStats(pointLessons, pointAssignments, topicPercent);
+
+    return {
+      label: formatShortDate(checkpoint),
+      averageGradePercent: scoreToPercent(stats.averageLessonGrade) ?? 0,
+      homeworkPercent: stats.homeworkPercent,
+      overallProgress: stats.overallProgress,
+    };
+  });
+}
+
+function DonutChart({
+  value,
+  size = 116,
+  stroke = 14,
+  compact = false,
+}: {
+  value: number;
+  size?: number;
+  stroke?: number;
+  compact?: boolean;
+}) {
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference - (clampPercent(value) / 100) * circumference;
+
+  return (
+    <div className={compact ? 'portfolio-donut portfolio-donut-compact' : 'portfolio-donut'} style={{ width: size, height: size }}>
+      <svg viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="#E8EDF5"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={COLORS.primary}
+          strokeLinecap="round"
+          strokeWidth={stroke}
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+      <strong>{formatPercent(value)}</strong>
+    </div>
+  );
 }
 
 function RadarChart({
@@ -183,57 +353,78 @@ function RadarChart({
   variant?: 'default' | 'report';
 }) {
   const isReport = variant === 'report';
-  const size = isReport ? 360 : 320;
+  const size = isReport ? 330 : 430;
   const center = size / 2;
-  const radius = isReport ? 126 : 86;
-  const labelDistance = isReport ? radius + 36 : radius + 54;
-  const labelPadding = isReport ? 24 : 34;
+  const radius = isReport ? 92 : 126;
+  const labelDistance = isReport ? 136 : 184;
+  const labelPadding = isReport ? 16 : 22;
   const points = values.map((item, index) => {
     const angle = (Math.PI * 2 * index) / values.length - Math.PI / 2;
-    const distance = radius * (item.value / 100);
+    const distance = radius * (clampPercent(item.value) / 100);
     const rawLabelX = center + Math.cos(angle) * labelDistance;
     const rawLabelY = center + Math.sin(angle) * labelDistance;
-    const labelAnchor: 'end' | 'start' | 'middle' =
-      rawLabelX < center - 8 ? 'start' : rawLabelX > center + 8 ? 'end' : 'middle';
+    const labelX = Math.max(labelPadding, Math.min(size - labelPadding, rawLabelX));
+    const labelY = Math.max(labelPadding + 8, Math.min(size - labelPadding - 8, rawLabelY));
+    const textAnchor: 'start' | 'middle' | 'end' =
+      rawLabelX < center - 16 ? 'end' : rawLabelX > center + 16 ? 'start' : 'middle';
+
     return {
       ...item,
       x: center + Math.cos(angle) * distance,
       y: center + Math.sin(angle) * distance,
-      labelX: Math.max(labelPadding, Math.min(size - labelPadding, rawLabelX)),
-      labelY: Math.max(labelPadding, Math.min(size - labelPadding, rawLabelY)),
-      labelLines: wrapRadarLabel(item.label),
-      labelAnchor,
+      axisX: center + Math.cos(angle) * radius,
+      axisY: center + Math.sin(angle) * radius,
+      labelX,
+      labelY,
+      textAnchor,
     };
   });
+  const polygon = points.map((point) => `${point.x},${point.y}`).join(' ');
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: '100%', maxWidth: isReport ? 360 : 340, overflow: 'visible' }}>
-      {[0.33, 0.66, 1].map((scale) => (
-        <circle key={scale} cx={center} cy={center} r={radius * scale} fill="none" stroke="rgba(23,32,51,0.12)" strokeWidth={isReport ? 1.2 : 1} />
-      ))}
+    <svg className={isReport ? 'portfolio-radar-svg portfolio-radar-svg-report' : 'portfolio-radar-svg'} viewBox={`0 0 ${size} ${size}`}>
+      {[0.25, 0.5, 0.75, 1].map((scale) => {
+        const ringPoints = values.map((_, index) => {
+          const angle = (Math.PI * 2 * index) / values.length - Math.PI / 2;
+          return `${center + Math.cos(angle) * radius * scale},${center + Math.sin(angle) * radius * scale}`;
+        });
+        return (
+          <polygon
+            key={scale}
+            points={ringPoints.join(' ')}
+            fill="none"
+            stroke="rgba(26, 26, 26, 0.12)"
+            strokeWidth={isReport ? 1 : 1.2}
+          />
+        );
+      })}
       {points.map((point) => (
-        <line key={point.label} x1={center} y1={center} x2={point.labelX} y2={point.labelY} stroke="rgba(23,32,51,0.1)" strokeWidth={isReport ? 1.2 : 1} />
+        <line
+          key={point.label}
+          x1={center}
+          y1={center}
+          x2={point.axisX}
+          y2={point.axisY}
+          stroke="rgba(26, 26, 26, 0.11)"
+          strokeWidth={isReport ? 1 : 1.2}
+        />
       ))}
-      <polygon points={points.map((point) => `${point.x},${point.y}`).join(' ')} fill="rgba(42,171,238,0.2)" stroke="#2AABEE" strokeWidth={isReport ? 4 : 3} />
+      <polygon points={polygon} fill="rgba(42,171,238,0.16)" stroke={COLORS.primary} strokeWidth={isReport ? 3 : 4} />
       {points.map((point) => (
         <g key={point.label}>
-          <circle cx={point.x} cy={point.y} r={isReport ? 5.5 : 4} fill="#2AABEE" />
+          <circle cx={point.x} cy={point.y} r={isReport ? 4.5 : 5.5} fill={COLORS.primary} />
           <text
             x={point.labelX}
             y={point.labelY}
-            textAnchor={point.labelAnchor}
+            textAnchor={point.textAnchor}
             dominantBaseline="middle"
-            fontSize={isReport ? 12 : 11}
-            fontWeight="800"
-            fill="#435066"
+            fill={COLORS.text}
+            fontSize={isReport ? 11 : 13}
+            fontWeight="850"
           >
-            {point.labelLines.map((line, lineIndex) => (
-              <tspan key={`${point.label}-${line}`} x={point.labelX} dy={lineIndex === 0 ? 0 : 13}>
-                {line}
-              </tspan>
-            ))}
-            <tspan x={point.labelX} dy={point.labelLines.length > 1 ? 14 : 13} fontSize={isReport ? 11 : 10} fontWeight="950" fill="#2AABEE">
-              {Math.round(point.value)}%
+            <tspan x={point.labelX}>{point.label}</tspan>
+            <tspan x={point.labelX} dy={isReport ? 13 : 16} fill={COLORS.primary} fontWeight="950">
+              {formatPercent(point.value)}
             </tspan>
           </text>
         </g>
@@ -242,91 +433,150 @@ function RadarChart({
   );
 }
 
-function GradeLineChart({
+function ProgressLineChart({
   rows,
   variant = 'default',
 }: {
-  rows: Array<{ label: string; value: number }>;
+  rows: ProgressPoint[];
   variant?: 'default' | 'report';
 }) {
   const isReport = variant === 'report';
-  const width = isReport ? 260 : 520;
-  const height = isReport ? 220 : 190;
+  const width = isReport ? 430 : 680;
+  const height = isReport ? 216 : 280;
   const padding = isReport
-    ? { top: 24, right: 16, bottom: 42, left: 34 }
-    : { top: 16, right: 18, bottom: 34, left: 34 };
+    ? { top: 14, right: 18, bottom: 34, left: 40 }
+    : { top: 18, right: 22, bottom: 42, left: 48 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
-  const points = rows.map((row, index) => {
+  const series = [
+    { key: 'averageGradePercent', label: 'Средний балл', color: COLORS.primary },
+    { key: 'homeworkPercent', label: 'Выполнение ДЗ', color: COLORS.success },
+    { key: 'overallProgress', label: 'Общий прогресс', color: '#7C3AED' },
+  ] as const;
+  const pointFor = (row: ProgressPoint, index: number, key: (typeof series)[number]['key']) => {
     const x = padding.left + (rows.length <= 1 ? plotWidth / 2 : (plotWidth * index) / (rows.length - 1));
-    const y = padding.top + plotHeight - ((row.value - 1) / 4) * plotHeight;
-    return { ...row, x, y };
-  });
-  const areaPoints =
-    points.length > 0
-      ? `${padding.left},${padding.top + plotHeight} ${points.map((point) => `${point.x},${point.y}`).join(' ')} ${padding.left + plotWidth},${padding.top + plotHeight}`
-      : '';
+    const y = padding.top + plotHeight - (clampPercent(row[key]) / 100) * plotHeight;
+    return { x, y };
+  };
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: isReport ? 210 : 174, display: 'block' }}>
-      <defs>
-        <linearGradient id="portfolioGradeFill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="rgba(42,171,238,0.28)" />
-          <stop offset="100%" stopColor="rgba(42,171,238,0.04)" />
-        </linearGradient>
-      </defs>
-      {[1, 2, 3, 4, 5].map((tick) => {
-        const y = padding.top + plotHeight - ((tick - 1) / 4) * plotHeight;
-        return (
-          <g key={tick}>
-            <line x1={padding.left} x2={padding.left + plotWidth} y1={y} y2={y} stroke="rgba(23,32,51,0.09)" />
-            <text x={padding.left - 12} y={y + 4} textAnchor="end" fontSize={isReport ? 13 : 12} fill="#687486">
-              {tick}
+    <div className={isReport ? 'portfolio-chart portfolio-chart-report' : 'portfolio-chart'}>
+      <div className="portfolio-chart-legend">
+        {series.map((item) => (
+          <span key={item.key}>
+            <i style={{ background: item.color }} />
+            {item.label}
+          </span>
+        ))}
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="portfolio-line-svg">
+        {[0, 25, 50, 75, 100].map((tick) => {
+          const y = padding.top + plotHeight - (tick / 100) * plotHeight;
+          return (
+            <g key={tick}>
+              <line x1={padding.left} x2={padding.left + plotWidth} y1={y} y2={y} stroke="rgba(26, 26, 26, 0.08)" />
+              <text x={padding.left - 12} y={y + 4} textAnchor="end" fontSize={isReport ? 10 : 12} fill={COLORS.secondary}>
+                {tick}%
+              </text>
+            </g>
+          );
+        })}
+        {series.map((item) => {
+          const points = rows.map((row, index) => pointFor(row, index, item.key));
+          return (
+            <g key={item.key}>
+              <polyline
+                points={points.map((point) => `${point.x},${point.y}`).join(' ')}
+                fill="none"
+                stroke={item.color}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={isReport ? 2.4 : 3}
+              />
+              {points.map((point, index) => (
+                <circle key={`${item.key}-${rows[index]?.label ?? index}`} cx={point.x} cy={point.y} r={isReport ? 3.2 : 4.2} fill={item.color} />
+              ))}
+            </g>
+          );
+        })}
+        {rows.map((row, index) => {
+          const x = padding.left + (rows.length <= 1 ? plotWidth / 2 : (plotWidth * index) / (rows.length - 1));
+          return (
+            <text key={row.label} x={x} y={height - 12} textAnchor="middle" fontSize={isReport ? 10 : 12} fill={COLORS.secondary}>
+              {row.label}
             </text>
-          </g>
-        );
-      })}
-      {areaPoints && <polygon points={areaPoints} fill="url(#portfolioGradeFill)" />}
-      {points.length > 0 && (
-        <polyline
-          points={points.map((point) => `${point.x},${point.y}`).join(' ')}
-          fill="none"
-          stroke="#2AABEE"
-          strokeWidth={isReport ? 3.5 : 3}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      )}
-      {points.map((point, index) => (
-        <g key={`${point.label}-${index}`}>
-          <circle cx={point.x} cy={point.y} r={isReport ? 5 : 4.5} fill="#2AABEE" />
-          <text x={point.x} y={height - 12} textAnchor="middle" fontSize={isReport ? 12 : 11} fill="#687486">
-            {point.label}
-          </text>
-          {isReport && (
-            <text x={point.x} y={point.y - 10} textAnchor="middle" fontSize="12" fontWeight="900" fill="#1A1A1A">
-              {point.value.toFixed(1)}
-            </text>
-          )}
-        </g>
-      ))}
-    </svg>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function attendanceMeta(status: AttendanceStatus) {
+  if (status === 'conducted') return { label: 'Проведено', color: '#FFFFFF', dot: COLORS.success, background: COLORS.success };
+  if (status === 'rescheduled') return { label: 'Перенос', color: '#FFFFFF', dot: COLORS.warning, background: COLORS.warning };
+  if (status === 'absence') return { label: 'Пропуск', color: '#FFFFFF', dot: COLORS.danger, background: COLORS.danger };
+  return { label: 'Нет занятия', color: '#8A94A6', dot: '#B7C0CE', background: '#EEF2F7' };
+}
+
+function AttendanceCalendar({
+  cells,
+  month,
+  compact = false,
+}: {
+  cells: CalendarCell[];
+  month: string;
+  compact?: boolean;
+}) {
+  return (
+    <div className={compact ? 'portfolio-calendar portfolio-calendar-compact' : 'portfolio-calendar'}>
+      <div className="portfolio-calendar-title">{formatMonthLabel(month)}</div>
+      <div className="portfolio-calendar-weekdays">
+        {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => (
+          <span key={day}>{day}</span>
+        ))}
+      </div>
+      <div className="portfolio-calendar-grid">
+        {cells.map((cell) => {
+          const meta = attendanceMeta(cell.status);
+          if (cell.day === null) return <span key={cell.key} className="portfolio-calendar-cell portfolio-calendar-cell-empty" />;
+          return (
+            <span
+              key={cell.key}
+              className="portfolio-calendar-cell"
+              title={`${cell.day}: ${meta.label}${cell.lessonCount ? `, ${cell.lessonCount} зан.` : ''}`}
+              style={{ color: meta.color, background: meta.background, borderColor: cell.status === 'none' ? '#E1E7F0' : meta.background }}
+            >
+              {cell.day}
+            </span>
+          );
+        })}
+      </div>
+      <div className="portfolio-calendar-legend">
+        {(['conducted', 'rescheduled', 'absence', 'none'] as const).map((status) => {
+          const meta = attendanceMeta(status);
+          return (
+            <span key={status}>
+              <i style={{ background: meta.dot }} />
+              {meta.label}
+            </span>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
 export default function PortfolioPage() {
   const [searchParams] = useSearchParams();
-  const isTablet = useMediaQuery('(max-width: 1100px)');
-  const isMobile = useMediaQuery('(max-width: 720px)');
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [topics, setTopics] = useState<TheoryTopic[]>([]);
-  const [tutorProfile, setTutorProfile] = useState<TutorProfile | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState('');
-  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('all');
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(() => formatMonthInput(new Date()));
   const [reportComment, setReportComment] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
@@ -339,7 +589,7 @@ export default function PortfolioPage() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [studentData, subjectData, relationData, lessonData, assignmentData, topicData, tutorData] =
+        const [studentData, subjectData, relationData, lessonData, assignmentData, topicData] =
           await Promise.all([
             getStudents(),
             getSubjects(),
@@ -347,7 +597,6 @@ export default function PortfolioPage() {
             getLessons(),
             getAssignments(),
             getTopics(),
-            getTutorProfile().catch(() => null),
           ]);
         setStudents(studentData);
         setSubjects(subjectData);
@@ -355,7 +604,6 @@ export default function PortfolioPage() {
         setLessons(lessonData);
         setAssignments(assignmentData);
         setTopics(topicData);
-        setTutorProfile(tutorData);
       } catch (error) {
         console.error('Ошибка загрузки портфолио:', error);
         alert('Не удалось загрузить раздел портфолио');
@@ -411,15 +659,25 @@ export default function PortfolioPage() {
   }, [studentRelations, subjectMap]);
 
   useEffect(() => {
-    const subjectIds = new Set(studentRelations.map((relation) => String(relation.subject_id)));
-    setSelectedSubjectFilter((current) => (current === 'all' || subjectIds.has(current) ? current : 'all'));
+    const subjectIds = [...new Set(studentRelations.map((relation) => String(relation.subject_id)))];
+    setSelectedSubjectFilter((current) => {
+      if (!subjectIds.length) return '';
+      if (subjectIds.length === 1) return subjectIds[0] ?? '';
+      return subjectIds.includes(current) ? current : '';
+    });
   }, [studentRelations]);
 
+  const selectedSubject = useMemo(
+    () => studentSubjectOptions.find((option) => String(option.id) === selectedSubjectFilter) ?? null,
+    [selectedSubjectFilter, studentSubjectOptions]
+  );
+  const selectedSubjectLabel = selectedSubject?.name ?? 'Предмет не выбран';
+  const subjectRequired = studentSubjectOptions.length > 1 && !selectedSubjectFilter;
   const filteredRelations = useMemo(
     () =>
-      selectedSubjectFilter === 'all'
-        ? studentRelations
-        : studentRelations.filter((relation) => String(relation.subject_id) === selectedSubjectFilter),
+      selectedSubjectFilter
+        ? studentRelations.filter((relation) => String(relation.subject_id) === selectedSubjectFilter)
+        : [],
     [selectedSubjectFilter, studentRelations]
   );
   const relationIds = useMemo(() => new Set(filteredRelations.map((relation) => relation.id)), [filteredRelations]);
@@ -433,7 +691,7 @@ export default function PortfolioPage() {
   );
   const previousMonthValue = previousMonth(selectedMonth);
   const reportCommentKey = selectedStudentId
-    ? `portfolio_comment:${selectedStudentId}:${selectedSubjectFilter}:${selectedMonth}`
+    ? `portfolio_comment:${selectedStudentId}:${selectedSubjectFilter || 'no-subject'}:${selectedMonth}`
     : '';
   const monthLessons = useMemo(
     () => studentLessons.filter((lesson) => inMonth(lessonDate(lesson), selectedMonth)),
@@ -451,7 +709,6 @@ export default function PortfolioPage() {
     () => studentAssignments.filter((assignment) => inMonth(assignment.deadline, previousMonthValue)),
     [previousMonthValue, studentAssignments]
   );
-
   const activeTopicIds = useMemo(
     () =>
       new Set([
@@ -474,7 +731,8 @@ export default function PortfolioPage() {
           ...topicAssignments.map((assignment) => assignment.grade).filter((grade): grade is number => grade !== null),
         ];
         const avg = average(topicGrades);
-        const activityScore = Math.min(topicLessons.length + topicAssignments.length, 4) / 4;
+        const activityCount = topicLessons.length + topicAssignments.length;
+        const activityScore = Math.min(activityCount, 4) / 4;
         const completionScore = topicAssignments.length > 0 ? topicCompletedAssignments.length / topicAssignments.length : 0;
         const gradeScore = avg === null ? 0 : avg / 5;
         return {
@@ -484,9 +742,10 @@ export default function PortfolioPage() {
           completedAssignments: topicCompletedAssignments.length,
           averageGrade: avg,
           progressPercent: clampPercent((activityScore * 0.35 + completionScore * 0.35 + gradeScore * 0.3) * 100),
+          activityCount,
         };
       })
-      .sort((a, b) => b.progressPercent - a.progressPercent);
+      .sort((a, b) => b.activityCount - a.activityCount || b.progressPercent - a.progressPercent);
   }, [activeTopicIds, filteredRelations, monthAssignments, monthLessons, topics]);
 
   const topicAverage = topicProgressRows.length
@@ -494,53 +753,68 @@ export default function PortfolioPage() {
     : 0;
   const currentStats = buildStats(monthLessons, monthAssignments, topicAverage);
   const previousStats = buildStats(previousMonthLessons, previousMonthAssignments, 0);
-  const gradeRows = currentStats.conductedLessons
-    .filter((lesson) => lesson.grade !== null)
-    .sort((a, b) => lessonDate(a).localeCompare(lessonDate(b)))
-    .map((lesson) => ({
-      label: new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(lesson.starts_at)),
-      value: lesson.grade ?? 0,
-    }));
   const onTimeHomeworkPercent =
     currentStats.assignments.length > 0
       ? ((currentStats.assignments.length - currentStats.overdueAssignments.length) / currentStats.assignments.length) * 100
       : 0;
   const competencyRows = [
-    { label: 'ДЗ', value: clampPercent(currentStats.homeworkPercent * 0.6 + (scoreToPercent(currentStats.averageAssignmentGrade) ?? 0) * 0.4) },
-    { label: 'Сам.', value: clampPercent(currentStats.homeworkPercent * 0.7 + (currentStats.overdueAssignments.length ? 0 : 30)) },
-    { label: 'Скорость', value: clampPercent(onTimeHomeworkPercent * 0.7 + currentStats.homeworkPercent * 0.3) },
-    { label: 'Теория', value: clampPercent(topicAverage * 0.7 + (scoreToPercent(currentStats.averageLessonGrade) ?? 0) * 0.3) },
+    {
+      label: 'Самостоятельность',
+      value: clampPercent(currentStats.homeworkPercent * 0.7 + (currentStats.overdueAssignments.length ? 0 : 30)),
+    },
+    {
+      label: 'Теория',
+      value: clampPercent(topicAverage * 0.7 + (scoreToPercent(currentStats.averageLessonGrade) ?? 0) * 0.3),
+    },
+    {
+      label: 'Скорость',
+      value: clampPercent(onTimeHomeworkPercent * 0.7 + currentStats.homeworkPercent * 0.3),
+    },
+    {
+      label: 'Домашние задания',
+      value: clampPercent(currentStats.homeworkPercent * 0.6 + (scoreToPercent(currentStats.averageAssignmentGrade) ?? 0) * 0.4),
+    },
   ];
+  const progressRows = buildProgressRows(selectedMonth, monthLessons, monthAssignments, topicAverage);
+  const calendarCells = buildCalendarCells(selectedMonth, monthLessons);
+  const topicActivityMax = Math.max(1, ...topicProgressRows.map((row) => row.activityCount));
+  const periodLabel = formatPeriodRange(selectedMonth);
+  const studentAvatarUrl = getMediaUrl(selectedStudent?.avatar_url);
+  const studentClassLabel = formatStudentGrade(selectedStudent);
 
   const strengths = useMemo(() => {
     const items: string[] = [];
-    const strongTopics = topicProgressRows.filter((row) => row.progressPercent >= 70).slice(0, 3).map((row) => row.topic.title);
+    const strongTopics = topicProgressRows.filter((row) => row.progressPercent >= 70).slice(0, 2).map((row) => row.topic.title);
     if (strongTopics.length > 0) items.push(`Уверенно идут темы: ${strongTopics.join(', ')}.`);
-    if (currentStats.averageLessonGrade !== null && currentStats.averageLessonGrade >= 4.5) items.push('Высокая средняя оценка за занятия.');
-    if (currentStats.averageAssignmentGrade !== null && currentStats.averageAssignmentGrade >= 4.5) items.push('Домашние задания выполняются качественно.');
-    if (currentStats.homeworkPercent >= 80) items.push('Хорошая дисциплина по домашним заданиям.');
-    return items.length ? items : ['Сильные стороны проявятся после накопления большего количества данных.'];
+    if (currentStats.averageLessonGrade !== null && currentStats.averageLessonGrade >= 4.5) items.push('Высокие оценки на занятиях.');
+    if (currentStats.averageAssignmentGrade !== null && currentStats.averageAssignmentGrade >= 4.5) items.push('Качественное выполнение ДЗ.');
+    if (currentStats.homeworkPercent >= 80) items.push('Домашние задания выполняются в срок.');
+    return items.length ? items.slice(0, 4) : ['Стабильность проявится после накопления данных.'];
   }, [currentStats.averageAssignmentGrade, currentStats.averageLessonGrade, currentStats.homeworkPercent, topicProgressRows]);
 
-  const weaknesses = useMemo(() => {
+  const growthZones = useMemo(() => {
     const items: string[] = [];
-    const weakTopics = topicProgressRows.filter((row) => row.progressPercent < 55).slice(0, 3).map((row) => row.topic.title);
-    if (weakTopics.length > 0) items.push(`Требуют проработки темы: ${weakTopics.join(', ')}.`);
-    if (currentStats.overdueAssignments.length > 0) items.push(`Есть просроченные задания: ${currentStats.overdueAssignments.length}.`);
-    if (currentStats.averageLessonGrade !== null && currentStats.averageLessonGrade < 4) items.push('Средняя оценка за занятия ниже 4.');
-    if (currentStats.averageAssignmentGrade !== null && currentStats.averageAssignmentGrade < 4) items.push('Средняя оценка за ДЗ ниже 4.');
-    return items.length ? items : ['Явных слабых сторон по текущим данным не видно.'];
+    const weakTopics = topicProgressRows.filter((row) => row.progressPercent < 55).slice(0, 2).map((row) => row.topic.title);
+    if (weakTopics.length > 0) items.push(`Повторить темы: ${weakTopics.join(', ')}.`);
+    if (currentStats.overdueAssignments.length > 0) items.push(`Закрыть просроченные ДЗ: ${currentStats.overdueAssignments.length}.`);
+    if (currentStats.averageLessonGrade !== null && currentStats.averageLessonGrade < 4) items.push('Подтянуть оценки на занятиях.');
+    if (currentStats.averageAssignmentGrade !== null && currentStats.averageAssignmentGrade < 4) items.push('Усилить качество домашних работ.');
+    return items.length ? items.slice(0, 4) : ['Критичных зон роста сейчас не видно.'];
   }, [currentStats.averageAssignmentGrade, currentStats.averageLessonGrade, currentStats.overdueAssignments.length, topicProgressRows]);
 
-  const nextSteps = [
-    currentStats.overdueAssignments.length > 0
-      ? 'Разобрать просроченные домашние задания и закрыть хвосты.'
-      : 'Поддерживать текущий темп выполнения домашних заданий.',
-    topicProgressRows.some((row) => row.progressPercent < 55)
-      ? 'Вернуться к самым слабым темам и дать короткую закрепляющую практику.'
-      : 'Добавить задачи повышенной сложности по уже освоенным темам.',
-    'В конце месяца обновить комментарий репетитора и сформировать отчёт о прогрессе ученика.',
-  ];
+  const recommendations = useMemo(
+    () => [
+      currentStats.overdueAssignments.length > 0
+        ? 'Разобрать просроченные задания.'
+        : 'Сохранять темп выполнения ДЗ.',
+      topicProgressRows.some((row) => row.progressPercent < 55)
+        ? 'Вернуться к слабым темам короткой практикой.'
+        : 'Добавить задачи повышенной сложности.',
+      'Закреплять материал регулярными мини-повторами.',
+      'Обновлять комментарий после контрольных точек.',
+    ],
+    [currentStats.overdueAssignments.length, topicProgressRows]
+  );
 
   useEffect(() => {
     if (!reportCommentKey) {
@@ -576,20 +850,29 @@ export default function PortfolioPage() {
       setPdfSaving(true);
       await new Promise((resolve) => requestAnimationFrame(resolve));
       const canvas = await html2canvas(reportRef.current, {
-        backgroundColor: '#F5F7FB',
+        backgroundColor: COLORS.surface,
         scale: 2,
         useCORS: true,
-        width: reportRef.current.offsetWidth,
-        height: reportRef.current.offsetHeight,
-        windowWidth: reportRef.current.offsetWidth,
-        windowHeight: reportRef.current.offsetHeight,
+        windowWidth: reportRef.current.scrollWidth,
+        windowHeight: reportRef.current.scrollHeight,
       });
       const imageData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const maxWidth = pageWidth - margin * 2;
+      const maxHeight = pageHeight - margin * 2;
+      const ratio = canvas.width / canvas.height;
+      let imageWidth = maxWidth;
+      let imageHeight = imageWidth / ratio;
 
-      pdf.addImage(imageData, 'PNG', 0, 0, pageWidth, pageHeight);
+      if (imageHeight > maxHeight) {
+        imageHeight = maxHeight;
+        imageWidth = imageHeight * ratio;
+      }
+
+      pdf.addImage(imageData, 'PNG', margin + (maxWidth - imageWidth) / 2, margin, imageWidth, imageHeight);
 
       const safeName = selectedStudent.full_name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'student';
       pdf.save(`progress-report-${safeName}-${selectedMonth}.pdf`);
@@ -600,112 +883,665 @@ export default function PortfolioPage() {
     }
   };
 
-  const comparisonRows = [
-    {
-      label: 'Общий прогресс',
-      before: formatPercent(previousStats.overallProgress),
-      after: formatPercent(currentStats.overallProgress),
-      delta: deltaText(currentStats.overallProgress, previousStats.overallProgress, '%'),
-    },
-    {
-      label: 'Оценка за занятия',
-      before: formatAverage(previousStats.averageLessonGrade),
-      after: formatAverage(currentStats.averageLessonGrade),
-      delta: deltaText(currentStats.averageLessonGrade, previousStats.averageLessonGrade),
-    },
-    {
-      label: 'Оценка за ДЗ',
-      before: formatAverage(previousStats.averageAssignmentGrade),
-      after: formatAverage(currentStats.averageAssignmentGrade),
-      delta: deltaText(currentStats.averageAssignmentGrade, previousStats.averageAssignmentGrade),
-    },
-    {
-      label: 'Выполнение ДЗ',
-      before: formatPercent(previousStats.homeworkPercent),
-      after: formatPercent(currentStats.homeworkPercent),
-      delta: deltaText(currentStats.homeworkPercent, previousStats.homeworkPercent, '%'),
-    },
-  ];
-  const selectedReportSubject =
-    selectedSubjectFilter === 'all'
-      ? studentSubjectOptions.length === 1
-        ? studentSubjectOptions[0]
-        : null
-      : studentSubjectOptions.find((option) => String(option.id) === selectedSubjectFilter) ?? null;
-  const selectedSubjectLabel = selectedReportSubject?.name ?? 'Выберите предмет';
-  const selectedTeacherLabel =
-    tutorProfile?.full_name?.trim() ||
-    selectedReportSubject?.tutorName ||
-    monthLessons.find((lesson) => lesson.tutor_name)?.tutor_name ||
-    'Преподаватель не указан';
-  const metricCards = [
-    ['Общий прогресс', formatPercent(currentStats.overallProgress), '#2AABEE', '◔'],
-    ['Оценка занятий', formatAverage(currentStats.averageLessonGrade), '#e5a11f', '★'],
-    ['Оценка ДЗ', formatAverage(currentStats.averageAssignmentGrade), '#2AABEE', '▣'],
-    ['Выполнено ДЗ', `${currentStats.completedAssignments.length}/${currentStats.assignments.length}`, '#4CAF50', '☑'],
-    ['Посещаемость', formatPercent(currentStats.attendancePercent), '#9C27B0', '●'],
-  ] as const;
-  const reportKpiCards = [
-    {
-      label: 'Общий прогресс',
-      value: formatPercent(currentStats.overallProgress),
-      delta: compactDeltaText(currentStats.overallProgress, previousStats.overallProgress, '%'),
-      color: '#2AABEE',
-      bg: '#EFF9FF',
-      icon: '↗',
-    },
+  const handleOpenReport = () => {
+    if (!selectedSubjectFilter) {
+      alert('Выберите предмет для отчёта. PDF формируется только по конкретному предмету.');
+      return;
+    }
+
+    setReportOpen(true);
+  };
+
+  const kpiCards = [
     {
       label: 'Средняя оценка',
-      value: currentStats.averageLessonGrade === null ? '—' : `${formatAverage(currentStats.averageLessonGrade)} / 5`,
-      delta: compactDeltaText(currentStats.averageLessonGrade, previousStats.averageLessonGrade),
-      color: '#FF9800',
-      bg: '#FFF8EE',
+      value: formatAverage(currentStats.averageLessonGrade),
+      delta: formatDelta(currentStats.averageLessonGrade, previousStats.averageLessonGrade),
+      color: COLORS.success,
+      background: '#F1FBF2',
       icon: '★',
     },
     {
       label: 'Выполнение ДЗ',
       value: formatPercent(currentStats.homeworkPercent),
-      delta: compactDeltaText(currentStats.homeworkPercent, previousStats.homeworkPercent, '%'),
-      color: '#4CAF50',
-      bg: '#F1FBF2',
+      delta: formatDelta(currentStats.homeworkPercent, previousStats.homeworkPercent, '%'),
+      color: COLORS.purple,
+      background: '#F9F0FF',
       icon: '✓',
     },
     {
       label: 'Посещаемость',
       value: formatPercent(currentStats.attendancePercent),
-      delta: compactDeltaText(currentStats.attendancePercent, previousStats.attendancePercent, '%'),
-      color: '#9C27B0',
-      bg: '#F9F0FF',
-      icon: '●',
+      delta: formatDelta(currentStats.attendancePercent, previousStats.attendancePercent, '%'),
+      color: COLORS.warning,
+      background: '#FFF8EE',
+      icon: '◷',
+    },
+    {
+      label: 'Проведено занятий',
+      value: String(currentStats.conductedLessons.length),
+      delta: formatCountDelta(currentStats.conductedLessons.length, previousStats.conductedLessons.length),
+      color: COLORS.primary,
+      background: '#EFF9FF',
+      icon: '□',
+    },
+    {
+      label: 'Средний балл ДЗ',
+      value: formatAverage(currentStats.averageAssignmentGrade),
+      delta: formatDelta(currentStats.averageAssignmentGrade, previousStats.averageAssignmentGrade),
+      color: COLORS.success,
+      background: '#F1FBF2',
+      icon: '▥',
     },
   ];
-  const reportGeneratedDate = formatReportDate(new Date());
-  const studentAvatarUrl = getMediaUrl(selectedStudent.avatar_url);
-  const handleOpenReport = () => {
-    if (studentSubjectOptions.length > 1 && selectedSubjectFilter === 'all') {
-      alert('Для отчёта выберите конкретный предмет в верхнем фильтре портфолио.');
-      return;
-    }
 
-    if (studentSubjectOptions.length === 1 && selectedSubjectFilter === 'all') {
-      setSelectedSubjectFilter(String(studentSubjectOptions[0].id));
-    }
-
-    setReportOpen(true);
-  };
-  const selectedMonthRange = monthRange(selectedMonth);
-  const firstMonthDayOffset = (selectedMonthRange.start.getDay() + 6) % 7;
-  const calendarDays = [
-    ...Array.from({ length: firstMonthDayOffset }, () => null),
-    ...Array.from({ length: selectedMonthRange.end.getDate() }, (_, index) => index + 1),
-  ];
+  const analyticsReady = Boolean(selectedSubjectFilter && (monthLessons.length || monthAssignments.length || topicProgressRows.length));
 
   return (
-    <div>
+    <div className="portfolio-page">
       <style>
         {`
+          .portfolio-page {
+            color: ${COLORS.text};
+            height: 100%;
+            min-height: 0;
+            display: grid;
+            grid-template-rows: auto auto minmax(0, 1fr);
+            gap: 14px;
+            overflow: hidden;
+          }
+
+          .portfolio-page *,
+          .portfolio-report-shell * {
+            box-sizing: border-box;
+          }
+
+          .portfolio-heading-row {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 0;
+          }
+
+          .portfolio-toolbar {
+            display: grid;
+            grid-template-columns: minmax(220px, 1.15fr) minmax(180px, 0.9fr) minmax(170px, 0.74fr) auto;
+            gap: 12px;
+            align-items: end;
+            margin-bottom: 0;
+          }
+
+          .portfolio-content-viewport {
+            min-height: 0;
+            display: grid;
+            align-content: start;
+            overflow-y: auto;
+            padding-right: 4px;
+            scrollbar-width: thin;
+          }
+
+          .portfolio-field {
+            display: grid;
+            gap: 7px;
+            min-width: 0;
+          }
+
+          .portfolio-field span {
+            color: ${COLORS.secondary};
+            font-size: 13px;
+            font-weight: 800;
+          }
+
+          .portfolio-field select,
+          .portfolio-field input {
+            min-height: 48px;
+            border-radius: 16px;
+            background: ${COLORS.surface};
+            border-color: ${COLORS.border};
+            font-weight: 800;
+          }
+
+          .portfolio-primary-button {
+            min-height: 48px;
+            padding: 0 18px;
+            border-radius: 16px;
+            background: ${COLORS.primary};
+            white-space: nowrap;
+            box-shadow: 0 12px 24px rgba(42, 171, 238, 0.22);
+          }
+
+          .portfolio-primary-button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            box-shadow: none;
+          }
+
+          .portfolio-notice {
+            margin: 0 0 14px;
+            padding: 12px 14px;
+            border-radius: 18px;
+            color: #8A5B00;
+            background: #FFF8EE;
+            border: 1px solid rgba(255, 152, 0, 0.18);
+            font-size: 14px;
+            line-height: 1.4;
+          }
+
+          .portfolio-student-card {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            gap: 18px;
+            align-items: center;
+            margin-bottom: 14px;
+          }
+
+          .portfolio-avatar,
+          .portfolio-avatar-fallback {
+            width: 82px;
+            height: 82px;
+            border-radius: 28px;
+            border: 1px solid ${COLORS.border};
+            background: #EFF9FF;
+          }
+
+          .portfolio-avatar {
+            object-fit: cover;
+          }
+
+          .portfolio-avatar-fallback {
+            display: grid;
+            place-items: center;
+            color: ${COLORS.primary};
+            font-size: 26px;
+            font-weight: 950;
+          }
+
+          .portfolio-student-title {
+            min-width: 0;
+          }
+
+          .portfolio-student-title h2 {
+            margin: 0 0 10px;
+            font-size: clamp(24px, 3vw, 34px);
+            line-height: 1.05;
+            letter-spacing: -0.04em;
+            overflow-wrap: anywhere;
+          }
+
+          .portfolio-meta-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+          }
+
+          .portfolio-chip {
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            color: #405066;
+            background: ${COLORS.background};
+            border: 1px solid ${COLORS.border};
+            font-size: 13px;
+            font-weight: 850;
+          }
+
+          .portfolio-chip strong {
+            color: ${COLORS.primary};
+          }
+
+          .portfolio-progress-summary {
+            min-width: 238px;
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 14px;
+            align-items: center;
+            padding: 12px;
+            border-radius: 22px;
+            background: #EFF9FF;
+            border: 1px solid #D7EEF9;
+          }
+
+          .portfolio-progress-summary h3 {
+            margin: 0 0 4px;
+            font-size: 15px;
+          }
+
+          .portfolio-progress-summary p {
+            margin: 0;
+            color: ${COLORS.secondary};
+            font-size: 13px;
+            line-height: 1.35;
+          }
+
+          .portfolio-donut {
+            position: relative;
+            display: grid;
+            place-items: center;
+            flex: 0 0 auto;
+          }
+
+          .portfolio-donut svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+          }
+
+          .portfolio-donut strong {
+            position: relative;
+            color: ${COLORS.text};
+            font-size: 24px;
+            font-weight: 950;
+          }
+
+          .portfolio-donut-compact strong {
+            font-size: 18px;
+          }
+
+          .portfolio-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+          }
+
+          .portfolio-kpi-card {
+            min-height: 112px;
+            display: grid;
+            gap: 10px;
+            align-content: space-between;
+            padding: 15px;
+            border-radius: 22px;
+            background: ${COLORS.surface};
+            border: 1px solid ${COLORS.border};
+            box-shadow: 0 16px 34px rgba(20, 32, 56, 0.06);
+            transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+          }
+
+          .portfolio-kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 42px rgba(20, 32, 56, 0.09);
+            border-color: #DCE7F3;
+          }
+
+          .portfolio-kpi-head {
+            display: grid;
+            grid-template-columns: 42px minmax(0, 1fr);
+            gap: 12px;
+            align-items: center;
+          }
+
+          .portfolio-icon-box {
+            width: 42px;
+            height: 42px;
+            display: inline-grid;
+            place-items: center;
+            border-radius: 17px;
+            flex: 0 0 auto;
+            font-size: 20px;
+            font-weight: 950;
+          }
+
+          .portfolio-kpi-label {
+            min-width: 0;
+            color: ${COLORS.secondary};
+            font-size: 13px;
+            font-weight: 800;
+            line-height: 1.25;
+          }
+
+          .portfolio-kpi-value-row {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 10px;
+          }
+
+          .portfolio-kpi-value {
+            color: ${COLORS.text};
+            font-size: 28px;
+            font-weight: 950;
+            line-height: 1;
+            letter-spacing: -0.03em;
+          }
+
+          .portfolio-delta {
+            min-height: 24px;
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 900;
+            white-space: nowrap;
+          }
+
+          .portfolio-delta-good {
+            color: ${COLORS.success};
+            background: #F1FBF2;
+          }
+
+          .portfolio-delta-bad {
+            color: ${COLORS.danger};
+            background: #FFF2F1;
+          }
+
+          .portfolio-delta-neutral {
+            color: ${COLORS.secondary};
+            background: ${COLORS.background};
+          }
+
+          .portfolio-analytics-grid {
+            display: grid;
+            grid-template-columns: minmax(380px, 0.92fr) minmax(460px, 1.08fr);
+            gap: 14px;
+            margin-bottom: 14px;
+          }
+
+          .portfolio-section-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 14px;
+          }
+
+          .portfolio-section-header h3 {
+            margin: 0;
+            font-size: 20px;
+            letter-spacing: -0.03em;
+          }
+
+          .portfolio-section-header span {
+            color: ${COLORS.secondary};
+            font-size: 13px;
+            font-weight: 800;
+          }
+
+          .portfolio-radar-card {
+            min-height: 420px;
+            display: grid;
+            align-content: start;
+          }
+
+          .portfolio-radar-wrap {
+            min-height: 332px;
+            display: grid;
+            place-items: center;
+            overflow: visible;
+          }
+
+          .portfolio-radar-svg {
+            width: min(100%, 430px);
+            height: auto;
+            overflow: visible;
+            display: block;
+          }
+
+          .portfolio-radar-svg-report {
+            width: 100%;
+            max-width: 330px;
+          }
+
+          .portfolio-chart {
+            display: grid;
+            gap: 8px;
+          }
+
+          .portfolio-chart-legend {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            color: ${COLORS.text};
+            font-size: 13px;
+            font-weight: 850;
+          }
+
+          .portfolio-chart-legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            white-space: nowrap;
+          }
+
+          .portfolio-chart-legend i {
+            width: 18px;
+            height: 3px;
+            border-radius: 999px;
+          }
+
+          .portfolio-line-svg {
+            width: 100%;
+            height: auto;
+            display: block;
+          }
+
+          .portfolio-empty {
+            min-height: 260px;
+            display: grid;
+            place-items: center;
+            color: ${COLORS.secondary};
+            text-align: center;
+            font-size: 14px;
+            line-height: 1.45;
+            border-radius: 18px;
+            background: ${COLORS.background};
+            border: 1px dashed ${COLORS.border};
+          }
+
+          .portfolio-lower-grid {
+            display: grid;
+            grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
+            gap: 14px;
+            margin-bottom: 14px;
+          }
+
+          .portfolio-topic-list {
+            display: grid;
+            gap: 0;
+          }
+
+          .portfolio-topic-table-head {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(140px, 0.8fr) 76px;
+            gap: 12px;
+            padding-bottom: 8px;
+            color: ${COLORS.secondary};
+            font-size: 12px;
+            font-weight: 900;
+            border-bottom: 1px solid ${COLORS.border};
+          }
+
+          .portfolio-topic-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(140px, 0.8fr) 76px;
+            gap: 12px;
+            align-items: center;
+            padding: 10px 0;
+            border-top: 1px solid ${COLORS.border};
+          }
+
+          .portfolio-topic-row:first-child {
+            border-top: 0;
+            padding-top: 0;
+          }
+
+          .portfolio-topic-title {
+            min-width: 0;
+            overflow: visible;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            color: ${COLORS.text};
+            font-size: 14px;
+            font-weight: 900;
+            line-height: 1.3;
+          }
+
+          .portfolio-topic-meta {
+            color: ${COLORS.secondary};
+            font-size: 12px;
+            margin-top: 3px;
+          }
+
+          .portfolio-progress-track {
+            height: 8px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: ${COLORS.border};
+          }
+
+          .portfolio-progress-fill {
+            height: 100%;
+            border-radius: inherit;
+          }
+
+          .portfolio-topic-count {
+            text-align: right;
+            color: ${COLORS.text};
+            font-size: 18px;
+            font-weight: 950;
+          }
+
+          .portfolio-calendar-title {
+            margin-bottom: 10px;
+            text-align: center;
+            color: ${COLORS.text};
+            font-weight: 900;
+          }
+
+          .portfolio-calendar-weekdays,
+          .portfolio-calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 6px;
+          }
+
+          .portfolio-calendar-weekdays {
+            margin-bottom: 6px;
+            color: ${COLORS.secondary};
+            font-size: 12px;
+            font-weight: 900;
+            text-align: center;
+          }
+
+          .portfolio-calendar-cell {
+            min-height: 38px;
+            aspect-ratio: 1.28 / 1;
+            display: grid;
+            place-items: center;
+            border: 1px solid;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 900;
+          }
+
+          .portfolio-calendar-cell-empty {
+            border: 0;
+            background: transparent;
+          }
+
+          .portfolio-calendar-legend {
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+            color: ${COLORS.secondary};
+            font-size: 12px;
+            font-weight: 800;
+          }
+
+          .portfolio-calendar-legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+          }
+
+          .portfolio-calendar-legend i {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+          }
+
+          .portfolio-insights-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 14px;
+          }
+
+          .portfolio-insight-card {
+            display: grid;
+            grid-template-columns: 46px minmax(0, 1fr);
+            gap: 14px;
+            align-content: start;
+          }
+
+          .portfolio-insight-card h3 {
+            margin: 0 0 10px;
+            font-size: 18px;
+          }
+
+          .portfolio-insight-list {
+            display: grid;
+            gap: 7px;
+            color: #405066;
+            font-size: 14px;
+            line-height: 1.4;
+          }
+
+          .portfolio-insight-list div {
+            display: grid;
+            grid-template-columns: 10px minmax(0, 1fr);
+            gap: 8px;
+          }
+
+          .portfolio-insight-list i {
+            width: 6px;
+            height: 6px;
+            margin-top: 8px;
+            border-radius: 50%;
+          }
+
+          .portfolio-comment-card {
+            display: grid;
+            grid-template-columns: 48px minmax(0, 1fr);
+            gap: 14px;
+            align-items: start;
+            margin-bottom: 0;
+          }
+
+          .portfolio-comment-card h3 {
+            margin: 0 0 8px;
+            font-size: 18px;
+          }
+
+          .portfolio-comment-card textarea {
+            width: 100%;
+            min-height: 96px;
+            resize: vertical;
+            border-radius: 16px;
+            line-height: 1.45;
+          }
+
+          .portfolio-report-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: grid;
+            place-items: center;
+            padding: 14px;
+            background: rgba(15, 23, 42, 0.52);
+            backdrop-filter: blur(6px);
+          }
+
           .portfolio-report-shell {
-            width: min(920px, calc(100vw - 24px));
+            width: min(980px, calc(100vw - 24px));
             max-height: calc(100vh - 24px);
             overflow: auto;
             display: grid;
@@ -713,439 +1549,431 @@ export default function PortfolioPage() {
             gap: 12px;
             padding: 12px;
             border-radius: 24px;
-            background: #F5F7FB;
+            background: ${COLORS.background};
             box-shadow: 0 30px 80px rgba(15, 23, 42, 0.22);
           }
 
           .portfolio-report-actions {
-            width: min(794px, 100%);
+            width: min(190mm, 100%);
             display: flex;
             justify-content: space-between;
             gap: 10px;
-            align-items: start;
+            align-items: center;
           }
 
           .portfolio-report-comment-editor {
-            width: min(794px, 100%);
+            width: min(190mm, 100%);
             display: grid;
             gap: 6px;
-            color: #666;
+            color: ${COLORS.secondary};
             font-size: 13px;
+            font-weight: 800;
+          }
+
+          .portfolio-report-comment-editor textarea {
+            border-radius: 16px;
+            line-height: 1.45;
           }
 
           .report-a4 {
-            width: 794px;
-            height: 1123px;
-            overflow: hidden;
-            padding: 26px 30px;
-            display: flex;
-            flex-direction: column;
-            gap: 9px;
-            color: #1A1A1A;
-            background: #F5F7FB;
-            border: 1px solid #E8EDF5;
-            border-radius: 18px;
-            font-size: 11px;
-            line-height: 1.32;
+            width: 190mm;
+            min-height: auto;
+            box-sizing: border-box;
+            display: grid;
+            gap: 3.1mm;
+            color: ${COLORS.text};
+            background: ${COLORS.surface};
+            border: 1px solid ${COLORS.border};
+            border-radius: 20px;
+            padding: 7mm;
+            font-size: 9.4px;
+            line-height: 1.35;
+            overflow: visible;
           }
 
           .report-card {
-            background: #FFFFFF;
-            border: 1px solid #E8EDF5;
-            border-radius: 22px;
-            box-shadow: 0 10px 26px rgba(20, 32, 56, 0.06);
-          }
-
-          .report-card,
-          .report-kpi-card {
-            transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
-          }
-
-          .report-card:hover,
-          .report-kpi-card:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 14px 30px rgba(20, 32, 56, 0.09);
-            border-color: #DDE7F3;
+            background: ${COLORS.surface};
+            border: 1px solid ${COLORS.border};
+            border-radius: 20px;
+            page-break-inside: avoid;
           }
 
           .report-header {
             display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 18px;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
             align-items: start;
           }
 
           .report-logo {
             display: inline-flex;
-            gap: 8px;
             align-items: center;
-            margin-bottom: 7px;
-            color: #2AABEE;
-            font-size: 11px;
+            gap: 8px;
+            margin-bottom: 5px;
+            color: ${COLORS.text};
+            font-size: 17px;
             font-weight: 950;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
+            letter-spacing: -0.04em;
           }
 
-          .report-logo span {
-            width: 24px;
-            height: 24px;
+          .report-logo-icon {
+            width: 26px;
+            height: 26px;
             display: grid;
             place-items: center;
-            border-radius: 9px;
-            color: #FFFFFF;
-            background: #2AABEE;
+            border-radius: 8px;
+            color: #fff;
+            background: ${COLORS.primary};
+            font-size: 17px;
+            line-height: 1;
+          }
+
+          .report-logo small {
+            display: block;
+            color: ${COLORS.primary};
+            font-size: 8px;
+            line-height: 0.9;
+            text-align: right;
             letter-spacing: 0;
-            font-size: 14px;
           }
 
           .report-title {
             margin: 0;
-            color: #1A1A1A;
-            font-size: 30px;
-            line-height: 1;
+            color: ${COLORS.text};
+            font-size: 24px;
+            line-height: 1.05;
             letter-spacing: -0.04em;
           }
 
-          .report-date {
-            color: #666;
-            font-size: 12px;
-            font-weight: 800;
-            padding-top: 10px;
+          .report-period {
+            display: grid;
+            gap: 2px;
+            color: ${COLORS.text};
+            font-size: 10px;
+            font-weight: 900;
+            text-align: right;
             white-space: nowrap;
           }
 
-          .report-top {
-            display: grid;
-            grid-template-columns: 1.05fr 1.95fr;
-            gap: 10px;
-            align-items: stretch;
+          .report-period span {
+            color: ${COLORS.secondary};
+            font-size: 8.8px;
           }
 
           .report-student-card {
-            min-height: 116px;
-            padding: 14px;
             display: grid;
-            grid-template-columns: 72px minmax(0, 1fr);
+            grid-template-columns: auto minmax(0, 1fr) auto;
             gap: 12px;
             align-items: center;
+            padding: 10px;
+          }
+
+          .report-avatar,
+          .report-avatar-fallback {
+            width: 54px;
+            height: 54px;
+            border-radius: 18px;
+            border: 1px solid ${COLORS.border};
+            background: #EFF9FF;
           }
 
           .report-avatar {
-            width: 72px;
-            height: 72px;
-            border-radius: 50%;
             object-fit: cover;
-            background: #EFF9FF;
-            border: 1px solid #E8EDF5;
           }
 
           .report-avatar-fallback {
-            width: 72px;
-            height: 72px;
-            border-radius: 50%;
             display: grid;
             place-items: center;
-            color: #2AABEE;
-            background: #EFF9FF;
-            border: 1px solid #E8EDF5;
-            font-size: 24px;
+            color: ${COLORS.primary};
+            font-size: 18px;
             font-weight: 950;
           }
 
           .report-student-name {
-            margin: 0 0 8px;
-            color: #1A1A1A;
-            font-size: 20px;
-            line-height: 1.05;
+            margin: 0 0 5px;
+            font-size: 17px;
+            line-height: 1.08;
             letter-spacing: -0.03em;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
           }
 
           .report-student-meta {
-            display: grid;
+            display: flex;
             gap: 6px;
-            color: #666;
-            font-size: 11.5px;
+            flex-wrap: wrap;
+          }
+
+          .report-student-meta span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            min-height: 20px;
+            padding: 3px 7px;
+            border-radius: 999px;
+            color: #405066;
+            background: ${COLORS.background};
+            font-size: 8.8px;
+            font-weight: 850;
           }
 
           .report-student-meta strong {
-            color: #1A1A1A;
+            color: ${COLORS.primary};
           }
 
-          .report-student-meta div {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+          .report-progress {
+            min-width: 154px;
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 8px;
+            align-items: center;
+          }
+
+          .report-progress h3 {
+            margin: 0 0 2px;
+            font-size: 10px;
+          }
+
+          .report-progress p {
+            margin: 0;
+            color: ${COLORS.secondary};
+            font-size: 8.4px;
           }
 
           .report-kpi-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 8px;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 2.4mm;
           }
 
           .report-kpi-card {
-            min-height: 116px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            gap: 8px;
-            background: #FFFFFF;
-            border: 1px solid #E8EDF5;
-            border-radius: 22px;
-            box-shadow: 0 10px 26px rgba(20, 32, 56, 0.06);
+            min-height: 23mm;
+            display: grid;
+            gap: 5px;
+            align-content: space-between;
+            padding: 8px;
+            border-radius: 17px;
           }
 
-          .report-kpi-top {
-            min-height: 34px;
+          .report-kpi-head {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 30px;
-            gap: 7px;
-            align-items: start;
+            grid-template-columns: 24px minmax(0, 1fr);
+            gap: 6px;
+            align-items: center;
+          }
+
+          .report-icon-box {
+            width: 24px;
+            height: 24px;
+            display: grid;
+            place-items: center;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 950;
           }
 
           .report-kpi-label {
-            color: #1A1A1A;
-            font-size: 10.5px;
+            color: ${COLORS.secondary};
+            font-size: 8px;
             font-weight: 900;
-            line-height: 1.25;
-            min-width: 0;
-          }
-
-          .report-kpi-icon {
-            width: 30px;
-            height: 30px;
-            border-radius: 13px;
-            display: grid;
-            place-items: center;
-            flex: 0 0 auto;
-            align-self: start;
-            font-size: 17px;
-            font-weight: 950;
+            line-height: 1.22;
           }
 
           .report-kpi-value {
-            color: #1A1A1A;
-            font-size: 22px;
+            margin-top: 3px;
+            color: ${COLORS.text};
+            font-size: 17px;
             font-weight: 950;
             line-height: 1;
-            white-space: nowrap;
           }
 
           .report-delta {
-            width: max-content;
-            max-width: 100%;
-            min-height: 20px;
             display: inline-flex;
             align-items: center;
-            margin-top: 7px;
-            padding: 3px 7px;
+            width: max-content;
+            max-width: 100%;
+            min-height: 16px;
+            margin-top: 5px;
+            padding: 2px 6px;
             border-radius: 999px;
-            font-size: 10.5px;
-            font-weight: 900;
-            line-height: 1;
+            font-size: 8px;
+            font-weight: 950;
             white-space: nowrap;
           }
 
-          .report-main-grid {
+          .report-analytics-grid,
+          .report-middle-grid {
             display: grid;
-            grid-template-columns: 0.76fr 1.58fr 1.16fr;
-            gap: 9px;
-          }
-
-          .report-lower-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 9px;
+            grid-template-columns: 1fr 1.25fr;
+            gap: 3mm;
           }
 
           .report-section {
-            padding: 13px;
+            padding: 10px;
           }
 
           .report-section-title {
-            margin: 0 0 8px;
-            color: #1A1A1A;
-            font-size: 17px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin: 0 0 7px;
+            font-size: 13px;
             line-height: 1.1;
             letter-spacing: -0.03em;
           }
 
-          .report-muted {
-            color: #666;
-          }
-
-          .report-comparison {
-            display: grid;
-            border: 1px solid #E8EDF5;
-            border-radius: 15px;
-            overflow: hidden;
-          }
-
-          .report-comparison-row {
-            display: grid;
-            grid-template-columns: 1.2fr 0.72fr 0.72fr 0.75fr;
-            gap: 6px;
-            align-items: center;
-            padding: 7px 8px;
-            border-top: 1px solid #E8EDF5;
-            background: #FFFFFF;
-            font-size: 10.5px;
-          }
-
-          .report-comparison-row:first-child {
-            border-top: 0;
-            background: #F5F7FB;
-            color: #666;
-            font-weight: 900;
+          .report-section-title span {
+            color: ${COLORS.secondary};
+            font-size: 8.4px;
+            font-weight: 800;
           }
 
           .report-radar-wrap {
+            min-height: 212px;
             display: grid;
-            grid-template-columns: 1fr;
-            gap: 7px;
-            justify-items: center;
+            place-items: center;
           }
 
-          .report-radar-wrap svg {
-            height: 300px !important;
-            max-width: 340px !important;
-          }
-
-          .report-legend {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 4px 8px;
-            width: 100%;
-            color: #666;
-            font-size: 9.5px;
-            line-height: 1.28;
-          }
-
-          .report-chart-card svg {
-            height: 220px !important;
-          }
-
-          .report-calendar-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-            margin-bottom: 8px;
-          }
-
-          .report-calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
+          .portfolio-chart-report {
             gap: 4px;
           }
 
-          .report-calendar-day {
-            height: 20px;
-            border-radius: 7px;
-            display: grid;
-            place-items: center;
-            font-size: 9px;
-            font-weight: 900;
+          .portfolio-chart-report .portfolio-chart-legend {
+            gap: 9px;
+            font-size: 8.5px;
+          }
+
+          .portfolio-chart-report .portfolio-chart-legend i {
+            width: 13px;
+            height: 2px;
           }
 
           .report-topic-list {
             display: grid;
-            gap: 7px;
+            gap: 6px;
           }
 
           .report-topic-row {
             display: grid;
-            gap: 4px;
+            grid-template-columns: minmax(0, 1fr) 68px 24px;
+            gap: 7px;
+            align-items: center;
           }
 
-          .report-topic-head {
-            display: flex;
-            justify-content: space-between;
-            gap: 8px;
-            color: #1A1A1A;
-            font-size: 10.5px;
-            font-weight: 900;
-          }
-
-          .report-topic-head span:first-child {
+          .report-topic-title {
             overflow: hidden;
+            color: ${COLORS.text};
+            font-size: 8.8px;
+            font-weight: 900;
             text-overflow: ellipsis;
             white-space: nowrap;
           }
 
-          .report-progress-track {
-            height: 6px;
-            overflow: hidden;
-            border-radius: 999px;
-            background: #E8EDF5;
+          .report-topic-count {
+            text-align: right;
+            color: ${COLORS.text};
+            font-size: 9px;
+            font-weight: 950;
           }
 
-          .report-progress-fill {
-            height: 100%;
-            border-radius: 999px;
+          .portfolio-calendar-compact .portfolio-calendar-title {
+            margin-bottom: 6px;
+            font-size: 9px;
+          }
+
+          .portfolio-calendar-compact .portfolio-calendar-weekdays,
+          .portfolio-calendar-compact .portfolio-calendar-grid {
+            gap: 2px;
+          }
+
+          .portfolio-calendar-compact .portfolio-calendar-weekdays {
+            margin-bottom: 3px;
+            font-size: 7.4px;
+          }
+
+          .portfolio-calendar-compact .portfolio-calendar-cell {
+            min-height: 17px;
+            border-radius: 5px;
+            font-size: 7.8px;
+          }
+
+          .portfolio-calendar-compact .portfolio-calendar-legend {
+            gap: 7px;
+            margin-top: 7px;
+            font-size: 7.6px;
+          }
+
+          .portfolio-calendar-compact .portfolio-calendar-legend i {
+            width: 6px;
+            height: 6px;
           }
 
           .report-insights-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 9px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 3mm;
           }
 
           .report-insight-card {
-            min-height: 118px;
-            padding: 13px;
-          }
-
-          .report-insight-title {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            margin: 0 0 8px;
-            font-size: 14px;
-            line-height: 1.2;
-          }
-
-          .report-insight-icon {
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
             display: grid;
-            place-items: center;
-            flex: 0 0 auto;
-            font-weight: 950;
+            grid-template-columns: 28px minmax(0, 1fr);
+            gap: 7px;
+            align-content: start;
+            min-height: 28mm;
+            padding: 9px;
+            border-radius: 18px;
+          }
+
+          .report-insight-card h3 {
+            margin: 0 0 5px;
+            font-size: 10.5px;
+            line-height: 1.15;
           }
 
           .report-insight-list {
             display: grid;
-            gap: 4px;
-            color: #1A1A1A;
-            font-size: 10.5px;
-            line-height: 1.35;
+            gap: 3px;
+            color: #405066;
+            font-size: 8.4px;
+            line-height: 1.28;
           }
 
           .report-insight-list div {
             display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
             overflow: hidden;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
           }
 
           .report-comment-card {
-            min-height: 58px;
-            padding: 13px 15px;
-            color: #1A1A1A;
+            display: grid;
+            grid-template-columns: 28px minmax(0, 1fr);
+            gap: 8px;
+            align-items: start;
+            padding: 9px;
+            border-radius: 18px;
             background: #EFF9FF;
-            border-color: #D6ECFA;
-            font-size: 11.5px;
-            line-height: 1.45;
+            border-color: #D7EEF9;
+          }
+
+          .report-comment-card h3 {
+            margin: 0 0 4px;
+            font-size: 10.5px;
+          }
+
+          .report-comment-card p {
             display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
             overflow: hidden;
+            margin: 0;
+            color: #405066;
+            font-size: 8.6px;
+            line-height: 1.35;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 3;
+          }
+
+          @page {
+            size: A4 portrait;
+            margin: 10mm;
           }
 
           @media print {
@@ -1160,36 +1988,95 @@ export default function PortfolioPage() {
 
             .report-a4 {
               position: absolute !important;
-              left: 0 !important;
-              top: 0 !important;
-              width: 794px !important;
-              height: 1123px !important;
+              left: 10mm !important;
+              top: 10mm !important;
+              width: 190mm !important;
+              border: 0 !important;
               border-radius: 0 !important;
               box-shadow: none !important;
+              padding: 0 !important;
+              overflow: visible !important;
             }
 
             .portfolio-print-hidden {
               display: none !important;
             }
 
-            .portfolio-pdf-only {
-              display: block !important;
+            .report-card {
+              box-shadow: none !important;
+            }
+          }
+
+          @media (max-width: 1180px) {
+            .portfolio-toolbar,
+            .portfolio-kpi-grid,
+            .portfolio-analytics-grid,
+            .portfolio-lower-grid,
+            .portfolio-insights-grid {
+              grid-template-columns: 1fr 1fr;
+            }
+
+            .portfolio-primary-button {
+              grid-column: span 2;
+            }
+          }
+
+          @media (max-width: 760px) {
+            .portfolio-page {
+              height: auto;
+              display: block;
+              overflow: visible;
+            }
+
+            .portfolio-heading-row,
+            .portfolio-toolbar {
+              margin-bottom: 14px;
+            }
+
+            .portfolio-content-viewport {
+              overflow: visible;
+              padding-right: 0;
+            }
+
+            .portfolio-toolbar,
+            .portfolio-kpi-grid,
+            .portfolio-analytics-grid,
+            .portfolio-lower-grid,
+            .portfolio-insights-grid,
+            .portfolio-student-card {
+              grid-template-columns: 1fr;
+            }
+
+            .portfolio-primary-button {
+              grid-column: auto;
+            }
+
+            .portfolio-progress-summary {
+              min-width: 0;
+            }
+
+            .portfolio-topic-row {
+              grid-template-columns: 1fr;
+            }
+
+            .portfolio-topic-table-head {
+              display: none;
+            }
+
+            .portfolio-topic-count {
+              text-align: left;
             }
           }
         `}
       </style>
-      <section
-        className="toolbar-panel mentor-panel"
-        style={{
-          gridTemplateColumns: isTablet ? '1fr 1fr' : 'repeat(3, minmax(0, 1fr))',
-          gap: 14,
-          padding: '14px 18px',
-          marginBottom: 10,
-          borderRadius: 18,
-        }}
-      >
-        <label style={{ display: 'grid', gap: 5 }}>
-          <span style={{ ...mutedTextStyle, fontSize: 13, fontWeight: 700 }}>Ученик</span>
+
+      <div className="portfolio-heading-row">
+        <h1 className="page-heading" style={{ marginBottom: 0 }}>Портфолио</h1>
+      </div>
+
+      <section className="portfolio-toolbar mentor-panel" style={{ padding: 16 }}>
+        <label className="portfolio-field">
+          <span>Ученик</span>
           <select value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
             {activeStudents.map((student) => (
               <option key={student.id} value={String(student.id)}>{student.full_name}</option>
@@ -1197,583 +2084,344 @@ export default function PortfolioPage() {
           </select>
         </label>
 
-        <label style={{ display: 'grid', gap: 5 }}>
-          <span style={{ ...mutedTextStyle, fontSize: 13, fontWeight: 700 }}>Предмет</span>
-          <select value={selectedSubjectFilter} onChange={(event) => setSelectedSubjectFilter(event.target.value)}>
-            <option value="all">Все предметы</option>
+        <label className="portfolio-field">
+          <span>Предмет</span>
+          <select
+            value={selectedSubjectFilter}
+            onChange={(event) => setSelectedSubjectFilter(event.target.value)}
+            disabled={studentSubjectOptions.length <= 1}
+          >
+            {studentSubjectOptions.length === 0 && <option value="">Нет предметов</option>}
+            {studentSubjectOptions.length > 0 && (studentSubjectOptions.length > 1 || !selectedSubjectFilter) && (
+              <option value="">Выберите предмет</option>
+            )}
             {studentSubjectOptions.map((subject) => (
               <option key={subject.id} value={String(subject.id)}>{subject.name}</option>
             ))}
           </select>
         </label>
 
-        <label style={{ display: 'grid', gap: 5 }}>
-          <span style={{ ...mutedTextStyle, fontSize: 13, fontWeight: 700 }}>Месяц</span>
+        <label className="portfolio-field">
+          <span>Месяц / период</span>
           <input type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
         </label>
+
+        <button
+          type="button"
+          className="portfolio-primary-button"
+          title="Сформировать PDF"
+          onClick={handleOpenReport}
+          disabled={!selectedSubjectFilter}
+        >
+          Сформировать PDF
+        </button>
       </section>
 
-      <section className="metric-grid" style={{ gridTemplateColumns: isTablet ? undefined : 'repeat(5, minmax(0, 1fr))', gap: 10, marginBottom: 10 }}>
-        {metricCards.map(([label, value, color, icon]) => (
-          <article key={label} className="metric-card" style={{ minHeight: 68, padding: '12px 14px', borderRadius: 18, background: 'rgba(255,255,255,0.9)', borderColor: `${color}18` }}>
-            <span className="metric-icon" style={{ width: 38, height: 38, borderRadius: 14, background: `${color}14`, color, fontSize: 19 }}>{icon}</span>
-            <div>
-              <div className="metric-label" style={{ fontSize: 13 }}>{label}</div>
-              <div className="metric-value" style={{ fontSize: 26, lineHeight: 1.05 }}>{value}</div>
-            </div>
-          </article>
-        ))}
-      </section>
+      <div className="portfolio-content-viewport">
+        {subjectRequired && (
+          <p className="portfolio-notice">Выберите предмет для портфолио и PDF-отчёта. Отчёт всегда формируется по одному конкретному предмету.</p>
+        )}
 
-      <section
-        style={{
-          display: 'grid',
-          gridTemplateColumns: isTablet ? '1fr' : '1.34fr 0.86fr 1.1fr',
-          gap: 10,
-          marginBottom: 10,
-          alignItems: 'stretch',
-        }}
-      >
-        <article style={{ ...panelStyle, padding: 14, borderRadius: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', marginBottom: 8 }}>
-            <div>
-              <h3 style={{ fontSize: 19, marginBottom: 2 }}>Было / стало</h3>
-              <div style={{ ...mutedTextStyle, fontSize: 12 }}>
-                Сравнение {formatMonthLabel(previousMonthValue)} и {formatMonthLabel(selectedMonth)}.
-              </div>
-            </div>
-            <button type="button" title="Сформировать отчёт о прогрессе ученика" onClick={handleOpenReport} style={{ minWidth: 52, height: 36, padding: '0 14px', borderRadius: 999, background: '#2AABEE', boxShadow: 'none' }}>
-              PDF
-            </button>
-          </div>
-          <div style={{ border: '1px solid rgba(24,33,47,0.08)', borderRadius: 16, overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.9fr 0.8fr 1fr', gap: 8, padding: '8px 12px', color: '#687486', fontSize: 12, fontWeight: 800 }}>
-              <span>Показатель</span>
-              <span>{formatMonthLabel(previousMonthValue).replace(' г.', '')}</span>
-              <span>{formatMonthLabel(selectedMonth).replace(' г.', '')}</span>
-              <span>Изменение</span>
-            </div>
-            {comparisonRows.map((row) => (
-              <div key={row.label} style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.9fr 0.8fr 1fr', gap: 8, alignItems: 'center', padding: '8px 12px', borderTop: '1px solid rgba(24,33,47,0.08)', background: 'rgba(255,255,255,0.72)', fontSize: 13 }}>
-                <strong style={{ color: '#1f2a3b' }}>{row.label}</strong>
-                <span style={{ color: '#687486' }}>{row.before}</span>
-                <strong style={{ color: '#1f2a3b' }}>{row.after}</strong>
-                <strong style={{ color: row.delta.startsWith('+') ? '#4CAF50' : '#435066', fontSize: 12 }}>{row.delta}</strong>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article style={{ ...panelStyle, padding: 14, borderRadius: 18, display: 'grid', gap: 8 }}>
-          <h3 style={{ fontSize: 19, marginBottom: 0, justifySelf: 'start' }}>Роза компетенций</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(190px, 1fr) minmax(150px, 0.78fr)', gap: 10, alignItems: 'center' }}>
-            <div style={{ width: '100%', maxWidth: 250, justifySelf: 'center' }}>
-              <RadarChart values={competencyRows} />
-            </div>
-            <div style={{ display: 'grid', gap: 5, color: '#687486', fontSize: 12, lineHeight: 1.3 }}>
-              <div><strong style={{ color: '#435066' }}>ДЗ</strong> — качество домашних заданий.</div>
-              <div><strong style={{ color: '#435066' }}>Сам.</strong> — самостоятельность ученика.</div>
-              <div><strong style={{ color: '#435066' }}>Скорость</strong> — соблюдение дедлайнов.</div>
-              <div><strong style={{ color: '#435066' }}>Теория</strong> — понимание тем.</div>
-            </div>
-          </div>
-        </article>
-
-        <article style={{ ...panelStyle, padding: 14, borderRadius: 18 }}>
-          <h3 style={{ fontSize: 19, marginBottom: 8 }}>Динамика оценок</h3>
-          {gradeRows.length === 0 ? (
-            <p style={{ ...mutedTextStyle, marginBottom: 0 }}>За выбранный месяц пока нет оценок за занятия.</p>
-          ) : (
-            <GradeLineChart rows={gradeRows} />
-          )}
-        </article>
-      </section>
-
-      <section
-        style={{
-          display: 'grid',
-          gridTemplateColumns: isTablet ? '1fr' : '1.34fr 0.62fr 1.34fr',
-          gap: 10,
-          alignItems: 'stretch',
-        }}
-      >
-        <article style={{ ...panelStyle, padding: 14, borderRadius: 18 }}>
-          <h3 style={{ fontSize: 19, marginBottom: 10 }}>Посещаемость</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
-            {[
-              ['Проведено', currentStats.conductedLessons.length, '#4CAF50'],
-              ['Запланировано', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'scheduled').length, '#2AABEE'],
-              ['Отменено', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'cancelled').length, '#F44336'],
-            ].map(([label, value, color]) => (
-              <div key={label} style={{ padding: '8px 10px', borderRadius: 12, background: `${color}10` }}>
-                <strong style={{ color: String(color), fontSize: 20 }}>{String(value)}</strong>
-                <div style={{ ...mutedTextStyle, fontSize: 12 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, color: '#687486', fontSize: 12, fontWeight: 800, marginBottom: 6, textAlign: 'center' }}>
-            {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => <span key={day}>{day}</span>)}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
-            {calendarDays.map((day, index) => {
-              if (day === null) return <span key={`empty-${index}`} />;
-              const date = `${selectedMonth}-${String(day).padStart(2, '0')}`;
-              const dayLessons = monthLessons.filter((lesson) => lessonDate(lesson) === date);
-              const conducted = dayLessons.some((lesson) => lesson.conduct_status === 'conducted');
-              const cancelled = dayLessons.some((lesson) => lesson.conduct_status === 'cancelled');
-              const scheduled = dayLessons.some((lesson) => lesson.conduct_status === 'scheduled');
-              const color = conducted ? '#4CAF50' : cancelled ? '#F44336' : scheduled ? '#2AABEE' : 'rgba(23,32,51,0.06)';
-
-              return (
-                <span key={date} title={`${day}: ${dayLessons.length} занятий`} style={{ height: 30, borderRadius: 9, background: color, color: conducted || cancelled || scheduled ? '#fff' : '#435066', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 900 }}>
-                  {day}
-                </span>
-              );
-            })}
-          </div>
-        </article>
-
-        <article style={{ ...panelStyle, padding: 14, borderRadius: 18, display: 'grid', alignContent: 'start', gap: 10 }}>
-          <h3 style={{ fontSize: 19, marginBottom: 0 }}>Освоение тем</h3>
-          <p style={{ ...mutedTextStyle, fontSize: 13, lineHeight: 1.45, marginBottom: 0 }}>
-            Показываются только темы, которые реально использовались в занятиях или ДЗ за выбранный месяц.
-          </p>
-          {topicProgressRows.length === 0 ? (
-            <div style={{ display: 'grid', justifyItems: 'center', gap: 8, marginTop: 8, color: '#687486', textAlign: 'center' }}>
-              <span style={{ width: 58, height: 58, borderRadius: '50%', background: 'rgba(23,32,51,0.06)', display: 'grid', placeItems: 'center', fontSize: 28 }}>▤</span>
-              <p style={{ margin: 0, fontSize: 13 }}>За выбранный месяц пока нет тем с данными.</p>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gap: 8, maxHeight: 192, overflow: 'auto', paddingRight: 4 }}>
-              {topicProgressRows.map((row) => (
-                <div key={row.topic.id} style={{ display: 'grid', gap: 5, padding: 8, borderRadius: 12, background: 'rgba(23,32,51,0.035)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
-                    <strong>{row.topic.title}</strong>
-                    <strong style={{ color: '#2AABEE' }}>{formatPercent(row.progressPercent)}</strong>
-                  </div>
-                  <div style={{ height: 6, borderRadius: 999, background: 'rgba(23,32,51,0.08)', overflow: 'hidden' }}>
-                    <div style={{ width: `${row.progressPercent}%`, height: '100%', borderRadius: 999, background: '#4CAF50' }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
-
-        <article style={{ ...panelStyle, padding: 14, borderRadius: 18, display: 'grid', gap: 10 }}>
-          {[
-            { title: 'Сильные стороны', items: strengths, accent: '#4CAF50', icon: '✓' },
-            { title: 'Зоны роста', items: weaknesses, accent: '#F44336', icon: '↗' },
-            { title: 'Следующие шаги', items: nextSteps, accent: '#FF9800', icon: '◎' },
-          ].map((section) => (
-            <div key={section.title} style={{ display: 'grid', gridTemplateColumns: '30px 1fr', gap: 10, paddingBottom: 8, borderBottom: section.title === 'Следующие шаги' ? 'none' : '1px solid rgba(24,33,47,0.08)' }}>
-              <span style={{ width: 28, height: 28, borderRadius: '50%', background: `${section.accent}16`, color: section.accent, display: 'grid', placeItems: 'center', fontWeight: 900 }}>{section.icon}</span>
-              <div>
-                <h3 style={{ color: section.accent, fontSize: 17, marginBottom: 6 }}>{section.title}</h3>
-                <div style={{ display: 'grid', gap: 5 }}>
-                  {section.items.map((item) => (
-                    <div key={item} style={{ color: '#435066', lineHeight: 1.35, fontSize: 13 }}>• {item}</div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
-        </article>
-      </section>
-
-      {false && (
-        <>
-      <h1 className="page-heading">Портфолио</h1>
-      <section
-        className="toolbar-panel mentor-panel"
-        style={{
-          gridTemplateColumns: isTablet ? '1fr 1fr' : '1.2fr 1fr 1fr 0.9fr auto',
-          marginBottom: 12,
-        }}
-      >
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ ...mutedTextStyle, fontSize: 14 }}>Ученик</span>
-            <select value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
-              {activeStudents.map((student) => (
-                <option key={student.id} value={String(student.id)}>{student.full_name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ ...mutedTextStyle, fontSize: 14 }}>Предмет</span>
-            <select value={selectedSubjectFilter} onChange={(event) => setSelectedSubjectFilter(event.target.value)}>
-              <option value="all">Все предметы</option>
-              {studentRelations.map((relation) => {
-                const subject = subjectMap.get(relation.subject_id);
-                return <option key={relation.id} value={String(relation.subject_id)}>{relation.subject_name ?? subject?.name ?? `Предмет #${relation.subject_id}`}</option>;
-              })}
-            </select>
-          </label>
-
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ ...mutedTextStyle, fontSize: 14 }}>Месяц</span>
-            <input type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
-          </label>
-          <button type="button" title="Сформировать отчёт о прогрессе ученика" onClick={handleOpenReport} style={{ alignSelf: 'end', minWidth: 52, height: 44, padding: '0 16px', borderRadius: 14, background: '#2AABEE', boxShadow: 'none' }}>
-            PDF
-          </button>
-      </section>
-
-      <section className="metric-grid" style={{ gridTemplateColumns: isTablet ? undefined : 'repeat(5, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
-        {[
-          ['Общий прогресс', formatPercent(currentStats.overallProgress), '#2AABEE', '↗'],
-          ['Оценка занятий', formatAverage(currentStats.averageLessonGrade), '#4CAF50', '★'],
-          ['Оценка ДЗ', formatAverage(currentStats.averageAssignmentGrade), '#2AABEE', '✓'],
-          ['Выполнено ДЗ', `${currentStats.completedAssignments.length}/${currentStats.assignments.length}`, '#9C27B0', '▣'],
-          ['Посещаемость', formatPercent(currentStats.attendancePercent), '#2AABEE', '●'],
-        ].map(([label, value, color, icon]) => (
-          <article key={label} className="metric-card" style={{ minHeight: 82, padding: '14px 16px', background: `linear-gradient(135deg, ${color}10, rgba(255,255,255,0.92))`, borderColor: `${color}24` }}>
-            <span className="metric-icon" style={{ width: 44, height: 44, borderRadius: 16, background: `${color}14`, color }}>{icon}</span>
-            <div>
-              <div className="metric-label">{label}</div>
-              <div className="metric-value">{value}</div>
-            </div>
-          </article>
-        ))}
-      </section>
-
-      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '1fr 0.92fr', gap: 12, marginBottom: 12 }}>
-        <article style={panelStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-            <div>
-              <h3 style={{ fontSize: 19, marginBottom: 4 }}>Было / стало</h3>
-              <div style={mutedTextStyle}>
-                Сравнение {formatMonthLabel(previousMonthValue)} и {formatMonthLabel(selectedMonth)}.
-              </div>
-            </div>
-          </div>
-          <div style={{ display: 'grid', gap: 8 }}>
-            {comparisonRows.map((row) => (
-              <div key={row.label} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 88px 88px 120px', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 14, background: 'rgba(23,32,51,0.03)', border: '1px solid rgba(24,33,47,0.06)' }}>
-                <strong style={{ color: '#1f2a3b' }}>{row.label}</strong>
-                <span style={mutedTextStyle}>{row.before}</span>
-                <span style={{ color: '#1f2a3b', fontWeight: 800 }}>{row.after}</span>
-                <span style={{ color: row.delta.startsWith('+') ? '#4CAF50' : '#687486', fontWeight: 800 }}>{row.delta}</span>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article style={{ ...panelStyle, display: 'grid', placeItems: 'center', padding: 14 }}>
-          <div style={{ width: '100%', display: 'grid', justifyItems: 'center', gap: 8 }}>
-            <h3 style={{ fontSize: 19, marginBottom: 0, justifySelf: 'start' }}>Роза компетенций</h3>
-            <RadarChart values={competencyRows} />
-            <div style={{ ...mutedTextStyle, textAlign: 'center' }}>
-              ДЗ, самостоятельность, скорость и теория считаются по текущим учебным данным.
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '0.95fr 1.05fr', gap: 12, marginBottom: 12 }}>
-        <article style={panelStyle}>
-          <h3 style={{ fontSize: 19, marginBottom: 10 }}>Динамика оценок</h3>
-          {gradeRows.length === 0 ? (
-            <p style={{ ...mutedTextStyle, marginBottom: 0 }}>За выбранный месяц пока нет оценок за занятия.</p>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gradeRows.length}, minmax(22px, 1fr))`, gap: 8, alignItems: 'end', minHeight: 122 }}>
-              {gradeRows.map((row, index) => (
-                <div key={`${row.label}-${index}`} title={`${row.label}: ${row.value}`} style={{ display: 'grid', gap: 6 }}>
-                  <div style={{ height: `${Math.max(10, (row.value / 5) * 96)}px`, borderRadius: '12px 12px 6px 6px', background: 'linear-gradient(180deg, #2AABEE 0%, #2AABEE 100%)' }} />
-                  <div style={{ color: '#687486', fontSize: 11, textAlign: 'center' }}>{row.label}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
-
-        <article style={panelStyle}>
-          <h3 style={{ fontSize: 19, marginBottom: 10 }}>Посещаемость</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
-            {[
-              ['Проведено', currentStats.conductedLessons.length, '#4CAF50'],
-              ['Запланировано', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'scheduled').length, '#2AABEE'],
-              ['Отменено', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'cancelled').length, '#F44336'],
-            ].map(([label, value, color]) => (
-              <div key={label} style={{ padding: 10, borderRadius: 14, background: `${color}12` }}>
-                <div style={{ color: String(color), fontWeight: 900, fontSize: 20 }}>{String(value)}</div>
-                <div style={{ ...mutedTextStyle, fontSize: 13 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
-            {Array.from({ length: monthRange(selectedMonth).end.getDate() }, (_, index) => {
-              const date = `${selectedMonth}-${String(index + 1).padStart(2, '0')}`;
-              const dayLessons = monthLessons.filter((lesson) => lessonDate(lesson) === date);
-              const conducted = dayLessons.some((lesson) => lesson.conduct_status === 'conducted');
-              const cancelled = dayLessons.some((lesson) => lesson.conduct_status === 'cancelled');
-              const scheduled = dayLessons.some((lesson) => lesson.conduct_status === 'scheduled');
-              const color = conducted ? '#4CAF50' : cancelled ? '#F44336' : scheduled ? '#2AABEE' : 'rgba(23,32,51,0.08)';
-
-              return (
-                <span key={date} title={`${index + 1}: ${dayLessons.length} зан.`} style={{ height: 28, borderRadius: 9, background: color, color: conducted || cancelled || scheduled ? '#fff' : '#687486', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800 }}>
-                  {index + 1}
-                </span>
-              );
-            })}
-          </div>
-        </article>
-      </section>
-
-      <section style={{ ...panelStyle, marginBottom: 12 }}>
-        <div style={{ marginBottom: 12 }}>
-          <h3 style={{ fontSize: 19, marginBottom: 4 }}>Освоение тем</h3>
-          <div style={mutedTextStyle}>
-            Показываются только темы, которые реально использовались в занятиях или ДЗ за выбранный месяц.
+        <section className="portfolio-student-card" style={panelStyle}>
+        {studentAvatarUrl ? (
+          <img className="portfolio-avatar" src={studentAvatarUrl} alt="" />
+        ) : (
+          <div className="portfolio-avatar-fallback">{getInitials(selectedStudent.full_name) || 'M'}</div>
+        )}
+        <div className="portfolio-student-title">
+          <h2>{selectedStudent.full_name}</h2>
+          <div className="portfolio-meta-row">
+            <span className="portfolio-chip">{studentClassLabel}</span>
+            <span className="portfolio-chip">Предмет: <strong>{selectedSubjectLabel}</strong></span>
           </div>
         </div>
-
-        {topicProgressRows.length === 0 ? (
-          <p style={{ ...mutedTextStyle, marginBottom: 0 }}>За выбранный месяц пока нет тем с данными.</p>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-            {topicProgressRows.map((row) => (
-              <div key={row.topic.id} style={{ padding: 12, borderRadius: 16, border: '1px solid rgba(24,33,47,0.08)', background: 'rgba(23,32,51,0.03)', display: 'grid', gap: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontWeight: 800, color: '#1f2a3b' }}>{row.topic.title}</div>
-                    <div style={{ ...mutedTextStyle, marginTop: 4 }}>{row.topic.description || 'Описание темы не заполнено'}</div>
-                  </div>
-                  <strong style={{ color: '#2AABEE' }}>{formatPercent(row.progressPercent)}</strong>
-                </div>
-                <div style={{ height: 8, borderRadius: 999, background: 'rgba(23,32,51,0.08)', overflow: 'hidden' }}>
-                  <div style={{ width: `${row.progressPercent}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #4CAF50 0%, #4CAF50 100%)' }} />
-                </div>
-                <div style={{ color: '#435066', fontSize: 13 }}>
-                  Занятий: {row.lessonCount} • ДЗ: {row.completedAssignments}/{row.assignmentCount} • Средняя: {formatAverage(row.averageGrade)}
-                </div>
-              </div>
-            ))}
+        <div className="portfolio-progress-summary">
+          <DonutChart value={currentStats.overallProgress} size={92} stroke={12} compact />
+          <div>
+            <h3>Общий прогресс</h3>
+            <p>Сводный показатель по оценкам, ДЗ, посещаемости и темам.</p>
           </div>
-        )}
-      </section>
+        </div>
+        </section>
 
-      <section style={{ display: 'grid', gridTemplateColumns: isTablet ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
+        <section className="portfolio-kpi-grid">
+        {kpiCards.map((card) => {
+          const tone = deltaTone(card.delta);
+          return (
+            <article key={card.label} className="portfolio-kpi-card">
+              <div className="portfolio-kpi-head">
+                <span className="portfolio-icon-box" style={{ color: card.color, background: card.background }}>{card.icon}</span>
+                <div className="portfolio-kpi-label">{card.label}</div>
+              </div>
+              <div className="portfolio-kpi-value-row">
+                <strong className="portfolio-kpi-value">{card.value}</strong>
+                <span className={`portfolio-delta portfolio-delta-${tone}`}>{card.delta}</span>
+              </div>
+            </article>
+          );
+        })}
+        </section>
+
+        <section className="portfolio-analytics-grid">
+        <article className="portfolio-radar-card" style={panelStyle}>
+          <div className="portfolio-section-header">
+            <h3>Роза компетенций</h3>
+          </div>
+          <div className="portfolio-radar-wrap">
+            <RadarChart values={competencyRows} />
+          </div>
+        </article>
+
+        <article style={panelStyle}>
+          <div className="portfolio-section-header">
+            <h3>Динамика прогресса</h3>
+          </div>
+          {analyticsReady ? (
+            <ProgressLineChart rows={progressRows} />
+          ) : (
+            <div className="portfolio-empty">После выбора предмета и появления занятий здесь будет динамика среднего балла, ДЗ и общего прогресса.</div>
+          )}
+        </article>
+        </section>
+
+        <section className="portfolio-lower-grid">
+        <article style={panelStyle}>
+          <div className="portfolio-section-header">
+            <h3>Пройденные темы</h3>
+            <span>Всего пройдено: {topicProgressRows.length} тем</span>
+          </div>
+          {topicProgressRows.length === 0 ? (
+            <div className="portfolio-empty">За выбранный период пока нет тем с данными.</div>
+          ) : (
+            <div className="portfolio-topic-list">
+              <div className="portfolio-topic-table-head">
+                <span>Тема</span>
+                <span>Доля</span>
+                <span style={{ textAlign: 'right' }}>Количество</span>
+              </div>
+              {topicProgressRows.map((row) => {
+                const share = (row.activityCount / topicActivityMax) * 100;
+                return (
+                  <div key={row.topic.id} className="portfolio-topic-row">
+                    <div>
+                      <div className="portfolio-topic-title">{row.topic.title}</div>
+                      <div className="portfolio-topic-meta">Занятий: {row.lessonCount} · ДЗ: {row.completedAssignments}/{row.assignmentCount}</div>
+                    </div>
+                    <div className="portfolio-progress-track">
+                      <div className="portfolio-progress-fill" style={{ width: `${share}%`, background: topicBarColor(row.progressPercent) }} />
+                    </div>
+                    <div className="portfolio-topic-count">{row.activityCount}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </article>
+
+        <article style={panelStyle}>
+          <div className="portfolio-section-header">
+            <h3>Посещаемость</h3>
+          </div>
+          <AttendanceCalendar cells={calendarCells} month={selectedMonth} />
+        </article>
+        </section>
+
+        <section className="portfolio-insights-grid">
         {[
-          { title: 'Сильные стороны', items: strengths, accent: '#4CAF50' },
-          { title: 'Зоны роста', items: weaknesses, accent: '#F44336' },
-          { title: 'Следующие шаги', items: nextSteps, accent: '#FF9800' },
+          { title: 'Сильные стороны', items: strengths, accent: COLORS.success, bg: '#F1FBF2', icon: '★' },
+          { title: 'Зоны роста', items: growthZones, accent: COLORS.warning, bg: '#FFF8EE', icon: '!' },
+          { title: 'Рекомендации', items: recommendations, accent: COLORS.primary, bg: '#EFF9FF', icon: '✓' },
         ].map((section) => (
-          <article key={section.title} style={panelStyle}>
-            <h3 style={{ color: section.accent, fontSize: 19, marginBottom: 10 }}>{section.title}</h3>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {section.items.map((item) => (
-                <div key={item} style={{ color: '#435066', lineHeight: 1.4, fontSize: 14 }}>{item}</div>
-              ))}
+          <article key={section.title} className="portfolio-insight-card" style={panelStyle}>
+            <span className="portfolio-icon-box" style={{ color: section.accent, background: section.bg }}>{section.icon}</span>
+            <div>
+              <h3 style={{ color: section.accent }}>{section.title}</h3>
+              <div className="portfolio-insight-list">
+                {section.items.map((item) => (
+                  <div key={item}>
+                    <i style={{ background: section.accent }} />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </article>
         ))}
-      </section>
+        </section>
 
-        </>
-      )}
+        <section className="portfolio-comment-card" style={panelStyle}>
+          <span className="portfolio-icon-box" style={{ color: COLORS.primary, background: '#EFF9FF' }}>□</span>
+          <div>
+            <h3>Комментарий преподавателя</h3>
+            <textarea
+              value={reportComment}
+              onChange={(event) => setReportComment(event.target.value)}
+              placeholder="Например: ученик стал увереннее решать задачи, но стоит закрепить теорию и больше практиковать задания повышенной сложности."
+              rows={4}
+              maxLength={360}
+            />
+          </div>
+        </section>
+      </div>
 
       {reportOpen && (
-        <div onClick={() => setReportOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.46)', display: 'grid', placeItems: 'center', padding: 12, zIndex: 50 }}>
+        <div className="portfolio-report-modal" onClick={() => setReportOpen(false)}>
           <div className="portfolio-report-shell" onClick={(event) => event.stopPropagation()}>
             <div className="portfolio-report-actions portfolio-print-hidden">
-              <div style={{ color: '#666', fontSize: 13, fontWeight: 800 }}>
-                PDF A4 portrait · {selectedSubjectLabel}
+              <div style={{ color: COLORS.secondary, fontSize: 13, fontWeight: 850 }}>
+                PDF A4 · {selectedStudent.full_name} · {selectedSubjectLabel}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button" title="Сохранить отчёт в PDF" onClick={handleSaveReportPdf} disabled={pdfSaving} style={{ minWidth: 52, height: 42, padding: '0 14px', borderRadius: 999, background: '#2AABEE', boxShadow: 'none', alignSelf: 'start' }}>{pdfSaving ? '...' : 'PDF'}</button>
-                <button type="button" title="Закрыть" onClick={() => setReportOpen(false)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#172033', boxShadow: 'none', alignSelf: 'start' }}>×</button>
+                <button type="button" title="Скачать PDF" onClick={handleSaveReportPdf} disabled={pdfSaving} className="modal-primary" style={{ minWidth: 130 }}>
+                  {pdfSaving ? 'Сохраняем...' : 'Скачать PDF'}
+                </button>
+                <button type="button" title="Закрыть" onClick={() => setReportOpen(false)} className="modal-close">
+                  ×
+                </button>
               </div>
             </div>
 
             <div ref={reportRef} className="report-a4">
               <header className="report-header">
                 <div>
-                  <div className="report-logo"><span>M</span><strong>Mentor App</strong></div>
+                  <div className="report-logo">
+                    <span className="report-logo-icon">M</span>
+                    <strong>mentor<small>app</small></strong>
+                  </div>
                   <h2 className="report-title">Отчёт о прогрессе ученика</h2>
                 </div>
-                <div className="report-date">Дата формирования: {reportGeneratedDate}</div>
+                <div className="report-period">
+                  <span>Период отчёта:</span>
+                  {periodLabel}
+                </div>
               </header>
 
-              <section className="report-top">
-                <article className="report-card report-student-card">
-                  {studentAvatarUrl ? (
-                    <img className="report-avatar" src={studentAvatarUrl} alt="" />
-                  ) : (
-                    <div className="report-avatar-fallback">{getInitials(selectedStudent.full_name) || 'M'}</div>
-                  )}
-                  <div>
-                    <h3 className="report-student-name">{selectedStudent.full_name}</h3>
-                    <div className="report-student-meta">
-                      <div><strong>Предмет:</strong> {selectedSubjectLabel}</div>
-                      <div><strong>Преподаватель:</strong> {selectedTeacherLabel}</div>
-                    </div>
+              <section className="report-card report-student-card">
+                {studentAvatarUrl ? (
+                  <img className="report-avatar" src={studentAvatarUrl} alt="" />
+                ) : (
+                  <div className="report-avatar-fallback">{getInitials(selectedStudent.full_name) || 'M'}</div>
+                )}
+                <div>
+                  <h3 className="report-student-name">{selectedStudent.full_name}</h3>
+                  <div className="report-student-meta">
+                    <span>Предмет: <strong>{selectedSubjectLabel}</strong></span>
+                    <span>{studentClassLabel}</span>
                   </div>
-                </article>
-
-                <div className="report-kpi-grid">
-                  {reportKpiCards.map((card) => (
-                    <article key={card.label} className="report-kpi-card">
-                      <div className="report-kpi-top">
-                        <div className="report-kpi-label">{card.label}</div>
-                        <span className="report-kpi-icon" style={{ color: card.color, background: card.bg }}>{card.icon}</span>
-                      </div>
-                      <div>
-                        <div className="report-kpi-value">{card.value}</div>
-                        <div
-                          className="report-delta"
-                          style={{
-                            color: card.delta.startsWith('↓') ? '#F44336' : card.delta === 'нет данных' ? '#666' : '#4CAF50',
-                            background: card.delta.startsWith('↓') ? '#FFF2F1' : card.delta === 'нет данных' ? '#F5F7FB' : '#F1FBF2',
-                          }}
-                        >
-                          {card.delta}
-                        </div>
-                      </div>
-                    </article>
-                  ))}
+                </div>
+                <div className="report-progress">
+                  <DonutChart value={currentStats.overallProgress} size={64} stroke={9} compact />
+                  <div>
+                    <h3>Общий прогресс</h3>
+                    <p>по сравнению с прошлым периодом</p>
+                  </div>
                 </div>
               </section>
 
-              <section className="report-main-grid">
-                <article className="report-card report-section">
-                  <h3 className="report-section-title">Было / стало</h3>
-                  <div className="report-comparison">
-                    <div className="report-comparison-row">
-                      <span>Показатель</span>
-                      <span>Прошлый</span>
-                      <span>Текущий</span>
-                      <span>Изменение</span>
-                    </div>
-                    {comparisonRows.map((row) => (
-                      <div key={row.label} className="report-comparison-row">
-                        <strong>{row.label}</strong>
-                        <span className="report-muted">{row.before}</span>
-                        <strong>{row.after}</strong>
-                        <strong style={{ color: row.delta.startsWith('+') ? '#4CAF50' : row.delta.startsWith('-') ? '#F44336' : '#666' }}>{row.delta}</strong>
+              <section className="report-kpi-grid">
+                {kpiCards.map((card) => {
+                  const tone = deltaTone(card.delta);
+                  return (
+                    <article key={card.label} className="report-card report-kpi-card">
+                      <div className="report-kpi-head">
+                        <span className="report-icon-box" style={{ color: card.color, background: card.background }}>{card.icon}</span>
+                        <span className="report-kpi-label">{card.label}</span>
                       </div>
-                    ))}
-                  </div>
-                </article>
+                      <div>
+                        <div className="report-kpi-value">{card.value}</div>
+                        <div className={`report-delta portfolio-delta-${tone}`}>{card.delta}</div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </section>
 
+              <section className="report-analytics-grid">
                 <article className="report-card report-section">
                   <h3 className="report-section-title">Роза компетенций</h3>
                   <div className="report-radar-wrap">
                     <RadarChart values={competencyRows} variant="report" />
-                    <div className="report-legend">
-                      <div><strong>ДЗ</strong> — качество домашних заданий.</div>
-                      <div><strong>Сам.</strong> — самостоятельность ученика.</div>
-                      <div><strong>Скорость</strong> — соблюдение дедлайнов.</div>
-                      <div><strong>Теория</strong> — понимание тем.</div>
-                      <div style={{ display: 'grid', gap: 4, marginTop: 4 }}>
-                        <span style={{ color: '#2AABEE' }}>● 80–100% высокий уровень</span>
-                        <span style={{ color: '#4CAF50' }}>● 60–79% хороший уровень</span>
-                        <span style={{ color: '#FF9800' }}>● 40–59% средний уровень</span>
-                        <span style={{ color: '#F44336' }}>● 0–39% зона роста</span>
-                      </div>
-                    </div>
                   </div>
                 </article>
 
-                <article className="report-card report-section report-chart-card">
-                  <h3 className="report-section-title">Динамика оценок</h3>
-                  {gradeRows.length === 0 ? (
-                    <p className="report-muted" style={{ margin: 0 }}>Пока нет оценок за занятия.</p>
-                  ) : (
-                    <GradeLineChart rows={gradeRows} variant="report" />
-                  )}
+                <article className="report-card report-section">
+                  <h3 className="report-section-title">Динамика прогресса</h3>
+                  <ProgressLineChart rows={progressRows} variant="report" />
                 </article>
               </section>
 
-              <section className="report-lower-grid">
+              <section className="report-middle-grid">
                 <article className="report-card report-section">
-                  <h3 className="report-section-title">Посещаемость</h3>
-                  <div className="report-calendar-stats">
-                    {[
-                      ['Проведено', currentStats.conductedLessons.length, '#4CAF50'],
-                      ['Запланировано', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'scheduled').length, '#2AABEE'],
-                      ['Отменено', currentStats.lessons.filter((lesson) => lesson.conduct_status === 'cancelled').length, '#F44336'],
-                    ].map(([label, value, color]) => (
-                      <div key={label} style={{ padding: '7px 8px', borderRadius: 13, background: color === '#4CAF50' ? '#F1FBF2' : color === '#2AABEE' ? '#EFF9FF' : '#FFF2F1' }}>
-                        <strong style={{ color: String(color), fontSize: 16 }}>{String(value)}</strong>
-                        <div className="report-muted" style={{ fontSize: 9.5 }}>{label}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="report-calendar-grid" style={{ color: '#666', fontSize: 9, fontWeight: 900, marginBottom: 4, textAlign: 'center' }}>
-                    {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => <span key={day}>{day}</span>)}
-                  </div>
-                  <div className="report-calendar-grid">
-                    {calendarDays.map((day, index) => {
-                      if (day === null) return <span key={`report-empty-${index}`} />;
-                      const date = `${selectedMonth}-${String(day).padStart(2, '0')}`;
-                      const dayLessons = monthLessons.filter((lesson) => lessonDate(lesson) === date);
-                      const conducted = dayLessons.some((lesson) => lesson.conduct_status === 'conducted');
-                      const cancelled = dayLessons.some((lesson) => lesson.conduct_status === 'cancelled');
-                      const scheduled = dayLessons.some((lesson) => lesson.conduct_status === 'scheduled');
-                      const color = conducted ? '#4CAF50' : cancelled ? '#F44336' : scheduled ? '#2AABEE' : '#EEF2F7';
-
-                      return (
-                        <span key={date} className="report-calendar-day" title={`${day}: ${dayLessons.length} занятий`} style={{ background: color, color: conducted || cancelled || scheduled ? '#fff' : '#1A1A1A' }}>
-                          {day}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </article>
-
-                <article className="report-card report-section">
-                  <h3 className="report-section-title">Освоение тем</h3>
+                  <h3 className="report-section-title">
+                    Пройденные темы
+                    <span>Всего пройдено: {topicProgressRows.length} тем</span>
+                  </h3>
                   {topicProgressRows.length === 0 ? (
-                    <p className="report-muted" style={{ margin: 0 }}>Пока нет тем с данными.</p>
+                    <p style={{ margin: 0, color: COLORS.secondary }}>Пока нет тем с данными.</p>
                   ) : (
                     <div className="report-topic-list">
-                      {topicProgressRows.slice(0, 5).map((row) => (
-                        <div key={row.topic.id} className="report-topic-row">
-                          <div className="report-topic-head">
-                            <span>{row.topic.title}</span>
-                            <span>{formatPercent(row.progressPercent)}</span>
+                      {topicProgressRows.slice(0, 5).map((row) => {
+                        const share = (row.activityCount / topicActivityMax) * 100;
+                        return (
+                          <div key={row.topic.id} className="report-topic-row">
+                            <div className="report-topic-title">{row.topic.title}</div>
+                            <div className="portfolio-progress-track">
+                              <div className="portfolio-progress-fill" style={{ width: `${share}%`, background: topicBarColor(row.progressPercent) }} />
+                            </div>
+                            <div className="report-topic-count">{row.activityCount}</div>
                           </div>
-                          <div className="report-progress-track">
-                            <div className="report-progress-fill" style={{ width: `${row.progressPercent}%`, background: topicBarColor(row.progressPercent) }} />
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </article>
 
+                <article className="report-card report-section">
+                  <h3 className="report-section-title">Посещаемость</h3>
+                  <AttendanceCalendar cells={calendarCells} month={selectedMonth} compact />
+                </article>
               </section>
 
               <section className="report-insights-grid">
                 {[
-                  { title: 'Сильные стороны', items: strengths.slice(0, 3), accent: '#4CAF50', bg: '#F1FBF2', icon: '✓' },
-                  { title: 'Зоны роста', items: weaknesses.slice(0, 3), accent: '#F44336', bg: '#FFF2F1', icon: '↗' },
-                  { title: 'Следующие шаги', items: nextSteps.slice(0, 3), accent: '#FF9800', bg: '#FFF8EE', icon: '◎' },
+                  { title: 'Сильные стороны', items: strengths.slice(0, 3), accent: COLORS.success, bg: '#F1FBF2', icon: '★' },
+                  { title: 'Зоны роста', items: growthZones.slice(0, 3), accent: COLORS.warning, bg: '#FFF8EE', icon: '!' },
+                  { title: 'Рекомендации', items: recommendations.slice(0, 3), accent: COLORS.primary, bg: '#EFF9FF', icon: '✓' },
                 ].map((section) => (
                   <article key={section.title} className="report-card report-insight-card">
-                    <h3 className="report-insight-title" style={{ color: section.accent }}>
-                      <span className="report-insight-icon" style={{ background: section.bg }}>{section.icon}</span>
-                      {section.title}
-                    </h3>
-                    <div className="report-insight-list">
-                      {section.items.map((item) => (
-                        <div key={item}>• {item}</div>
-                      ))}
+                    <span className="report-icon-box" style={{ color: section.accent, background: section.bg }}>{section.icon}</span>
+                    <div>
+                      <h3 style={{ color: section.accent }}>{section.title}</h3>
+                      <div className="report-insight-list">
+                        {section.items.map((item) => (
+                          <div key={item}>• {item}</div>
+                        ))}
+                      </div>
                     </div>
                   </article>
                 ))}
               </section>
 
-              <article className="report-card report-comment-card">
-                {reportComment.trim() || 'Комментарий преподавателя появится здесь после заполнения перед сохранением отчёта.'}
-              </article>
+              {reportComment.trim() && (
+                <article className="report-card report-comment-card">
+                  <span className="report-icon-box" style={{ color: COLORS.primary, background: '#DFF2FF' }}>□</span>
+                  <div>
+                    <h3>Комментарий преподавателя</h3>
+                    <p>{reportComment.trim()}</p>
+                  </div>
+                </article>
+              )}
             </div>
 
             <label className="portfolio-report-comment-editor portfolio-print-hidden">
               Комментарий преподавателя
-              <textarea value={reportComment} onChange={(event) => setReportComment(event.target.value)} placeholder="Например: ученик стал увереннее решать квадратные уравнения, но стоит закрепить задачи на проценты." rows={3} maxLength={260} />
+              <textarea
+                value={reportComment}
+                onChange={(event) => setReportComment(event.target.value)}
+                placeholder="Например: ученик показывает устойчивый прогресс, хорошо выполняет домашние задания и стал увереннее решать задачи."
+                rows={3}
+                maxLength={360}
+              />
             </label>
           </div>
         </div>

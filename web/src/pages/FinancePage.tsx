@@ -690,7 +690,7 @@ export default function FinancePage() {
     }
 
     return rows;
-  }, [lessons]);
+  }, [lessons, relationMap]);
 
   const maxDailyIncome = Math.max(...dailyIncomeRows.map((row) => row.value), 1);
   const maxAverageWeekIncome = Math.max(...averageWeekRows.map((row) => row.value), 1);
@@ -867,7 +867,7 @@ export default function FinancePage() {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
+    <div style={{ display: 'grid', gap: 12, height: isMobile ? 'auto' : '100%', minHeight: 0, overflowY: isMobile ? 'visible' : 'auto', alignContent: 'start', scrollbarWidth: 'thin' }}>
       <h1 className="page-heading">Финансы</h1>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         {[
@@ -922,22 +922,7 @@ export default function FinancePage() {
             onClick={() =>
               setFinanceAnchorDate((current) => shiftFinancePeriod(current, financePeriod, -1))
             }
-            style={{
-              width: 42,
-              height: 42,
-              padding: 0,
-              borderRadius: 14,
-              background: '#fff',
-              color: '#172033',
-              border: '1px solid rgba(31,42,59,0.1)',
-              boxShadow: 'none',
-              fontSize: 24,
-              lineHeight: 1,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flex: '0 0 42px',
-            }}
+            className="icon-button icon-button-ghost"
           >
             ‹
           </button>
@@ -947,22 +932,7 @@ export default function FinancePage() {
             onClick={() =>
               setFinanceAnchorDate((current) => shiftFinancePeriod(current, financePeriod, 1))
             }
-            style={{
-              width: 42,
-              height: 42,
-              padding: 0,
-              borderRadius: 14,
-              background: '#fff',
-              color: '#172033',
-              border: '1px solid rgba(31,42,59,0.1)',
-              boxShadow: 'none',
-              fontSize: 24,
-              lineHeight: 1,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flex: '0 0 42px',
-            }}
+            className="icon-button icon-button-ghost"
           >
             ›
           </button>
@@ -1499,16 +1469,7 @@ export default function FinancePage() {
                             title="Подтвердить оплату"
                             onClick={() => handlePaymentDecision(row.id, true)}
                             disabled={processingPaymentId === row.id}
-                            style={{
-                              minWidth: 30,
-                              width: 30,
-                              height: 30,
-                              padding: 0,
-                              borderRadius: 10,
-                              background: '#4CAF50',
-                              boxShadow: 'none',
-                              fontSize: 14,
-                            }}
+                            className="icon-button icon-button-compact icon-button-success"
                           >
                             ✓
                           </button>
@@ -1517,16 +1478,7 @@ export default function FinancePage() {
                             title="Отклонить оплату"
                             onClick={() => handlePaymentDecision(row.id, false)}
                             disabled={processingPaymentId === row.id}
-                            style={{
-                              minWidth: 30,
-                              width: 30,
-                              height: 30,
-                              padding: 0,
-                              borderRadius: 10,
-                              background: '#F44336',
-                              boxShadow: 'none',
-                              fontSize: 14,
-                            }}
+                            className="icon-button icon-button-compact icon-button-danger"
                           >
                             ×
                           </button>
@@ -1743,7 +1695,7 @@ export default function FinancePage() {
                     type="button"
                     title="Создать абонемент"
                     onClick={handleCreateNewAbonement}
-                    style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#2AABEE', boxShadow: 'none', fontSize: 20, display: 'inline-grid', placeItems: 'center' }}
+                    className="add-trigger"
                   >
                     +
                   </button>
@@ -1850,38 +1802,21 @@ export default function FinancePage() {
       {createModalOpen && (
         <div
           onClick={() => setCreateModalOpen(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.48)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 20,
-            zIndex: 40,
-          }}
+          className="modal-overlay"
         >
           <div
             onClick={(event) => event.stopPropagation()}
-            style={{
-              width: 'min(560px, 100%)',
-              background: '#fff',
-              borderRadius: 24,
-              border: '1px solid rgba(24,33,47,0.08)',
-              boxShadow: '0 30px 80px rgba(15,23,42,0.18)',
-              padding: isMobile ? 18 : 24,
-              display: 'grid',
-              gap: 14,
-            }}
+            className="app-modal"
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+            <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: 22, marginBottom: 6 }}>Создать абонемент</h3>
+                <h3 className="modal-title">Создать абонемент</h3>
               </div>
               <button
                 type="button"
                 title="Закрыть"
                 onClick={() => setCreateModalOpen(false)}
-                style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 22 }}
+                className="modal-close"
               >
                 ×
               </button>
@@ -1931,14 +1866,14 @@ export default function FinancePage() {
               </label>
             </div>
 
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button type="button" onClick={handleSubmitCreateAbonement} disabled={savingAbonement}>
+            <div className="modal-actions">
+              <button type="button" onClick={handleSubmitCreateAbonement} disabled={savingAbonement} className="modal-primary">
                 {savingAbonement ? 'Сохраняем...' : 'Создать абонемент'}
               </button>
               <button
                 type="button"
                 onClick={() => setCreateModalOpen(false)}
-                style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                className="modal-secondary"
               >
                 Отмена
               </button>
@@ -1950,40 +1885,23 @@ export default function FinancePage() {
       {detailsModalOpen && selectedRelation && (
         <div
           onClick={() => setDetailsModalOpen(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.48)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 20,
-            zIndex: 40,
-          }}
+          className="modal-overlay"
         >
           <div
             onClick={(event) => event.stopPropagation()}
-            style={{
-              width: 'min(560px, 100%)',
-              background: '#fff',
-              borderRadius: 24,
-              border: '1px solid rgba(24,33,47,0.08)',
-              boxShadow: '0 30px 80px rgba(15,23,42,0.18)',
-              padding: isMobile ? 18 : 24,
-              display: 'grid',
-              gap: 14,
-            }}
+            className="app-modal"
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+            <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: 22, marginBottom: 6 }}>{selectedRelation.studentName}</h3>
-                <div style={{ color: '#687486', fontSize: 14 }}>{selectedRelation.subjectName}</div>
+                <h3 className="modal-title">{selectedRelation.studentName}</h3>
+                <div className="modal-subtitle">{selectedRelation.subjectName}</div>
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
                   title={editingAbonement ? 'Скрыть редактирование' : 'Редактировать абонемент'}
                   onClick={() => setEditingAbonement((current) => !current)}
-                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#2AABEE', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                  className="icon-button icon-button-primary"
                 >
                   ✎
                 </button>
@@ -1991,7 +1909,7 @@ export default function FinancePage() {
                   type="button"
                   title="Удалить абонемент"
                   onClick={handleDeleteAbonement}
-                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                  className="icon-button icon-button-danger"
                 >
                   🗑
                 </button>
@@ -2002,7 +1920,7 @@ export default function FinancePage() {
                     setDetailsModalOpen(false);
                     setEditingAbonement(false);
                   }}
-                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 22 }}
+                  className="modal-close"
                 >
                   ×
                 </button>
@@ -2075,8 +1993,8 @@ export default function FinancePage() {
             </div>
 
             {editingAbonement && (
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button type="button" onClick={handleSaveAbonementDetails} disabled={savingAbonement}>
+              <div className="modal-actions">
+                <button type="button" onClick={handleSaveAbonementDetails} disabled={savingAbonement} className="modal-primary">
                   {savingAbonement ? 'Сохраняем...' : 'Сохранить изменения'}
                 </button>
                 <button
@@ -2086,7 +2004,7 @@ export default function FinancePage() {
                     setEditLessons(String(selectedRelation.total));
                     setEditRate(String(selectedRelation.rate));
                   }}
-                  style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                  className="modal-secondary"
                 >
                   Отмена
                 </button>

@@ -6,7 +6,6 @@ import AssignmentsPage from '../pages/AssignmentsPage';
 import ContactsPage from '../pages/ContactsPage';
 import DashboardPage from '../pages/DashboardPage';
 import FinancePage from '../pages/FinancePage';
-import LevelsPage from '../pages/LevelsPage';
 import LoginPage from '../pages/LoginPage';
 import MaterialsPage from '../pages/MaterialsPage';
 import NotFoundPage from '../pages/NotFoundPage';
@@ -14,7 +13,6 @@ import PortfolioPage from '../pages/PortfolioPage';
 import RequestsPage from '../pages/RequestsPage';
 import SchedulePage from '../pages/SchedulePage';
 import StudentsPage from '../pages/StudentsPage';
-import SubjectsPage from '../pages/SubjectsPage';
 import TutorProfilePage from '../pages/TutorProfilePage';
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -38,12 +36,10 @@ export default function AppRouter() {
         <Route path="/schedule" element={<ProtectedLayout><SchedulePage /></ProtectedLayout>} />
         <Route path="/requests" element={<ProtectedLayout><RequestsPage /></ProtectedLayout>} />
         <Route path="/assignments" element={<ProtectedLayout><AssignmentsPage /></ProtectedLayout>} />
-        <Route path="/subjects" element={<ProtectedLayout><SubjectsPage /></ProtectedLayout>} />
         <Route path="/materials" element={<ProtectedLayout><MaterialsPage /></ProtectedLayout>} />
         <Route path="/finance" element={<ProtectedLayout><FinancePage /></ProtectedLayout>} />
         <Route path="/portfolio" element={<ProtectedLayout><PortfolioPage /></ProtectedLayout>} />
         <Route path="/profile" element={<ProtectedLayout><TutorProfilePage /></ProtectedLayout>} />
-        <Route path="/levels" element={<ProtectedLayout><LevelsPage /></ProtectedLayout>} />
 
         <Route path="*" element={<NotFoundPage />} />
         <Route path="" element={<Navigate to="/" replace />} />

@@ -251,34 +251,26 @@ export default function DashboardPage() {
 
   const activeLessons = useMemo(() => lessons.filter(isActiveLesson), [lessons]);
 
-  const todayLessons = useMemo(
-    () =>
-      activeLessons
-        .filter(
-          (lesson) =>
-            lessonDate(lesson) === today && ['scheduled', 'conducted'].includes(lesson.conduct_status)
-        )
-        .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
-        .map((lesson) => {
-          const relation = lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id) : undefined;
-          return {
-            lesson,
-            relation,
-            student: relation ? studentMap.get(relation.student_id) : undefined,
-            subject: relation ? subjectMap.get(relation.subject_id) : undefined,
-          };
-        }),
-    [activeLessons, relationMap, studentMap, subjectMap, today]
-  );
+  const todayLessons = activeLessons
+    .filter(
+      (lesson) =>
+        lessonDate(lesson) === today && ['scheduled', 'conducted'].includes(lesson.conduct_status)
+    )
+    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
+    .map((lesson) => {
+      const relation = lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id) : undefined;
+      return {
+        lesson,
+        relation,
+        student: relation ? studentMap.get(relation.student_id) : undefined,
+        subject: relation ? subjectMap.get(relation.subject_id) : undefined,
+      };
+    });
 
-  const weekLessons = useMemo(
-    () =>
-      activeLessons.filter((lesson) => {
-        const time = new Date(lesson.starts_at).getTime();
-        return time >= weekStart.getTime() && time <= weekEnd.getTime();
-      }),
-    [activeLessons, weekEnd, weekStart]
-  );
+  const weekLessons = activeLessons.filter((lesson) => {
+    const time = new Date(lesson.starts_at).getTime();
+    return time >= weekStart.getTime() && time <= weekEnd.getTime();
+  });
 
   const weekPaid = weekLessons
     .filter((lesson) => lesson.conduct_status === 'conducted' && lesson.payment_status === 'paid')
@@ -418,7 +410,7 @@ export default function DashboardPage() {
   }, [assignments, lessons, relationMap, studentMap, tutorStudents]);
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div style={{ display: 'grid', gap: 16, height: '100%', minHeight: 0, overflowY: 'auto', alignContent: 'start', scrollbarWidth: 'thin' }}>
       {loadWarning ? (
         <div
           style={{
