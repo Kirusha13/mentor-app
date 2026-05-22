@@ -1850,35 +1850,28 @@ export default function SchedulePage() {
           <div
             onClick={(event) => event.stopPropagation()}
             className="app-modal wide"
-            style={{ width: 'min(1040px, calc(100vw - 48px))' }}
+            style={{ width: 'min(1040px, calc(100vw - 48px))', padding: 18, gap: 12 }}
           >
             <div className="modal-header">
-              <div>
-                <div style={{ display: 'inline-flex', padding: '8px 12px', borderRadius: 999, background: '#2AABEE', color: '#fff', fontSize: 12, fontWeight: 900, marginBottom: 12 }}>
-                  Свободные слоты
-                </div>
-                <h3 className="modal-title">Создать свободные слоты</h3>
-                <p className="modal-subtitle">
-                  Выберите дни и задайте диапазоны времени. Система создаст слоты автоматически.
-                </p>
-              </div>
+              <h3 className="modal-title" style={{ marginBottom: 0 }}>Свободные слоты</h3>
               <button type="button" title="Закрыть" onClick={() => setIsSlotPlannerOpen(false)} className="modal-close">×</button>
             </div>
 
-            <div style={{ display: 'grid', gap: 18 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 220px', gap: 16, alignItems: 'end', padding: 14, borderRadius: 20, background: '#f8fafc', border: '1px solid rgba(31,42,59,0.08)' }}>
-                <div style={{ display: 'inline-flex', gap: 6, padding: 5, borderRadius: 16, background: '#fff', border: '1px solid rgba(31,42,59,0.1)', width: 'fit-content' }}>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 200px', gap: 12, alignItems: 'center', padding: 10, borderRadius: 16, background: '#f8fafc', border: '1px solid rgba(31,42,59,0.08)' }}>
+                <div style={{ display: 'inline-flex', gap: 4, padding: 4, borderRadius: 13, background: '#fff', border: '1px solid rgba(31,42,59,0.1)', width: 'fit-content' }}>
                   <button
                     type="button"
                     title="Текущая неделя"
                     onClick={() => setSlotWeekOffset(0)}
                     style={{
-                      height: 40,
-                      borderRadius: 13,
+                      height: 34,
+                      borderRadius: 10,
                       background: slotWeekOffset === 0 ? '#2AABEE' : 'transparent',
                       color: slotWeekOffset === 0 ? '#fff' : '#324055',
                       border: 'none',
                       boxShadow: slotWeekOffset === 0 ? '0 10px 22px rgba(42,171,238,0.22)' : 'none',
+                      fontSize: 13,
                     }}
                   >
                     Текущая неделя
@@ -1888,31 +1881,33 @@ export default function SchedulePage() {
                     title="Следующая неделя"
                     onClick={() => setSlotWeekOffset(1)}
                     style={{
-                      height: 40,
-                      borderRadius: 13,
+                      height: 34,
+                      borderRadius: 10,
                       background: slotWeekOffset === 1 ? '#2AABEE' : 'transparent',
                       color: slotWeekOffset === 1 ? '#fff' : '#324055',
                       border: 'none',
                       boxShadow: slotWeekOffset === 1 ? '0 10px 22px rgba(42,171,238,0.22)' : 'none',
+                      fontSize: 13,
                     }}
                   >
                     Следующая неделя
                   </button>
                 </div>
-                <label className="modal-field">
-                  Длительность слота
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#768294', fontWeight: 700 }}>
+                  <span style={{ whiteSpace: 'nowrap' }}>Длит. (мин)</span>
                   <input
                     type="number"
                     min="15"
                     step="15"
                     value={slotDurationMinutes}
                     onChange={(event) => setSlotDurationMinutes(event.target.value)}
-                    placeholder="60 мин"
+                    placeholder="60"
+                    style={{ minWidth: 0, flex: 1 }}
                   />
                 </label>
               </div>
 
-              <div style={{ display: 'grid', gap: 10 }}>
+              <div style={{ display: 'grid', gap: 6 }}>
                 {slotDrafts.map((draft, index) => {
                   const dayDate = addDays(slotPlannerWeekStart, index);
                   const enabled = draft.enabled;
@@ -1922,45 +1917,45 @@ export default function SchedulePage() {
                       className="slot-day-row"
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: 'var(--slot-day-row-columns, minmax(170px, 1fr) minmax(130px, 180px) minmax(130px, 180px))',
-                        gap: 12,
+                        gridTemplateColumns: 'var(--slot-day-row-columns, minmax(170px, 1fr) minmax(120px, 160px) minmax(120px, 160px))',
+                        gap: 10,
                         alignItems: 'center',
-                        padding: 14,
-                        borderRadius: 18,
+                        padding: 8,
+                        borderRadius: 14,
                         background: enabled ? '#eef6ff' : '#fff',
                         border: enabled ? '1px solid rgba(42,171,238,0.35)' : '1px solid rgba(31,42,59,0.1)',
                         boxShadow: enabled ? '0 12px 24px rgba(42,171,238,0.08)' : '0 8px 20px rgba(15,23,42,0.04)',
                       }}
                     >
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 900, color: '#1f2a3b', minWidth: 0 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, fontSize: 13, color: '#1f2a3b', minWidth: 0 }}>
                         <input
                           type="checkbox"
                           checked={draft.enabled}
                           onChange={(event) => handleSlotDraftChange(index, { enabled: event.target.checked })}
-                          style={{ width: 18, height: 18, flex: '0 0 auto' }}
+                          style={{ width: 16, height: 16, flex: '0 0 auto' }}
                         />
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {WEEK_DAYS[index]} • {formatDayShort(dayDate)}
                         </span>
                       </label>
-                      <label className="modal-field" style={{ gap: 6, fontSize: 13 }}>
-                        С
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <span style={{ fontSize: 13, color: '#768294', whiteSpace: 'nowrap', flexShrink: 0 }}>С</span>
                         <input
                           type="time"
                           value={draft.start}
                           disabled={!draft.enabled}
                           onChange={(event) => handleSlotDraftChange(index, { start: event.target.value })}
-                          style={{ background: draft.enabled ? '#fff' : '#f8fafc' }}
+                          style={{ background: draft.enabled ? '#fff' : '#f8fafc', minWidth: 0, flex: 1 }}
                         />
                       </label>
-                      <label className="modal-field" style={{ gap: 6, fontSize: 13 }}>
-                        До
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <span style={{ fontSize: 13, color: '#768294', whiteSpace: 'nowrap', flexShrink: 0 }}>До</span>
                         <input
                           type="time"
                           value={draft.end}
                           disabled={!draft.enabled}
                           onChange={(event) => handleSlotDraftChange(index, { end: event.target.value })}
-                          style={{ background: draft.enabled ? '#fff' : '#f8fafc' }}
+                          style={{ background: draft.enabled ? '#fff' : '#f8fafc', minWidth: 0, flex: 1 }}
                         />
                       </label>
                     </div>
