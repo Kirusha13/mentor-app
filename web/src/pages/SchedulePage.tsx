@@ -23,6 +23,7 @@ import { getApiErrorCode, getApiErrorMessage } from '../utils/apiError';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
 import {
   lessonDate as toLessonDateStr,
+  lessonDateRu,
   lessonStartTime as toStartTime,
   lessonEndTime as toEndTime,
   lessonStartMinutes,
@@ -1620,7 +1621,7 @@ export default function SchedulePage() {
                           {student?.full_name ?? 'Ученик'}
                         </div>
                         <div style={{ color: '#5d6778' }}>
-                          {subject?.name ?? lesson.subject_name ?? 'Без предмета'} • {toLessonDateStr(lesson)} • {toTime(toStartTime(lesson))} - {toTime(toEndTime(lesson))}
+                          {subject?.name ?? lesson.subject_name ?? 'Без предмета'} • {lessonDateRu(lesson)} • {toTime(toStartTime(lesson))} - {toTime(toEndTime(lesson))}
                         </div>
                       </div>
                       <div style={{ fontWeight: 700, color: '#1f2a3b' }}>{lesson.cost ?? '—'} ₽</div>
