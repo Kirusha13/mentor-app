@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AvailableSlot, bookLesson, getAvailableWindows } from '../../api/lessons';
 import { getTutors, TutorStudent } from '../../api/student';
+import { lessonDate, lessonStartTime, lessonEndTime } from '../../utils/lessonTime';
 
 // ─── Вспомогательные функции ──────────────────────────────────────────────────
 
@@ -18,33 +19,21 @@ const MONTHS_RU = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', '
 const MONTHS_FULL_RU = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 const DAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
-const DURATIONS = [
-  { label: '45 мин', minutes: 45 },
-  { label: '1 ч', minutes: 60 },
-  { label: '1.5 ч', minutes: 90 },
-  { label: '2 ч', minutes: 120 },
-  { label: '2.5 ч', minutes: 150 },
-  { label: '3 ч', minutes: 180 },
-];
-
-function toMinutes(t: string): number {
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
-}
-function fromMinutes(mins: number): string {
-  return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
-}
-function fmt(t: string): string { return t.slice(0, 5); }
 function formatDateFull(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   return `${d.getDate()} ${MONTHS_FULL_RU[d.getMonth()]}`;
 }
-function getStartOptions(slotStart: string, slotEnd: string): string[] {
-  const options: string[] = [];
-  const end = toMinutes(slotEnd) - 45;
-  let cur = toMinutes(slotStart);
-  while (cur <= end) { options.push(fromMinutes(cur)); cur += 30; }
-  return options;
+
+function slotDurationMinutes(slot: AvailableSlot): number {
+  return (new Date(slot.ends_at).getTime() - new Date(slot.starts_at).getTime()) / 60000;
+}
+
+function formatDuration(mins: number): string {
+  if (mins < 60) return `${mins} мин`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (m === 0) return `${h} ч`;
+  return `${h}.${m === 30 ? '5' : String(Math.round(m * 10 / 60))} ч`;
 }
 
 // ─── Секция формы ─────────────────────────────────────────────────────────────
@@ -77,8 +66,7 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
   const [selectedTutorId, setSelectedTutorId] = useState<number | null>(null);
   const [selectedTS, setSelectedTS] = useState<TutorStudent | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [selectedStart, setSelectedStart] = useState<string | null>(null);
-  const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -94,7 +82,6 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
     })();
   }, []);
 
-
   // Уникальные репетиторы
   const uniqueTutors = tutors.filter(
     (ts, idx, arr) => arr.findIndex(t => t.tutor_id === ts.tutor_id) === idx
@@ -105,64 +92,40 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
     ? tutors.filter(ts => ts.tutor_id === selectedTutorId)
     : [];
 
-  // Доступные даты для выбранного tutor_student (только сегодня и будущее, только если есть хотя бы одна рабочая позиция)
   const todayStr = new Date().toISOString().slice(0, 10);
-
-  type StartOption = { time: string; slotEnd: string };
 
   function getSlotsForDate(date: string): AvailableSlot[] {
     return selectedTS
-      ? windows.filter(w => w.tutor_id === selectedTS.tutor_id && w.lesson_date === date)
+      ? windows.filter(w => w.tutor_id === selectedTS.tutor_id && lessonDate(w) === date)
       : [];
-  }
-
-  function getStartOptionsForSlots(slots: AvailableSlot[]): StartOption[] {
-    return slots.flatMap(slot =>
-      getStartOptions(slot.start_time, slot.end_time).map(t => ({ time: t, slotEnd: slot.end_time }))
-    );
   }
 
   const availableDates = selectedTS
     ? [...new Set(
         windows
-          .filter(w => w.tutor_id === selectedTS.tutor_id && w.lesson_date >= todayStr)
-          .map(w => w.lesson_date)
-      )]
-        .sort()
-        .filter(date => getStartOptionsForSlots(getSlotsForDate(date)).length > 0)
+          .filter(w => w.tutor_id === selectedTS!.tutor_id && lessonDate(w) >= todayStr)
+          .map(w => lessonDate(w))
+      )].sort()
     : [];
 
-  // Слоты на выбранную дату
   const dateSlots = selectedDate ? getSlotsForDate(selectedDate) : [];
 
-  // Варианты начала
-  const startOptions: StartOption[] = getStartOptionsForSlots(dateSlots);
-
-  const activeSlotEnd = selectedStart
-    ? startOptions.find(o => o.time === selectedStart)?.slotEnd ?? null
+  const cost = selectedSlot && selectedTS
+    ? Math.round(slotDurationMinutes(selectedSlot) / 60 * Number(selectedTS.hourly_rate))
     : null;
-
-  const validDurations = selectedStart && activeSlotEnd
-    ? DURATIONS.filter(d => toMinutes(selectedStart) + d.minutes <= toMinutes(activeSlotEnd))
-    : [];
-
-  const endTime = selectedStart && selectedDuration ? fromMinutes(toMinutes(selectedStart) + selectedDuration) : null;
-  const cost = selectedDuration && selectedTS ? Math.round((selectedDuration / 60) * Number(selectedTS.hourly_rate)) : null;
 
   // Сбросы при смене шагов
   function selectTutor(tutorId: number) {
     setSelectedTutorId(tutorId);
     setSelectedTS(null);
     setSelectedDate(null);
-    setSelectedStart(null);
-    setSelectedDuration(null);
+    setSelectedSlot(null);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
   }
   function selectSubject(ts: TutorStudent) {
     setSelectedTS(ts);
     setSelectedDate(null);
-    setSelectedStart(null);
-    setSelectedDuration(null);
+    setSelectedSlot(null);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
   }
 
@@ -183,21 +146,17 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
 
   function selectDate(date: string) {
     setSelectedDate(date);
-    setSelectedStart(null);
-    setSelectedDuration(null);
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
-  }
-  function selectStart(time: string) {
-    setSelectedStart(time);
-    setSelectedDuration(null);
+    setSelectedSlot(null);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
   }
 
   const handleBook = () => {
-    if (!selectedTS || !selectedDate || !selectedStart || !endTime) return;
+    if (!selectedTS || !selectedDate || !selectedSlot) return;
+    const start = lessonStartTime(selectedSlot);
+    const end = lessonEndTime(selectedSlot);
     Alert.alert(
       'Отправить запрос?',
-      `${formatDateFull(selectedDate)}, ${fmt(selectedStart)} – ${fmt(endTime)}\n${selectedTS.subject_name} · ${cost} ₽\n\nЗапрос будет отправлен репетитору. После одобрения занятие появится в расписании.`,
+      `${formatDateFull(selectedDate)}, ${start} – ${end}\n${selectedTS.subject_name} · ${cost} ₽\n\nЗапрос будет отправлен репетитору. После одобрения занятие появится в расписании.`,
       [
         { text: 'Отмена', style: 'cancel' },
         {
@@ -207,9 +166,8 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
             try {
               await bookLesson({
                 tutor_student_id: selectedTS.id,
-                lesson_date: selectedDate,
-                start_time: selectedStart + ':00',
-                end_time: endTime + ':00',
+                starts_at: selectedSlot.starts_at,
+                ends_at: selectedSlot.ends_at,
               });
               Alert.alert('Запрос отправлен', 'Репетитор рассмотрит ваш запрос и подтвердит занятие.', [{ text: 'OK', onPress: onSuccess }]);
             } catch (e: any) {
@@ -333,8 +291,8 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
                   <View style={s.emptySlotsIconWrap}>
                     <Ionicons name="calendar-outline" size={32} color="#2AABEE" />
                   </View>
-                  <Text style={s.emptySlotsTitle}>Нет свободных окон</Text>
-                  <Text style={s.emptySlotsHint}>Репетитор ещё не добавил доступное время</Text>
+                  <Text style={s.emptySlotsTitle}>Свободных слотов пока нет</Text>
+                  <Text style={s.emptySlotsHint}>Обратитесь к репетитору</Text>
                 </View>
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -364,70 +322,48 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
             </Section>
           )}
 
-          {/* Бейджи окон */}
-          {selectedDate && dateSlots.length > 0 && (
-            <View style={s.windowsBadgeRow}>
-              {dateSlots.map((slot, i) => (
-                <View key={i} style={s.windowBadge}>
-                  <Text style={s.windowBadgeText}>
-                    🕐 {fmt(slot.start_time)} – {fmt(slot.end_time)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* ── 4. Время начала ── */}
-          {selectedDate && startOptions.length > 0 && (
-            <Section label="Время начала">
-              <View style={s.chipGrid}>
-                {startOptions.map(({ time }) => {
-                  const isSelected = time === selectedStart;
+          {/* ── 4. Слот ── */}
+          {selectedDate && (
+            <Section label="Слот">
+              {dateSlots.length === 0 ? (
+                <Text style={s.emptyText}>Нет доступных слотов на эту дату</Text>
+              ) : (
+                dateSlots.map((slot, i) => {
+                  const isSelected = selectedSlot?.starts_at === slot.starts_at;
+                  const mins = slotDurationMinutes(slot);
                   return (
                     <TouchableOpacity
-                      key={time}
-                      style={[s.timeChip, isSelected && s.timeChipSelected]}
-                      onPress={() => selectStart(time)}
+                      key={i}
+                      style={[s.slotCard, isSelected && s.slotCardSelected]}
+                      onPress={() => {
+                        setSelectedSlot(slot);
+                        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
+                      }}
                     >
-                      <Text style={[s.timeChipText, isSelected && s.timeChipTextSelected]}>
-                        {fmt(time)}
+                      <Text style={[s.slotCardTime, isSelected && s.slotCardTimeSelected]}>
+                        {lessonStartTime(slot)} – {lessonEndTime(slot)}
                       </Text>
+                      <View style={[s.slotDurationBadge, isSelected && s.slotDurationBadgeSelected]}>
+                        <Text style={[s.slotDurationText, isSelected && s.slotDurationTextSelected]}>
+                          {formatDuration(mins)}
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                   );
-                })}
-              </View>
-            </Section>
-          )}
-
-          {/* ── 5. Длительность ── */}
-          {selectedStart && validDurations.length > 0 && (
-            <Section label="Длительность">
-              <View style={s.chipRow}>
-                {validDurations.map(d => {
-                  const isSelected = d.minutes === selectedDuration;
-                  return (
-                    <TouchableOpacity
-                      key={d.minutes}
-                      style={[s.durationChip, isSelected && s.durationChipSelected]}
-                      onPress={() => setSelectedDuration(d.minutes)}
-                    >
-                      <Text style={[s.durationChipText, isSelected && s.durationChipTextSelected]}>
-                        {d.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                })
+              )}
             </Section>
           )}
 
           {/* ── Итог ── */}
-          {selectedStart && selectedDuration && endTime && cost !== null && (
+          {selectedSlot && cost !== null && (
             <View style={s.summary}>
-              <SummaryRow label="Репетитор" value={selectedTS?.tutor_name ?? ''} />
-              <SummaryRow label="Предмет" value={selectedTS?.subject_name ?? ''} />
               <SummaryRow label="Дата" value={formatDateFull(selectedDate!)} />
-              <SummaryRow label="Время" value={`${fmt(selectedStart)} – ${fmt(endTime)}`} />
+              <SummaryRow
+                label="Время"
+                value={`${lessonStartTime(selectedSlot)} – ${lessonEndTime(selectedSlot)}`}
+              />
+              <SummaryRow label="Длительность" value={formatDuration(slotDurationMinutes(selectedSlot))} />
               <SummaryRow label="Стоимость" value={`${cost} ₽`} highlight last />
             </View>
           )}
@@ -437,7 +373,7 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
       )}
 
       {/* Фиксированная кнопка */}
-      {selectedTS && selectedDate && selectedStart && selectedDuration && (
+      {selectedTS && selectedDate && selectedSlot && (
         <View style={s.footer}>
           <TouchableOpacity
             style={[s.bookBtn, booking && s.bookBtnDisabled]}
@@ -576,31 +512,31 @@ const s = StyleSheet.create({
   dateChipMonth: { fontSize: 11, color: '#999' },
   dateChipTextSelected: { color: '#fff' },
 
-  // Окна
-  windowsBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12, marginTop: -8 },
-  windowBadge: { backgroundColor: '#F1FBF2', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  windowBadgeText: { fontSize: 13, color: '#4CAF50', fontWeight: '500' },
-
-  // Время начала
-  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  timeChip: {
-    paddingHorizontal: 14, paddingVertical: 9,
-    borderRadius: 10, backgroundColor: '#f5f5f5',
-    borderWidth: 1, borderColor: '#eee',
+  // Слот-карточки
+  slotCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#eee',
+    backgroundColor: '#fafafa',
+    marginBottom: 8,
   },
-  timeChipSelected: { backgroundColor: '#2AABEE', borderColor: '#2AABEE' },
-  timeChipText: { fontSize: 14, fontWeight: '500', color: '#333' },
-  timeChipTextSelected: { color: '#fff' },
-
-  // Длительность
-  durationChip: {
-    paddingHorizontal: 18, paddingVertical: 10,
-    borderRadius: 10, backgroundColor: '#f5f5f5',
-    borderWidth: 1, borderColor: '#eee',
+  slotCardSelected: { borderColor: '#2AABEE', backgroundColor: '#EFF9FF' },
+  slotCardTime: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  slotCardTimeSelected: { color: '#2AABEE' },
+  slotDurationBadge: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  durationChipSelected: { backgroundColor: '#1a1a1a', borderColor: '#1a1a1a' },
-  durationChipText: { fontSize: 14, fontWeight: '500', color: '#333' },
-  durationChipTextSelected: { color: '#fff' },
+  slotDurationBadgeSelected: { backgroundColor: '#d0edfc' },
+  slotDurationText: { fontSize: 13, color: '#888', fontWeight: '500' },
+  slotDurationTextSelected: { color: '#2AABEE' },
 
   // Нет слотов
   emptySlots: { alignItems: 'center', paddingVertical: 24, gap: 6 },
