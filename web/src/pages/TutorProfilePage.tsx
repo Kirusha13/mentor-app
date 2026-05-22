@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   createSubject,
   deleteSubject,
@@ -8,6 +7,13 @@ import {
   type Subject,
 } from '../api/subjects';
 import { getTutorProfile, updateTutorProfile, type TutorProfile } from '../api/tutor';
+import {
+  createTutorLevel,
+  deleteTutorLevel,
+  getTutorLevels,
+  updateTutorLevel,
+  type TutorLevel,
+} from '../api/tutorLevels';
 import { getApiErrorMessage } from '../utils/apiError';
 
 const panelStyle = {
@@ -68,7 +74,6 @@ function fieldCard(label: string, value: string) {
 }
 
 export default function TutorProfilePage() {
-  const navigate = useNavigate();
   const [profile, setProfile] = useState<TutorProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -84,6 +89,16 @@ export default function TutorProfilePage() {
   const [editingSubjectId, setEditingSubjectId] = useState<number | null>(null);
   const [editSubjectName, setEditSubjectName] = useState('');
   const [editSubjectRate, setEditSubjectRate] = useState('');
+
+  const [levels, setLevels] = useState<TutorLevel[]>([]);
+  const [levelsLoading, setLevelsLoading] = useState(true);
+  const [levelsSaving, setLevelsSaving] = useState(false);
+  const [levelsModalOpen, setLevelsModalOpen] = useState(false);
+  const [newLevelName, setNewLevelName] = useState('');
+  const [editingLevelId, setEditingLevelId] = useState<number | null>(null);
+  const [editLevelName, setEditLevelName] = useState('');
+  const [editLevelIsFavourite, setEditLevelIsFavourite] = useState(false);
+  const [showOnlyFavouriteLevels, setShowOnlyFavouriteLevels] = useState(false);
 
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -124,8 +139,24 @@ export default function TutorProfilePage() {
       }
     };
 
+    const loadLevels = async () => {
+      try {
+        setLevelsLoading(true);
+        const data = await getTutorLevels();
+        if (!cancelled) setLevels(data);
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Ошибка загрузки уровней:', error);
+          alert(getApiErrorMessage(error, 'Не удалось загрузить уровни обучения'));
+        }
+      } finally {
+        if (!cancelled) setLevelsLoading(false);
+      }
+    };
+
     void loadProfile();
     void loadSubjects();
+    void loadLevels();
 
     return () => {
       cancelled = true;
@@ -140,6 +171,22 @@ export default function TutorProfilePage() {
         subject.name.toLowerCase().includes(subjectSearch.trim().toLowerCase())
       ),
     [subjectSearch, subjects]
+  );
+
+  const sortedLevels = useMemo(
+    () =>
+      [...levels].sort((a, b) => {
+        if (a.is_favourite !== b.is_favourite) {
+          return a.is_favourite ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name, 'ru-RU');
+      }),
+    [levels]
+  );
+
+  const visibleLevels = useMemo(
+    () => (showOnlyFavouriteLevels ? sortedLevels.filter((level) => level.is_favourite) : sortedLevels),
+    [showOnlyFavouriteLevels, sortedLevels]
   );
 
   const handleProfileCancel = () => {
@@ -259,6 +306,90 @@ export default function TutorProfilePage() {
     }
   };
 
+  const startLevelEditing = (level: TutorLevel) => {
+    setEditingLevelId(level.id);
+    setEditLevelName(level.name);
+    setEditLevelIsFavourite(level.is_favourite);
+  };
+
+  const cancelLevelEditing = () => {
+    setEditingLevelId(null);
+    setEditLevelName('');
+    setEditLevelIsFavourite(false);
+  };
+
+  const handleLevelCreate = async () => {
+    const name = newLevelName.trim();
+    if (!name) {
+      alert('Укажи название уровня');
+      return;
+    }
+
+    try {
+      setLevelsSaving(true);
+      const created = await createTutorLevel({
+        name,
+        is_favourite: false,
+      });
+      setLevels((prev) => [...prev, created]);
+      setNewLevelName('');
+    } catch (error) {
+      console.error('Ошибка создания уровня:', error);
+      alert(getApiErrorMessage(error, 'Не удалось создать уровень'));
+    } finally {
+      setLevelsSaving(false);
+    }
+  };
+
+  const handleLevelSave = async (level: TutorLevel) => {
+    const name = editLevelName.trim();
+    if (!name) {
+      alert('Название уровня не может быть пустым');
+      return;
+    }
+
+    try {
+      setLevelsSaving(true);
+      const updated = await updateTutorLevel(level.id, {
+        name,
+        is_favourite: editLevelIsFavourite,
+      });
+      setLevels((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      cancelLevelEditing();
+    } catch (error) {
+      console.error('Ошибка сохранения уровня:', error);
+      alert(getApiErrorMessage(error, 'Не удалось сохранить уровень'));
+    } finally {
+      setLevelsSaving(false);
+    }
+  };
+
+  const handleLevelDelete = async (level: TutorLevel) => {
+    if (!window.confirm(`Удалить уровень «${level.name}»? Связи с темами и учениками будут очищены.`)) {
+      return;
+    }
+
+    try {
+      await deleteTutorLevel(level.id);
+      setLevels((prev) => prev.filter((item) => item.id !== level.id));
+    } catch (error) {
+      console.error('Ошибка удаления уровня:', error);
+      alert(getApiErrorMessage(error, 'Не удалось удалить уровень'));
+    }
+  };
+
+  const handleToggleLevelFavourite = async (level: TutorLevel) => {
+    try {
+      const updated = await updateTutorLevel(level.id, {
+        is_favourite: !level.is_favourite,
+      });
+      setLevels((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (error) {
+      console.error('Ошибка обновления избранного уровня:', error);
+      alert(getApiErrorMessage(error, 'Не удалось обновить избранное'));
+    }
+  };
+
   if (loading) {
     return <p style={{ color: '#687486', margin: 0 }}>Загрузка личного кабинета...</p>;
   }
@@ -268,7 +399,7 @@ export default function TutorProfilePage() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div style={{ display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)', gap: 16, height: '100%', minHeight: 0, overflow: 'hidden' }}>
       <section
         style={{
           ...panelStyle,
@@ -357,7 +488,7 @@ export default function TutorProfilePage() {
             <button
               type="button"
               title="Открыть уровни обучения"
-              onClick={() => navigate('/levels')}
+              onClick={() => setLevelsModalOpen(true)}
               style={{
                 background: '#fff',
                 color: '#1f2a3b',
@@ -415,7 +546,7 @@ export default function TutorProfilePage() {
         </div>
       </article>
 
-      <article style={{ ...panelStyle, display: 'grid', gap: 16 }}>
+      <article style={{ ...panelStyle, display: 'grid', gap: 16, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin' }}>
         <div
           style={{
             display: 'grid',
@@ -442,7 +573,7 @@ export default function TutorProfilePage() {
               title="Создать предмет"
               type="button"
               onClick={() => setSubjectCreateModalOpen(true)}
-              style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center' }}
+              className="add-trigger"
             >
               +
             </button>
@@ -532,13 +663,11 @@ export default function TutorProfilePage() {
                     >
                       {isEditing ? (
                         <>
-                          <button onClick={() => handleSubjectSave(subject.id)}>Сохранить</button>
+                          <button type="button" onClick={() => handleSubjectSave(subject.id)} className="modal-primary">Сохранить</button>
                           <button
+                            type="button"
                             onClick={cancelSubjectEditing}
-                            style={{
-                              background: 'rgba(23,32,51,0.92)',
-                              boxShadow: 'none',
-                            }}
+                            className="modal-secondary"
                           >
                             Отмена
                           </button>
@@ -549,17 +678,7 @@ export default function TutorProfilePage() {
                             <button
                               title="Скопировать token"
                               onClick={() => handleCopyToken(subject.invitation_token)}
-                              style={{
-                                minWidth: 42,
-                                width: 42,
-                                height: 42,
-                                padding: 0,
-                                borderRadius: 999,
-                                boxShadow: 'none',
-                                fontSize: 18,
-                                display: 'inline-grid',
-                                placeItems: 'center',
-                              }}
+                              className="icon-button icon-button-ghost"
                             >
                               ⧉
                             </button>
@@ -567,34 +686,14 @@ export default function TutorProfilePage() {
                           <button
                             title="Редактировать предмет"
                             onClick={() => startSubjectEditing(subject)}
-                            style={{
-                              minWidth: 42,
-                              width: 42,
-                              height: 42,
-                              padding: 0,
-                              borderRadius: 999,
-                              background: 'rgba(23,32,51,0.92)',
-                              boxShadow: 'none',
-                              fontSize: 18,
-                              display: 'inline-grid',
-                              placeItems: 'center',
-                            }}
+                            className="icon-button icon-button-dark"
                           >
                             ✎
                           </button>
                           <button
                             title="Удалить предмет"
                             onClick={() => handleSubjectDelete(subject.id, subject.name)}
-                            style={{
-                              minWidth: 42,
-                              width: 42,
-                              height: 42,
-                              padding: 0,
-                              borderRadius: 999,
-                              background: '#F44336',
-                              boxShadow: 'none',
-                              fontSize: 18,
-                            }}
+                            className="icon-button icon-button-danger"
                           >
                             🗑
                           </button>
@@ -608,6 +707,134 @@ export default function TutorProfilePage() {
           </div>
         )}
       </article>
+
+      {levelsModalOpen && (
+        <div onClick={() => setLevelsModalOpen(false)} className="modal-overlay">
+          <div onClick={(event) => event.stopPropagation()} className="app-modal wide">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">Уровни обучения</h3>
+                <p className="modal-subtitle">Добавляй уровни и отмечай избранные для быстрого выбора в темах и карточках учеников.</p>
+              </div>
+              <button title="Закрыть" type="button" onClick={() => setLevelsModalOpen(false)} className="modal-close">×</button>
+            </div>
+
+            <section className="modal-section">
+              <div className="modal-section-title">Добавить уровень</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto', gap: 10, alignItems: 'center' }}>
+                <input
+                  value={newLevelName}
+                  onChange={(event) => setNewLevelName(event.target.value)}
+                  placeholder="Например: 9 класс, ОГЭ, ЕГЭ база"
+                />
+                <button type="button" onClick={handleLevelCreate} disabled={levelsSaving}>
+                  Добавить
+                </button>
+              </div>
+            </section>
+
+            <section style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ color: '#1f2a3b', fontSize: 18, fontWeight: 900 }}>Список уровней</div>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#435066', fontSize: 14 }}>
+                  <input
+                    type="checkbox"
+                    checked={showOnlyFavouriteLevels}
+                    onChange={(event) => setShowOnlyFavouriteLevels(event.target.checked)}
+                    style={{ width: 'auto' }}
+                  />
+                  Избранные
+                </label>
+              </div>
+
+              {levelsLoading ? (
+                <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Загрузка...</p>
+              ) : visibleLevels.length === 0 ? (
+                <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Уровней пока нет.</p>
+              ) : (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {visibleLevels.map((level) => {
+                    const isEditingLevel = editingLevelId === level.id;
+
+                    return (
+                      <article
+                        key={level.id}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: isEditingLevel ? 'minmax(220px, 1fr) auto auto' : 'minmax(220px, 1fr) auto',
+                          gap: 10,
+                          alignItems: 'center',
+                          padding: 14,
+                          borderRadius: 18,
+                          background: 'rgba(23,32,51,0.03)',
+                          border: '1px solid rgba(24,33,47,0.08)',
+                        }}
+                      >
+                        {isEditingLevel ? (
+                          <>
+                            <input value={editLevelName} onChange={(event) => setEditLevelName(event.target.value)} />
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#435066', fontSize: 14, whiteSpace: 'nowrap' }}>
+                              <input
+                                type="checkbox"
+                                checked={editLevelIsFavourite}
+                                onChange={(event) => setEditLevelIsFavourite(event.target.checked)}
+                                style={{ width: 'auto' }}
+                              />
+                              Избранное
+                            </label>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                              <button type="button" onClick={() => handleLevelSave(level)} disabled={levelsSaving} className="modal-primary">
+                                Сохранить
+                              </button>
+                              <button type="button" onClick={cancelLevelEditing} className="modal-secondary">
+                                Отмена
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                              <button
+                                type="button"
+                                title={level.is_favourite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                                onClick={() => handleToggleLevelFavourite(level)}
+                                style={{ minWidth: 34, width: 34, height: 34, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.04)', color: level.is_favourite ? '#2AABEE' : '#98a3b3', border: '1px solid rgba(24,33,47,0.08)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                              >
+                                ★
+                              </button>
+                              <div style={{ color: '#1f2a3b', fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {level.name}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                title="Редактировать уровень"
+                                onClick={() => startLevelEditing(level)}
+                                className="icon-button icon-button-dark"
+                              >
+                                ✎
+                              </button>
+                              <button
+                                type="button"
+                                title="Удалить уровень"
+                                onClick={() => handleLevelDelete(level)}
+                                className="icon-button icon-button-danger"
+                              >
+                                🗑
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+      )}
 
       {subjectCreateModalOpen && (
         <div onClick={() => setSubjectCreateModalOpen(false)} className="modal-overlay">

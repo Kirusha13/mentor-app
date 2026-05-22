@@ -294,7 +294,7 @@ export default function ContactsPage() {
   const telegramCount = records.filter((record) => Boolean(record.studentContact.contact.telegram_id)).length;
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div style={{ display: 'grid', gridTemplateRows: 'auto auto auto minmax(0, 1fr) auto', gap: 16, height: '100%', minHeight: 0, overflow: 'hidden' }}>
       <h1 className="page-heading">Контакты</h1>
 
       <section className="mentor-panel toolbar-panel" style={{ gridTemplateColumns: 'minmax(280px, 1.25fr) minmax(150px, 0.45fr) minmax(190px, 0.55fr) minmax(170px, 0.5fr) auto' }}>
@@ -351,7 +351,7 @@ export default function ContactsPage() {
         </div>
       </section>
 
-      <section className="mentor-panel" style={{ padding: 16 }}>
+      <section className="mentor-panel" style={{ padding: 16, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin' }}>
         {loading ? (
           <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка...</p>
         ) : filteredRecords.length === 0 ? (
@@ -408,8 +408,7 @@ export default function ContactsPage() {
                       event.stopPropagation();
                       handleRemoveContact(record);
                     }}
-                    className="icon-button ghost-button"
-                    style={{ color: '#F44336' }}
+                    className="icon-button icon-button-danger"
                   >
                     🗑
                   </button>
@@ -518,37 +517,18 @@ export default function ContactsPage() {
       {detailsOpen && selectedRecord && (
         <div
           onClick={closeDetails}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.48)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 20,
-            zIndex: 40,
-          }}
+          className="modal-overlay"
         >
           <div
             onClick={(event) => event.stopPropagation()}
-            style={{
-              width: 'min(680px, 100%)',
-              maxHeight: '88vh',
-              overflowY: 'auto',
-              background: '#fff',
-              borderRadius: 24,
-              border: '1px solid rgba(24,33,47,0.08)',
-              boxShadow: '0 30px 80px rgba(15,23,42,0.18)',
-              padding: 24,
-              display: 'grid',
-              gap: 16,
-            }}
+            className="app-modal"
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+            <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: 22, marginBottom: 6 }}>
+                <h3 className="modal-title">
                   {selectedRecord.studentContact.contact.full_name}
                 </h3>
-                <div style={{ color: '#687486', fontSize: 14 }}>
+                <div className="modal-subtitle">
                   {relationshipLabels[selectedRecord.studentContact.relationship_type]}
                 </div>
               </div>
@@ -556,7 +536,7 @@ export default function ContactsPage() {
                 type="button"
                 title="Закрыть"
                 onClick={closeDetails}
-                style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 22 }}
+                className="modal-close"
               >
                 ×
               </button>
@@ -602,6 +582,7 @@ export default function ContactsPage() {
                       type="button"
                       onClick={() => handleSaveContact(selectedRecord)}
                       disabled={savingContactId === selectedRecord.studentContact.contact.id}
+                      className="modal-primary"
                     >
                       {savingContactId === selectedRecord.studentContact.contact.id
                         ? 'Сохраняем...'
@@ -613,7 +594,7 @@ export default function ContactsPage() {
                         setEditingContactId(null);
                         setEditingDraft(emptyDraft());
                       }}
-                      style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                      className="modal-secondary"
                     >
                       Отмена
                     </button>
@@ -628,7 +609,7 @@ export default function ContactsPage() {
                       type="button"
                       title="Редактировать контакт"
                       onClick={() => startEditingContact(selectedRecord)}
-                      style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                      className="icon-button icon-button-dark"
                     >
                       ✎
                     </button>
@@ -636,7 +617,7 @@ export default function ContactsPage() {
                       type="button"
                       title="Отвязать контакт"
                       onClick={() => handleRemoveContact(selectedRecord)}
-                      style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                      className="icon-button icon-button-danger"
                     >
                       🗑
                     </button>

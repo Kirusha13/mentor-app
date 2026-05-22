@@ -151,13 +151,13 @@ export default function RequestsPage() {
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {lesson.conduct_status === 'booking_pending' && (
                     <>
-                      <button onClick={() => handleResolve(lesson, 'approve-booking')} disabled={processingId === lesson.id}>
+                      <button onClick={() => handleResolve(lesson, 'approve-booking')} disabled={processingId === lesson.id} className="modal-success">
                         Подтвердить запись
                       </button>
                       <button
                         onClick={() => handleResolve(lesson, 'reject-booking')}
                         disabled={processingId === lesson.id}
-                        style={{ background: '#F44336', boxShadow: 'none' }}
+                        className="modal-danger"
                       >
                         Отклонить запись
                       </button>
@@ -166,13 +166,13 @@ export default function RequestsPage() {
 
                   {lesson.conduct_status === 'reschedule_pending' && (
                     <>
-                      <button onClick={() => handleResolve(lesson, 'approve-reschedule')} disabled={processingId === lesson.id}>
+                      <button onClick={() => handleResolve(lesson, 'approve-reschedule')} disabled={processingId === lesson.id} className="modal-success">
                         Подтвердить перенос
                       </button>
                       <button
                         onClick={() => handleResolve(lesson, 'reject-reschedule')}
                         disabled={processingId === lesson.id}
-                        style={{ background: '#F44336', boxShadow: 'none' }}
+                        className="modal-danger"
                       >
                         Отклонить перенос
                       </button>
@@ -181,13 +181,13 @@ export default function RequestsPage() {
 
                   {lesson.payment_status === 'payment_pending' && (
                     <>
-                      <button onClick={() => handleResolve(lesson, 'approve-payment')} disabled={processingId === lesson.id}>
+                      <button onClick={() => handleResolve(lesson, 'approve-payment')} disabled={processingId === lesson.id} className="modal-success">
                         Подтвердить оплату
                       </button>
                       <button
                         onClick={() => handleResolve(lesson, 'reject-payment')}
                         disabled={processingId === lesson.id}
-                        style={{ background: '#F44336', boxShadow: 'none' }}
+                        className="modal-danger"
                       >
                         Отклонить оплату
                       </button>

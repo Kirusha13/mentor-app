@@ -88,6 +88,11 @@ function formatDateInput(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+function formatDateRangeInputLabel(value: string) {
+  const [, month, day] = value.split('-');
+  return day && month ? `${day}-${month}` : 'ДД-ММ';
+}
+
 function defaultPeriodStart() {
   const date = new Date();
   date.setDate(date.getDate() - 7);
@@ -662,7 +667,11 @@ export default function AssignmentsPage() {
         {`
           .assignments-page-shell {
             display: grid;
-            gap: 20px;
+            grid-template-rows: auto auto auto minmax(0, 1fr);
+            gap: 14px;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
           }
 
           .assignments-controls {
@@ -709,21 +718,38 @@ export default function AssignmentsPage() {
 
           .assignments-period-control {
             display: grid;
-            grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+            grid-template-columns: auto minmax(72px, auto) auto minmax(72px, auto);
             gap: 8px;
             align-items: center;
             padding: 0 14px;
             color: #566173;
           }
 
-          .assignments-period-control input {
-            min-width: 0;
+          .assignments-date-picker {
+            position: relative;
+            min-width: 76px;
             height: 38px;
-            border: 0;
-            padding: 0;
-            background: transparent;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            background: #F5F7FB;
             color: #1A1A1A;
-            font-weight: 700;
+            font-weight: 850;
+            overflow: hidden;
+            cursor: pointer;
+          }
+
+          .assignments-date-picker input {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+          }
+
+          .assignments-date-picker span {
+            pointer-events: none;
           }
 
           .assignments-create-button {
@@ -743,6 +769,11 @@ export default function AssignmentsPage() {
             align-items: stretch;
           }
 
+          .assignments-board-grid {
+            min-height: 0;
+            overflow: hidden;
+          }
+
           .assignment-kpi-card,
           .assignment-board-block {
             border: 1px solid #E8EDF5;
@@ -751,27 +782,27 @@ export default function AssignmentsPage() {
           }
 
           .assignment-kpi-card {
-            min-height: 112px;
+            min-height: 92px;
             border-radius: 22px;
-            padding: 20px;
+            padding: 16px;
             display: flex;
-            gap: 18px;
+            gap: 14px;
             align-items: center;
           }
 
           .assignment-kpi-icon {
-            width: 54px;
-            height: 54px;
+            width: 48px;
+            height: 48px;
             border-radius: 999px;
             display: inline-grid;
             place-items: center;
-            flex: 0 0 54px;
-            font-size: 25px;
+            flex: 0 0 48px;
+            font-size: 22px;
             font-weight: 900;
           }
 
           .assignment-kpi-value {
-            font-size: 32px;
+            font-size: 28px;
             line-height: 1;
             font-weight: 950;
             letter-spacing: 0;
@@ -786,12 +817,14 @@ export default function AssignmentsPage() {
           }
 
           .assignment-board-block {
-            min-height: 626px;
+            min-height: 0;
+            height: 100%;
             border-radius: 22px;
-            padding: 18px;
+            padding: 14px;
             display: grid;
             grid-template-rows: auto 1fr auto;
-            gap: 14px;
+            gap: 12px;
+            overflow: hidden;
           }
 
           .assignment-column-title,
@@ -817,10 +850,14 @@ export default function AssignmentsPage() {
             display: grid;
             align-content: start;
             gap: 12px;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 2px;
+            scrollbar-width: thin;
           }
 
           .assignment-empty-spacer {
-            min-height: 360px;
+            min-height: 0;
           }
 
           .assignment-card {
@@ -937,6 +974,10 @@ export default function AssignmentsPage() {
             display: grid;
             align-content: start;
             gap: 12px;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 2px;
+            scrollbar-width: thin;
           }
 
           .checked-archive-button {
@@ -952,11 +993,11 @@ export default function AssignmentsPage() {
           .assignment-archive-overlay {
             position: fixed;
             inset: 0;
-            z-index: 900;
+            z-index: 1000;
             display: grid;
             justify-items: end;
-            background: rgba(15, 23, 42, 0.28);
-            backdrop-filter: blur(3px);
+            background: rgba(15, 23, 42, 0.52);
+            backdrop-filter: blur(6px);
           }
 
           .assignment-archive-drawer {
@@ -992,7 +1033,11 @@ export default function AssignmentsPage() {
             padding: 0;
             border-radius: 999px;
             background: #172033;
+            border: 1px solid rgba(23, 32, 51, 0.18);
+            color: #fff;
             box-shadow: none;
+            display: inline-grid;
+            place-items: center;
           }
 
           .assignment-archive-filters {
@@ -1021,6 +1066,11 @@ export default function AssignmentsPage() {
           }
 
           @media (max-width: 1280px) {
+            .assignments-page-shell {
+              overflow-y: auto;
+              scrollbar-width: thin;
+            }
+
             .assignments-controls {
               grid-template-columns: repeat(2, minmax(0, 1fr));
             }
@@ -1036,6 +1086,11 @@ export default function AssignmentsPage() {
           }
 
           @media (max-width: 720px) {
+            .assignments-page-shell {
+              height: auto;
+              overflow: visible;
+            }
+
             .assignments-controls,
             .assignments-kpi-grid,
             .assignments-board-grid,
@@ -1044,7 +1099,7 @@ export default function AssignmentsPage() {
             }
 
             .assignments-period-control {
-              grid-template-columns: 1fr;
+              grid-template-columns: auto minmax(72px, auto) auto minmax(72px, auto);
               padding: 10px 14px;
             }
 
@@ -1097,12 +1152,18 @@ export default function AssignmentsPage() {
           ))}
         </select>
 
-        <label className="assignments-period-control">
+        <div className="assignments-period-control">
           <span>Период:</span>
-          <input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} />
+          <label className="assignments-date-picker">
+            <span>{formatDateRangeInputLabel(periodStart)}</span>
+            <input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} />
+          </label>
           <span>—</span>
-          <input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} />
-        </label>
+          <label className="assignments-date-picker">
+            <span>{formatDateRangeInputLabel(periodEnd)}</span>
+            <input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} />
+          </label>
+        </div>
 
         <button type="button" onClick={() => setCreateModalOpen(true)} className="assignments-create-button">
           + Создать задание
@@ -1199,7 +1260,7 @@ export default function AssignmentsPage() {
                     {attachedLinks.map((link, index) => (
                       <div key={`${link.url}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', padding: '10px 12px', borderRadius: 14, background: '#fff' }}>
                         <a href={link.url} target="_blank" rel="noreferrer">{link.label}</a>
-                        <button type="button" onClick={() => setAttachedLinks((prev) => prev.filter((_, itemIndex) => itemIndex !== index))} style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>
+                        <button type="button" onClick={() => setAttachedLinks((prev) => prev.filter((_, itemIndex) => itemIndex !== index))} className="modal-secondary">
                           Убрать
                         </button>
                       </div>
@@ -1208,7 +1269,7 @@ export default function AssignmentsPage() {
                     {attachedFiles.map((file, index) => (
                       <div key={`${file.name}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', padding: '10px 12px', borderRadius: 14, background: '#fff' }}>
                         <div style={{ color: '#243041' }}>{file.name} ({formatFileSize(file.size)})</div>
-                        <button type="button" onClick={() => setAttachedFiles((prev) => prev.filter((_, itemIndex) => itemIndex !== index))} style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>
+                        <button type="button" onClick={() => setAttachedFiles((prev) => prev.filter((_, itemIndex) => itemIndex !== index))} className="modal-secondary">
                           Убрать
                         </button>
                       </div>
@@ -1351,12 +1412,18 @@ export default function AssignmentsPage() {
                   </option>
                 ))}
               </select>
-              <label className="assignments-period-control assignment-archive-period">
+              <div className="assignments-period-control assignment-archive-period">
                 <span>Период:</span>
-                <input type="date" value={archiveStart} onChange={(event) => setArchiveStart(event.target.value)} />
+                <label className="assignments-date-picker">
+                  <span>{formatDateRangeInputLabel(archiveStart)}</span>
+                  <input type="date" value={archiveStart} onChange={(event) => setArchiveStart(event.target.value)} />
+                </label>
                 <span>—</span>
-                <input type="date" value={archiveEnd} onChange={(event) => setArchiveEnd(event.target.value)} />
-              </label>
+                <label className="assignments-date-picker">
+                  <span>{formatDateRangeInputLabel(archiveEnd)}</span>
+                  <input type="date" value={archiveEnd} onChange={(event) => setArchiveEnd(event.target.value)} />
+                </label>
+              </div>
             </div>
 
             <div className="assignment-archive-list">
@@ -1375,8 +1442,8 @@ export default function AssignmentsPage() {
         const color = LANE_META[selectedLane].color;
 
         return (
-          <div onClick={() => setSelectedAssignmentId(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.34)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 24, zIndex: 1000 }}>
-            <div onClick={(event) => event.stopPropagation()} style={{ width: 'min(640px, 100%)', maxHeight: '84vh', overflowY: 'auto', borderRadius: 22, background: 'rgba(255,255,255,0.98)', boxShadow: '0 28px 70px rgba(15, 23, 42, 0.22)', border: '1px solid rgba(24,33,47,0.08)' }}>
+          <div onClick={() => setSelectedAssignmentId(null)} className="modal-overlay">
+            <div onClick={(event) => event.stopPropagation()} className="app-modal" style={{ width: 'min(640px, 100%)', padding: 0, gap: 0 }}>
               <div style={{ padding: '22px 24px 18px', background: `${color}14`, borderBottom: '1px solid rgba(24,33,47,0.08)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                   <div>
@@ -1392,11 +1459,11 @@ export default function AssignmentsPage() {
                       type="button"
                       title="Удалить ДЗ"
                       onClick={() => handleDeleteAssignment(selectedAssignment)}
-                      style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                      className="icon-button icon-button-danger"
                     >
                       🗑
                     </button>
-                    <button onClick={() => setSelectedAssignmentId(null)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>
+                    <button type="button" title="Закрыть" onClick={() => setSelectedAssignmentId(null)} className="modal-close">
                       ×
                     </button>
                   </div>
@@ -1477,10 +1544,10 @@ export default function AssignmentsPage() {
                 )}
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  <button onClick={() => handlePatchAssignment(selectedAssignment.id, { completion_status: 'completed' })}>
+                  <button type="button" onClick={() => handlePatchAssignment(selectedAssignment.id, { completion_status: 'completed' })} className="modal-primary">
                     Отметить выполненным
                   </button>
-                  <button onClick={() => handlePatchAssignment(selectedAssignment.id, { completion_status: 'in_progress' })} style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>
+                  <button type="button" onClick={() => handlePatchAssignment(selectedAssignment.id, { completion_status: 'in_progress' })} className="modal-secondary">
                     В работу
                   </button>
                   <button
@@ -1490,7 +1557,7 @@ export default function AssignmentsPage() {
                       if (!value || value < 1 || value > 5) return;
                       handlePatchAssignment(selectedAssignment.id, { grade: value });
                     }}
-                    style={{ background: '#4CAF50', boxShadow: 'none' }}
+                    className="modal-success"
                   >
                     Поставить оценку
                   </button>
@@ -1515,7 +1582,7 @@ export default function AssignmentsPage() {
                         assignmentCommentSaving ||
                         (selectedAssignment.grade_comment ?? '') === assignmentGradeCommentDraft.trim()
                       }
-                      style={{ boxShadow: 'none' }}
+                      className="modal-primary"
                     >
                       {assignmentCommentSaving ? 'Сохраняем...' : 'Сохранить комментарий'}
                     </button>

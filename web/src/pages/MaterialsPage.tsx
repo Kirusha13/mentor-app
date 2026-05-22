@@ -285,16 +285,6 @@ export default function MaterialsPage() {
     [formatFilter, levelFilter, materials, normalizedSearch, selectedTopic]
   );
 
-  const subjectTopicCount = filteredTopics.length;
-  const subjectMaterialCount = useMemo(() => {
-    const topicIds = new Set(filteredTopics.map((topic) => topic.id));
-    return materials.filter((material) => topicIds.has(material.topic_id)).length;
-  }, [filteredTopics, materials]);
-  const subjectLinkCount = useMemo(() => {
-    const topicIds = new Set(filteredTopics.map((topic) => topic.id));
-    return materials.filter((material) => topicIds.has(material.topic_id) && material.format === 'link').length;
-  }, [filteredTopics, materials]);
-
   const openCreateRootTopic = () => {
     setTopicModal({ mode: 'create-root', topic: null });
     setTopicTitle('');
@@ -491,7 +481,7 @@ export default function MaterialsPage() {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div style={{ display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)', gap: 16, height: isMobile ? 'auto' : '100%', minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
       <h1 className="page-heading">Материалы</h1>
 
       <section className="mentor-panel toolbar-panel" style={{ gridTemplateColumns: isTablet ? '1fr' : '1.2fr 0.8fr 0.8fr 0.75fr' }}>
@@ -546,50 +536,58 @@ export default function MaterialsPage() {
           </label>
       </section>
 
-      <section className="metric-grid">
-        <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>▣</span>
-          <div><div className="metric-value">{subjectTopicCount} тем</div><div className="metric-label">Создано тем</div></div>
-        </div>
-        <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.12)', color: '#4CAF50' }}>▤</span>
-          <div><div className="metric-value">{subjectMaterialCount} материалов</div><div className="metric-label">Всего материалов</div></div>
-        </div>
-        <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>↗</span>
-          <div><div className="metric-value">{subjectLinkCount} ссылок</div><div className="metric-label">Внешних ресурсов</div></div>
-        </div>
-      </section>
-
       <section
         style={{
           display: 'grid',
           gridTemplateColumns: isTablet ? '1fr' : '320px minmax(0, 1fr)',
           gap: 16,
+          minHeight: 0,
+          overflow: isMobile ? 'visible' : 'hidden',
         }}
       >
-        <aside style={{ ...panelStyle, display: 'grid', gap: 14, alignContent: 'start' }}>
+        <aside style={{ ...panelStyle, display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 14, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
             <div>
               <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 2 }}>Темы</div>
               <div style={mutedTextStyle}>{selectedSubject?.name ?? 'Предмет не выбран'}</div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button title="Создать тему" type="button" onClick={openCreateRootTopic} className="add-trigger" style={{ minWidth: 40, width: 40, height: 40, borderRadius: 999, fontSize: 20 }}>
+            <button title="Создать тему" type="button" onClick={openCreateRootTopic} className="add-trigger">
               +
             </button>
             <button
               title="Создать подтему"
               type="button"
               onClick={openCreateChildTopic}
-              style={{ minWidth: 40, width: 40, height: 40, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center', lineHeight: 1 }}
+              className="icon-button icon-button-dark"
             >
-              ↳
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="9" y="2" width="6" height="6" rx="1.6" />
+                <path d="M12 8v4" />
+                <path d="M5 12h14" />
+                <path d="M5 12v4" />
+                <path d="M12 12v4" />
+                <path d="M19 12v4" />
+                <rect x="2" y="16" width="6" height="6" rx="1.6" />
+                <rect x="9" y="16" width="6" height="6" rx="1.6" />
+                <rect x="16" y="16" width="6" height="6" rx="1.6" />
+              </svg>
             </button>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', alignContent: 'start', gap: 8, minHeight: 0, overflowY: isMobile ? 'visible' : 'auto', paddingRight: 2, scrollbarWidth: 'thin' }}>
             {loading ? (
               <div style={mutedTextStyle}>Загружаем темы...</div>
             ) : topicRows.length === 0 ? (
@@ -664,8 +662,8 @@ export default function MaterialsPage() {
           </div>
         </aside>
 
-        <section style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
-          <article style={panelStyle}>
+        <section style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 16, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
+          <article style={{ ...panelStyle, minHeight: 0 }}>
             <div
               style={{
                 display: 'flex',
@@ -693,7 +691,7 @@ export default function MaterialsPage() {
                     type="button"
                     title="Редактировать тему"
                     onClick={openEditTopic}
-                    style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                    className="icon-button icon-button-dark"
                   >
                     ✎
                   </button>
@@ -701,7 +699,7 @@ export default function MaterialsPage() {
                     type="button"
                     title="Удалить тему"
                     onClick={handleDeleteTopic}
-                    style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                    className="icon-button icon-button-danger"
                   >
                     🗑
                   </button>
@@ -739,7 +737,7 @@ export default function MaterialsPage() {
             )}
           </article>
 
-          <article style={panelStyle}>
+          <article style={{ ...panelStyle, display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', minHeight: 0, overflow: 'hidden' }}>
             <div
               style={{
                 display: 'flex',
@@ -764,7 +762,6 @@ export default function MaterialsPage() {
                   onClick={openCreateMaterial}
                   disabled={!selectedTopic}
                   className="add-trigger"
-                  style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, fontSize: 20, display: 'inline-grid', placeItems: 'center' }}
                 >
                   +
                 </button>
@@ -780,7 +777,7 @@ export default function MaterialsPage() {
                   : 'У этой темы пока нет материалов.'}
               </div>
             ) : (
-              <div style={{ display: 'grid', border: '1px solid rgba(24,33,47,0.08)', borderRadius: 18, overflow: 'hidden' }}>
+              <div style={{ display: 'grid', alignContent: 'start', border: '1px solid rgba(24,33,47,0.08)', borderRadius: 18, overflow: 'auto', minHeight: 0, scrollbarWidth: 'thin' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr auto' : 'minmax(260px, 1fr) 150px 90px 120px 132px', gap: 12, alignItems: 'center', padding: '12px 14px', background: 'rgba(248,250,252,0.9)', color: '#687486', fontSize: 12, fontWeight: 800 }}>
                   <span>Название материала</span>
                   {!isMobile && <span>Тип</span>}
@@ -862,8 +859,7 @@ export default function MaterialsPage() {
                           type="button"
                           title="Редактировать материал"
                           onClick={() => openEditMaterial(material)}
-                          className="icon-button ghost-button"
-                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999 }}
+                          className="icon-button icon-button-dark"
                         >
                           ✎
                         </button>
@@ -871,8 +867,7 @@ export default function MaterialsPage() {
                           type="button"
                           title="Удалить материал"
                           onClick={() => handleDeleteMaterial(material)}
-                          className="icon-button ghost-button"
-                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, color: '#F44336' }}
+                          className="icon-button icon-button-danger"
                         >
                           🗑
                         </button>

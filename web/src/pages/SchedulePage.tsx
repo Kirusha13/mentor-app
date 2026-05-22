@@ -1242,15 +1242,9 @@ export default function SchedulePage() {
         />
       ))}
       {layoutTimelineLessons(items, timelineWindow.startHour, timelineSlotHeights).map(({ lesson, top, height, column, columns }) => {
-        const narrow = viewMode === 'week';
-        const laneGap = narrow ? 4 : 6;
-        const safeColumn = narrow ? Math.min(column, 2) : column;
-        const width = narrow && columns > 1
-          ? `calc(100% - ${16 + safeColumn * 12}px)`
-          : `calc((100% - 16px - ${(columns - 1) * laneGap}px) / ${columns})`;
-        const left = narrow && columns > 1
-          ? `${8 + safeColumn * 12}px`
-          : `calc(8px + ${column} * (((100% - 16px - ${(columns - 1) * laneGap}px) / ${columns}) + ${laneGap}px))`;
+        const laneGap = viewMode === 'week' ? 4 : 6;
+        const width = `calc((100% - 16px - ${(columns - 1) * laneGap}px) / ${columns})`;
+        const left = `calc(8px + ${column} * (((100% - 16px - ${(columns - 1) * laneGap}px) / ${columns}) + ${laneGap}px))`;
 
         const rawCardHeight = Math.max(height - 8, 0);
         const density: LessonCardDensity = rawCardHeight < MIN_EVENT_CARD_HEIGHT || columns > 1 ? 'compact' : 'standard';
@@ -1264,9 +1258,9 @@ export default function SchedulePage() {
               top: top + 3,
               left,
               width,
-              minWidth: narrow && columns === 1 ? 0 : undefined,
+              minWidth: 0,
               height: cardHeight,
-              zIndex: narrow && columns > 1 ? 10 + column : column + 1,
+              zIndex: column + 1,
             }}
           >
             {renderLessonCard(lesson, viewMode, density)}
@@ -1385,7 +1379,7 @@ export default function SchedulePage() {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div style={{ display: 'grid', gridTemplateRows: 'auto auto auto minmax(0, 1fr)', gap: 16, height: '100%', minHeight: 0, overflow: 'hidden' }}>
       <h1 className="page-heading">Расписание</h1>
 
       <section
@@ -1523,27 +1517,11 @@ export default function SchedulePage() {
         </label>
       </section>
 
-      <section className="mentor-panel" style={{ padding: 10, overflow: 'hidden', borderRadius: 24, boxShadow: 'var(--shadow-card)' }}>
-        <div style={{ width: '100%', minWidth: 0, overflow: 'hidden' }}>
+      <section className="mentor-panel" style={{ padding: 10, minHeight: 0, overflow: 'auto', borderRadius: 24, boxShadow: 'var(--shadow-card)', scrollbarWidth: 'thin' }}>
+        <div style={{ width: '100%', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
           {loading ? <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка расписания...</p> : renderCalendarBody()}
         </div>
       </section>
-
-      <div
-        className="mentor-panel"
-        style={{
-          padding: '12px 16px',
-          color: '#687486',
-          fontSize: 13,
-          display: 'flex',
-          justifyContent: 'space-between',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
-      >
-        <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}><span>ⓘ</span> Время указано по вашему часовому поясу: Москва (UTC+3)</span>
-        <span>Занятия длятся 60 минут по умолчанию. Стоимость указана за занятие.</span>
-      </div>
 
       {isRequestsModalOpen && (
         <div onClick={() => setIsRequestsModalOpen(false)} className="modal-overlay">
@@ -1596,13 +1574,13 @@ export default function SchedulePage() {
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       {lesson.conduct_status === 'booking_pending' && (
                         <>
-                          <button onClick={() => handleRequestResolve(lesson, 'approve-booking')} disabled={processingRequestId === lesson.id}>
+                          <button onClick={() => handleRequestResolve(lesson, 'approve-booking')} disabled={processingRequestId === lesson.id} className="modal-success">
                             Подтвердить запись
                           </button>
                           <button
                             onClick={() => handleRequestResolve(lesson, 'reject-booking')}
                             disabled={processingRequestId === lesson.id}
-                            style={{ background: '#F44336', boxShadow: 'none' }}
+                            className="modal-danger"
                           >
                             Отклонить запись
                           </button>
@@ -1611,13 +1589,13 @@ export default function SchedulePage() {
 
                       {lesson.conduct_status === 'reschedule_pending' && (
                         <>
-                          <button onClick={() => handleRequestResolve(lesson, 'approve-reschedule')} disabled={processingRequestId === lesson.id}>
+                          <button onClick={() => handleRequestResolve(lesson, 'approve-reschedule')} disabled={processingRequestId === lesson.id} className="modal-success">
                             Подтвердить перенос
                           </button>
                           <button
                             onClick={() => handleRequestResolve(lesson, 'reject-reschedule')}
                             disabled={processingRequestId === lesson.id}
-                            style={{ background: '#F44336', boxShadow: 'none' }}
+                            className="modal-danger"
                           >
                             Отклонить перенос
                           </button>
@@ -1626,13 +1604,13 @@ export default function SchedulePage() {
 
                       {lesson.payment_status === 'payment_pending' && (
                         <>
-                          <button onClick={() => handleRequestResolve(lesson, 'approve-payment')} disabled={processingRequestId === lesson.id}>
+                          <button onClick={() => handleRequestResolve(lesson, 'approve-payment')} disabled={processingRequestId === lesson.id} className="modal-success">
                             Подтвердить оплату
                           </button>
                           <button
                             onClick={() => handleRequestResolve(lesson, 'reject-payment')}
                             disabled={processingRequestId === lesson.id}
-                            style={{ background: '#F44336', boxShadow: 'none' }}
+                            className="modal-danger"
                           >
                             Отклонить оплату
                           </button>
@@ -1650,11 +1628,12 @@ export default function SchedulePage() {
       {selectedMonthDay && selectedMonthDayDate && (
         <div
           onClick={() => setSelectedMonthDay(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.34)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 24, zIndex: 1000 }}
+          className="modal-overlay"
         >
           <div
             onClick={(event) => event.stopPropagation()}
-            style={{ width: 'min(560px, 100%)', maxHeight: '82vh', overflowY: 'auto', borderRadius: 24, background: 'rgba(255,255,255,0.98)', boxShadow: '0 28px 70px rgba(15, 23, 42, 0.22)', border: '1px solid rgba(24,33,47,0.08)' }}
+            className="app-modal"
+            style={{ width: 'min(560px, 100%)', padding: 0, gap: 0 }}
           >
             <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid rgba(24,33,47,0.08)', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
               <div>
@@ -1665,7 +1644,7 @@ export default function SchedulePage() {
                   {selectedMonthDayLessons.length} записей
                 </div>
               </div>
-              <button type="button" title="Закрыть" onClick={() => setSelectedMonthDay(null)} style={{ minWidth: 40, width: 40, height: 40, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 22 }}>×</button>
+              <button type="button" title="Закрыть" onClick={() => setSelectedMonthDay(null)} className="modal-close">×</button>
             </div>
 
             <div style={{ padding: 18, display: 'grid', gap: 10 }}>
@@ -1966,11 +1945,12 @@ export default function SchedulePage() {
         return (
           <div
             onClick={() => setSelectedLessonId(null)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.34)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 24, zIndex: 1000 }}
+            className="modal-overlay"
           >
             <div
               onClick={(event) => event.stopPropagation()}
-              style={{ width: 'min(560px, 100%)', borderRadius: 28, background: 'rgba(255,255,255,0.98)', boxShadow: '0 28px 70px rgba(15, 23, 42, 0.22)', border: '1px solid rgba(24,33,47,0.08)', overflow: 'hidden' }}
+              className="app-modal"
+              style={{ width: 'min(560px, 100%)', padding: 0, gap: 0, overflow: 'hidden' }}
             >
               <div style={{ padding: '22px 24px 18px', background: `${currentStatusColor}12`, borderBottom: '1px solid rgba(24,33,47,0.08)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
@@ -1985,7 +1965,7 @@ export default function SchedulePage() {
                         : `${subject?.name ?? 'Без предмета'} • ${toLessonDateStr(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`}
                     </p>
                   </div>
-                  <button onClick={() => setSelectedLessonId(null)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>×</button>
+                  <button type="button" title="Закрыть" onClick={() => setSelectedLessonId(null)} className="modal-close">×</button>
                 </div>
               </div>
 
@@ -2015,12 +1995,13 @@ export default function SchedulePage() {
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                     <button
+                      type="button"
                       title={isEditingLesson ? 'Скрыть редактирование' : 'Редактировать занятие'}
                       onClick={() => {
                         setIsEditingLesson((prev) => !prev);
                         setIsReschedulingLesson(false);
                       }}
-                      style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: isEditingLesson ? 'rgba(23,32,51,0.92)' : '#2AABEE', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                      className={`icon-button ${isEditingLesson ? 'icon-button-dark' : 'icon-button-primary'}`}
                     >
                       ✎
                     </button>
@@ -2035,24 +2016,13 @@ export default function SchedulePage() {
                               : 'Добавить личную заметку'
                         }
                         onClick={() => setShowLessonNoteEditor((prev) => !prev)}
-                        style={{
-                          minWidth: 42,
-                          width: 42,
-                          height: 42,
-                          padding: 0,
-                          borderRadius: 999,
-                          background: showLessonNoteEditor ? 'rgba(23,32,51,0.92)' : '#2AABEE',
-                          boxShadow: 'none',
-                          fontSize: 18,
-                          display: 'inline-grid',
-                          placeItems: 'center',
-                        }}
+                        className={`icon-button ${showLessonNoteEditor ? 'icon-button-dark' : 'icon-button-primary'}`}
                       >
                         {selectedLesson.tutor_note?.trim() ? '✎' : '+'}
                       </button>
                     )}
                     {canMarkConducted && (
-                      <button title="Отметить проведённым" onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'conducted' })} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#4CAF50', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}>
+                      <button type="button" title="Отметить проведённым" onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'conducted' })} className="icon-button icon-button-success">
                         ✓
                       </button>
                     )}
@@ -2063,39 +2033,43 @@ export default function SchedulePage() {
                           setIsReschedulingLesson((prev) => !prev);
                           setIsEditingLesson(false);
                         }}
-                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: isReschedulingLesson ? '#9C27B0' : 'rgba(23,32,51,0.92)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                        className={`icon-button ${isReschedulingLesson ? 'icon-button-purple' : 'icon-button-dark'}`}
                       >
                         ↻
                       </button>
                     )}
                     {canApproveBooking && (
                       <button
+                        type="button"
                         onClick={() => handleBookingDecision(selectedLesson.id, true)}
-                        style={{ background: '#4CAF50', boxShadow: 'none' }}
+                        className="modal-success"
                       >
                         Подтвердить запись
                       </button>
                     )}
                     {canRejectBooking && (
                       <button
+                        type="button"
                         onClick={() => handleBookingDecision(selectedLesson.id, false)}
-                        style={{ background: '#F44336', boxShadow: 'none' }}
+                        className="modal-danger"
                       >
                         Отклонить запись
                       </button>
                     )}
                     {canApprovePayment && (
                       <button
+                        type="button"
                         onClick={() => handlePaymentDecision(selectedLesson.id, true)}
-                        style={{ background: '#4CAF50', boxShadow: 'none' }}
+                        className="modal-success"
                       >
                         Подтвердить оплату
                       </button>
                     )}
                     {canRejectPayment && (
                       <button
+                        type="button"
                         onClick={() => handlePaymentDecision(selectedLesson.id, false)}
-                        style={{ background: '#F44336', boxShadow: 'none' }}
+                        className="modal-danger"
                       >
                         Отклонить оплату
                       </button>
@@ -2104,7 +2078,7 @@ export default function SchedulePage() {
                       <button
                         title="Отметить оплаченным"
                         onClick={() => handleLessonPatch(selectedLesson.id, { payment_status: 'paid' })}
-                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#4CAF50', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                        className="icon-button icon-button-success"
                       >
                         ₽
                       </button>
@@ -2113,7 +2087,7 @@ export default function SchedulePage() {
                       <button
                         title="Удалить слот"
                         onClick={() => handleLessonDelete(selectedLesson)}
-                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#F44336', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                        className="icon-button icon-button-danger"
                       >
                         🗑
                       </button>
@@ -2122,7 +2096,7 @@ export default function SchedulePage() {
                       <button
                         title="Отменить занятие"
                         onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'cancelled' })}
-                        style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: '#F44336', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                        className="icon-button icon-button-danger"
                       >
                         ⊘
                       </button>
@@ -2158,8 +2132,9 @@ export default function SchedulePage() {
                       </select>
                     )}
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button onClick={handleLessonDetailsSave}>Сохранить изменения</button>
+                      <button type="button" onClick={handleLessonDetailsSave} className="modal-primary">Сохранить изменения</button>
                       <button
+                        type="button"
                         onClick={() => {
                           setEditLessonDate(toLessonDateStr(selectedLesson));
                           setEditStartTime(toTime(toStartTime(selectedLesson)));
@@ -2168,7 +2143,7 @@ export default function SchedulePage() {
                           setEditTopicId(selectedLesson.topic_id ? String(selectedLesson.topic_id) : '');
                           setIsEditingLesson(false);
                         }}
-                        style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                        className="modal-secondary"
                       >
                         Отмена
                       </button>
@@ -2186,17 +2161,18 @@ export default function SchedulePage() {
                       <input type="time" value={rescheduleEndTime} onChange={(event) => setRescheduleEndTime(event.target.value)} />
                     </div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button onClick={handleLessonReschedule} style={{ background: '#9C27B0', boxShadow: 'none' }}>
+                      <button type="button" onClick={handleLessonReschedule} className="modal-purple">
                         Подтвердить перенос
                       </button>
                       <button
+                        type="button"
                         onClick={() => {
                           setRescheduleDate(toLessonDateStr(selectedLesson));
                           setRescheduleStartTime(toTime(toStartTime(selectedLesson)));
                           setRescheduleEndTime(toTime(toEndTime(selectedLesson)));
                           setIsReschedulingLesson(false);
                         }}
-                        style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}
+                        className="modal-secondary"
                       >
                         Отмена
                       </button>

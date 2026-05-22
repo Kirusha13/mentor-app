@@ -192,10 +192,10 @@ export default function LevelsPage() {
                         Избранное
                       </label>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={() => handleSave(level)} disabled={saving}>
+                        <button type="button" onClick={() => handleSave(level)} disabled={saving} className="modal-primary">
                           Сохранить
                         </button>
-                        <button type="button" onClick={() => setEditingId(null)} style={{ background: 'rgba(23,32,51,0.92)', boxShadow: 'none' }}>
+                        <button type="button" onClick={() => setEditingId(null)} className="modal-secondary">
                           Отмена
                         </button>
                       </div>
@@ -203,7 +203,7 @@ export default function LevelsPage() {
                   ) : (
                     <>
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <button
                             type="button"
                             title={level.is_favourite ? 'Убрать из избранного' : 'Добавить в избранное'}
@@ -214,18 +214,17 @@ export default function LevelsPage() {
                           </button>
                           <div style={{ fontWeight: 900, color: '#1f2a3b' }}>{level.name}</div>
                         </div>
-                        <div style={mutedTextStyle}>Используется для тем, ДЗ, расписания и карточек учеников.</div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         <button
                           type="button"
                           title="Редактировать уровень"
                           onClick={() => startEdit(level)}
-                          style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
+                          className="icon-button icon-button-dark"
                         >
                           ✎
                         </button>
-                        <button type="button" title="Удалить уровень" onClick={() => handleDelete(level)} style={{ minWidth: 42, width: 42, height: 42, padding: 0, borderRadius: 999, background: 'rgba(166,63,59,0.92)', boxShadow: 'none', fontSize: 18 }}>
+                        <button type="button" title="Удалить уровень" onClick={() => handleDelete(level)} className="icon-button icon-button-danger">
                           🗑
                         </button>
                       </div>

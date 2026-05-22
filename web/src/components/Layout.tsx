@@ -189,7 +189,8 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div
       style={{
-        minHeight: '100vh',
+        height: isMobile ? 'auto' : '100dvh',
+        minHeight: isMobile ? '100vh' : '100dvh',
         display: 'grid',
         gridTemplateColumns: isMobile
           ? '1fr'
@@ -197,6 +198,7 @@ export default function Layout({ children }: LayoutProps) {
             ? '238px minmax(0, 1fr)'
             : '286px minmax(0, 1fr)',
         background: 'transparent',
+        overflow: isMobile ? 'visible' : 'hidden',
       }}
     >
       <aside
@@ -212,7 +214,8 @@ export default function Layout({ children }: LayoutProps) {
             : '18px 0 42px rgba(15, 23, 42, 0.16)',
           position: isMobile ? 'relative' : 'sticky',
           top: 0,
-          height: isMobile ? 'auto' : '100vh',
+          height: isMobile ? 'auto' : '100dvh',
+          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
           gap: 18,
@@ -269,7 +272,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </div>
 
-        <nav style={{ display: 'grid', gap: 16, overflowY: 'auto', paddingRight: 2 }}>
+        <nav style={{ display: 'grid', gap: 16, overflowY: 'auto', paddingRight: 2, minHeight: 0 }}>
           {NAV_GROUPS.map((group) => (
             <div
               key={group.title}
@@ -397,17 +400,24 @@ export default function Layout({ children }: LayoutProps) {
         style={{
           minWidth: 0,
           padding: isMobile ? '12px' : isTablet ? '14px' : '16px 18px 20px',
+          height: isMobile ? 'auto' : '100dvh',
+          minHeight: 0,
+          overflow: isMobile ? 'visible' : 'hidden',
+          display: 'grid',
         }}
       >
         <div
           style={{
-            minHeight: isMobile ? 'auto' : 'calc(100vh - 36px)',
+            height: isMobile ? 'auto' : isTablet ? 'calc(100dvh - 28px)' : 'calc(100dvh - 36px)',
+            minHeight: isMobile ? 'auto' : 0,
             borderRadius: isMobile ? 18 : 28,
             background: 'rgba(255,255,255,0.72)',
             border: '1px solid rgba(255,255,255,0.78)',
             boxShadow: '0 26px 70px rgba(21, 32, 51, 0.08)',
             backdropFilter: 'blur(18px)',
             padding: isMobile ? 12 : isTablet ? 16 : 22,
+            overflow: isMobile ? 'visible' : 'hidden',
+            display: 'grid',
           }}
         >
           {children}
