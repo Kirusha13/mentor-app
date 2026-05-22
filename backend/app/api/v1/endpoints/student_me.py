@@ -127,6 +127,7 @@ async def my_tutors(
 
 class JoinRequest(BaseModel):
     token: str
+    grade: int | None = None
 
 
 @router.post("/join", response_model=TutorStudentOut, summary="Вступить по токену приглашения")
@@ -157,6 +158,9 @@ async def join_by_token(
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Вы уже привязаны к этому предмету")
+
+    if data.grade is not None:
+        student.grade = data.grade
 
     ts = TutorStudent(
         tutor_id=subject.tutor_id,
