@@ -17,12 +17,14 @@ async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
     if not verify_telegram_data(tg_dict):
         raise ValueError("invalid_telegram_hash")
 
-    subject_result = await db.execute(
-        select(Subject).where(Subject.invitation_token == data.invitation_token)
-    )
-    subject = subject_result.scalar_one_or_none()
-    if subject is None:
-        raise LookupError("invalid_invitation_token")
+    subject = None
+    if data.invitation_token:
+        subject_result = await db.execute(
+            select(Subject).where(Subject.invitation_token == data.invitation_token)
+        )
+        subject = subject_result.scalar_one_or_none()
+        if subject is None:
+            raise LookupError("invalid_invitation_token")
 
     existing_student = await get_student_by_telegram_id(db, data.id)
     if existing_student:
@@ -45,26 +47,27 @@ async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
         db.add(student)
         await db.flush()
 
-    existing_relation_result = await db.execute(
-        select(TutorStudent).where(
-            TutorStudent.student_id == student.id,
-            TutorStudent.tutor_id == subject.tutor_id,
-            TutorStudent.subject_id == subject.id,
-        )
-    )
-    existing_relation = existing_relation_result.scalar_one_or_none()
-
-    if existing_relation is None:
-        db.add(
-            TutorStudent(
-                tutor_id=subject.tutor_id,
-                student_id=student.id,
-                subject_id=subject.id,
-                hourly_rate=subject.default_rate or 0,
-                rate_set_at=datetime.now(timezone.utc),
-                started_at=datetime.now(timezone.utc).date(),
+    if subject is not None:
+        existing_relation_result = await db.execute(
+            select(TutorStudent).where(
+                TutorStudent.student_id == student.id,
+                TutorStudent.tutor_id == subject.tutor_id,
+                TutorStudent.subject_id == subject.id,
             )
         )
+        existing_relation = existing_relation_result.scalar_one_or_none()
+
+        if existing_relation is None:
+            db.add(
+                TutorStudent(
+                    tutor_id=subject.tutor_id,
+                    student_id=student.id,
+                    subject_id=subject.id,
+                    hourly_rate=subject.default_rate or 0,
+                    rate_set_at=datetime.now(timezone.utc),
+                    started_at=datetime.now(timezone.utc).date(),
+                )
+            )
 
     await db.commit()
     await db.refresh(student)

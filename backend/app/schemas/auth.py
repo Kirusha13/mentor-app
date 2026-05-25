@@ -23,7 +23,7 @@ class TelegramRegisterData(TelegramAuthData):
 
 
 class StudentRegisterData(TelegramAuthData):
-    invitation_token: str
+    invitation_token: str | None = None
     full_name: str
     phone_number: str
     grade: int | None = None
