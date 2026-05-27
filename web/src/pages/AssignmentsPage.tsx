@@ -1551,31 +1551,38 @@ export default function AssignmentsPage() {
                   <button type="button" onClick={() => handlePatchAssignment(selectedAssignment.id, { completion_status: 'in_progress' })} className="modal-secondary">
                     В работу
                   </button>
-                  <button
-                    onClick={() => {
-                      const grade = window.prompt('Поставить оценку 1-5');
-                      const value = Number(grade);
-                      if (!value || value < 1 || value > 5) return;
-                      handlePatchAssignment(selectedAssignment.id, { grade: value, completion_status: 'completed' });
-                    }}
-                    className="modal-success"
-                  >
-                    Поставить оценку
-                  </button>
                 </div>
 
-                <div style={{ marginTop: 16 }}>
+                <div style={{ marginTop: 16, display: 'grid', gap: 12, padding: 16, borderRadius: 18, background: 'rgba(23,32,51,0.035)', border: '1px solid rgba(24,33,47,0.06)' }}>
+                  <div style={{ fontSize: 14, color: '#687486' }}>Оценка за задание</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <input
+                      key={selectedAssignment.id}
+                      type="number"
+                      min="1"
+                      max="5"
+                      defaultValue={selectedAssignment.grade ?? ''}
+                      onBlur={(event) => {
+                        const value = Number(event.target.value);
+                        if (!value || value < 1 || value > 5 || value === selectedAssignment.grade) return;
+                        handlePatchAssignment(selectedAssignment.id, { grade: value, completion_status: 'completed' });
+                      }}
+                      style={{ maxWidth: 100 }}
+                    />
+                    <span style={{ color: '#5d6778' }}>Оценка от 1 до 5</span>
+                  </div>
+
                   <label style={{ display: 'grid', gap: 6 }}>
                     <span style={{ fontSize: 13, color: '#687486' }}>Комментарий к оценке за ДЗ</span>
                     <textarea
                       value={assignmentGradeCommentDraft}
                       onChange={(event) => setAssignmentGradeCommentDraft(event.target.value)}
-                      rows={4}
+                      rows={3}
                       placeholder="Например: решение верное, но нужно внимательнее оформлять ответ"
                       style={{ resize: 'vertical' }}
                     />
                   </label>
-                  <div style={{ marginTop: 10 }}>
+                  <div>
                     <button
                       type="button"
                       onClick={handleSaveAssignmentGradeComment}

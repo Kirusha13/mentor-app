@@ -708,7 +708,7 @@ export default function FinancePage() {
   const forecastParts = [
     { label: 'Оплачено', value: forecastPaidIncome, color: '#4CAF50' },
     { label: 'На проверке', value: visiblePendingConfirmation, color: '#FF9800' },
-    { label: 'В расписании', value: forecastPlannedIncome, color: '#2AABEE' },
+    { label: 'Запланировано', value: forecastPlannedIncome, color: '#2AABEE' },
   ];
   const forecastRangeLabel = financePeriod === 'week' ? 'выбранную неделю' : 'выбранный месяц';
   const chartRangeLabel = {
@@ -1015,7 +1015,7 @@ export default function FinancePage() {
         <article className="metric-card" style={{ minHeight: 84, padding: '14px 16px', borderColor: 'rgba(42,171,238,0.16)', background: 'linear-gradient(135deg, rgba(42,171,238,0.08), rgba(255,255,255,0.92))' }}>
           <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>□</span>
           <div>
-            <div className="metric-label">В расписании</div>
+            <div className="metric-label">Запланировано</div>
             <div className="metric-value">{loading ? '—' : formatCurrency(forecastPlannedIncome)}</div>
             <div style={{ marginTop: 8, color: scheduledDelta >= 0 ? '#2AABEE' : '#F44336', fontSize: 13, fontWeight: 800 }}>
               {formatSignedNumber(scheduledDelta, 'зан.')} к {periodLabelShort}
@@ -1649,13 +1649,13 @@ export default function FinancePage() {
                     marginTop: 10,
                     padding: '12px 14px',
                     borderRadius: 16,
-                    background: 'rgba(47,125,90,0.1)',
-                    color: '#4CAF50',
+                    background: averageWeekDelta >= 0 ? 'rgba(47,125,90,0.1)' : 'rgba(244,67,54,0.1)',
+                    color: averageWeekDelta >= 0 ? '#4CAF50' : '#F44336',
                     fontSize: 14,
                     fontWeight: 800,
                   }}
                 >
-                  ↗ В {lastAverageWeek.fullLabel} средняя неделя{' '}
+                  {averageWeekDelta >= 0 ? '↗' : '↘'} В {lastAverageWeek.fullLabel} средняя неделя{' '}
                   {averageWeekDelta >= 0 ? 'выше' : 'ниже'} предыдущего месяца на{' '}
                   {formatCurrency(Math.abs(averageWeekDelta))}.
                 </div>
