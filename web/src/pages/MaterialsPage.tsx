@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   createMaterial,
@@ -20,7 +20,6 @@ import {
 } from '../api/topics';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { getApiErrorMessage } from '../utils/apiError';
-import { getMediaUrl } from '../utils/media';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -84,8 +83,17 @@ function parseStudyLevel(value: string): string[] | null {
   return items.length ? items : null;
 }
 
-function getMaterialContentPreview(material: Material) {
-  return material.content_text?.trim() || material.content_url?.trim() || 'Материал без содержимого';
+function getMaterialTitle(material: Material): string {
+  if (material.title?.trim()) return material.title.trim();
+  if (material.content_text?.trim()) return material.content_text.trim().slice(0, 60);
+  if (material.content_url?.trim()) {
+    try { return new URL(material.content_url).hostname; } catch { return material.content_url; }
+  }
+  return 'Материал без названия';
+}
+
+function getDomainHint(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
 
 export default function MaterialsPage() {
@@ -106,6 +114,7 @@ export default function MaterialsPage() {
   const [formatFilter, setFormatFilter] = useState<'all' | MaterialFormat>('all');
   const [levelFilter, setLevelFilter] = useState<'all' | MaterialLevel>('all');
   const [collapsedTopicIds, setCollapsedTopicIds] = useState<Set<number>>(() => new Set());
+  const [expandedMaterialIds, setExpandedMaterialIds] = useState<Set<number>>(() => new Set());
 
   const [topicTitle, setTopicTitle] = useState('');
   const [topicDescription, setTopicDescription] = useState('');
@@ -117,6 +126,8 @@ export default function MaterialsPage() {
   const [materialLevel, setMaterialLevel] = useState<MaterialLevel>('basic');
   const [materialText, setMaterialText] = useState('');
   const [materialUrl, setMaterialUrl] = useState('');
+  const [materialTitle, setMaterialTitle] = useState('');
+
   const requestedSubjectId = searchParams.get('subject_id');
   const requestedTopicId = searchParams.get('topic_id');
 
@@ -187,6 +198,7 @@ export default function MaterialsPage() {
     () => buildTopicRows(filteredTopics, null, 0, collapsedTopicIds),
     [collapsedTopicIds, filteredTopics]
   );
+
   const childTopicCount = useMemo(() => {
     const map = new Map<number, number>();
     filteredTopics.forEach((topic) => {
@@ -247,6 +259,7 @@ export default function MaterialsPage() {
               if (!normalizedSearch) return true;
 
               const haystack = [
+                material.title ?? '',
                 material.content_text ?? '',
                 material.content_url ?? '',
                 formatLabels[material.format],
@@ -306,6 +319,7 @@ export default function MaterialsPage() {
     setMaterialLevel('basic');
     setMaterialText('');
     setMaterialUrl('');
+    setMaterialTitle('');
   };
 
   const openEditMaterial = (material: Material) => {
@@ -314,6 +328,7 @@ export default function MaterialsPage() {
     setMaterialLevel(material.level);
     setMaterialText(material.content_text ?? '');
     setMaterialUrl(material.content_url ?? '');
+    setMaterialTitle(material.title ?? '');
   };
 
   const handleSaveTopic = async () => {
@@ -420,6 +435,7 @@ export default function MaterialsPage() {
       setSaving(true);
       const payload = {
         topic_id: selectedTopic.id,
+        title: materialTitle.trim() || null,
         format: materialFormat,
         level: materialLevel,
         content_text: usesText ? trimmedText : null,
@@ -461,121 +477,74 @@ export default function MaterialsPage() {
     <div style={{ display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)', gap: 16, height: isMobile ? 'auto' : '100%', minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
       <h1 className="page-heading">Материалы</h1>
 
-      <section className="mentor-panel toolbar-panel" style={{ gridTemplateColumns: isTablet ? '1fr' : '1.2fr 0.8fr 0.8fr 0.75fr' }}>
-          <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-            Поиск по темам и материалам
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Например: квадратные, формула, pdf, ОГЭ"
-            />
-          </label>
+      {/* ── Toolbar: search + subject only ── */}
+      <section className="mentor-panel toolbar-panel" style={{ gridTemplateColumns: isTablet ? '1fr' : '1fr 220px' }}>
+        <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+          Поиск по темам и материалам
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Например: квадратные, формула, pdf, ОГЭ"
+          />
+        </label>
 
-          <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-            Предмет
-            <select value={selectedSubjectId} onChange={(event) => setSelectedSubjectId(event.target.value)}>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={String(subject.id)}>
-                  {subject.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-            Формат материала
-            <select
-              value={formatFilter}
-              onChange={(event) => setFormatFilter(event.target.value as 'all' | MaterialFormat)}
-            >
-              <option value="all">Все форматы</option>
-              {Object.entries(formatLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
-            Уровень
-            <select
-              value={levelFilter}
-              onChange={(event) => setLevelFilter(event.target.value as 'all' | MaterialLevel)}
-            >
-              <option value="all">Все уровни</option>
-              {Object.entries(levelLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
+        <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
+          Предмет
+          <select value={selectedSubjectId} onChange={(event) => setSelectedSubjectId(event.target.value)}>
+            {subjects.map((subject) => (
+              <option key={subject.id} value={String(subject.id)}>
+                {subject.name}
+              </option>
+            ))}
+          </select>
+        </label>
       </section>
 
       <section
         style={{
           display: 'grid',
-          gridTemplateColumns: isTablet ? '1fr' : '320px minmax(0, 1fr)',
+          gridTemplateColumns: isTablet ? '1fr' : '260px minmax(0, 1fr)',
           gap: 16,
           minHeight: 0,
           overflow: isMobile ? 'visible' : 'hidden',
         }}
       >
-        <aside style={{ ...panelStyle, display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 14, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-            <div>
-              <div style={{ fontWeight: 800, color: '#1f2a3b', marginBottom: 2 }}>Темы</div>
-              <div style={mutedTextStyle}>{selectedSubject?.name ?? 'Предмет не выбран'}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button title="Создать тему" type="button" onClick={openCreateRootTopic} className="add-trigger">
-              +
-            </button>
-            <button
-              title="Создать подтему"
-              type="button"
-              onClick={openCreateChildTopic}
-              className="icon-button icon-button-dark"
-            >
-              <svg
-                aria-hidden="true"
-                focusable="false"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+        {/* ── Sidebar: flat indented topic tree ── */}
+        <aside style={{ ...panelStyle, display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 0, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden', padding: 0 }}>
+          <div style={{ padding: '14px 14px 12px', borderBottom: '1px solid rgba(24,33,47,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: '#1f2a3b' }}>Темы</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                title="Создать подтему"
+                type="button"
+                onClick={openCreateChildTopic}
+                style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid rgba(24,33,47,0.1)', background: '#f5f7fb', display: 'grid', placeItems: 'center', fontSize: 14, color: '#556', boxShadow: 'none', cursor: 'pointer' }}
               >
-                <rect x="9" y="2" width="6" height="6" rx="1.6" />
-                <path d="M12 8v4" />
-                <path d="M5 12h14" />
-                <path d="M5 12v4" />
-                <path d="M12 12v4" />
-                <path d="M19 12v4" />
-                <rect x="2" y="16" width="6" height="6" rx="1.6" />
-                <rect x="9" y="16" width="6" height="6" rx="1.6" />
-                <rect x="16" y="16" width="6" height="6" rx="1.6" />
-              </svg>
-            </button>
+                ⤵
+              </button>
+              <button
+                title="Создать тему"
+                type="button"
+                onClick={openCreateRootTopic}
+                style={{ width: 30, height: 30, borderRadius: 9, border: 'none', background: '#2AABEE', display: 'grid', placeItems: 'center', fontSize: 18, color: '#fff', boxShadow: 'none', cursor: 'pointer', fontWeight: 700 }}
+              >
+                +
+              </button>
             </div>
           </div>
 
-          <div style={{ display: 'grid', alignContent: 'start', gap: 8, minHeight: 0, overflowY: isMobile ? 'visible' : 'auto', paddingRight: 2, scrollbarWidth: 'thin' }}>
+          <div style={{ padding: '10px 10px', display: 'grid', alignContent: 'start', gap: 2, minHeight: 0, overflowY: isMobile ? 'visible' : 'auto', scrollbarWidth: 'thin' }}>
             {loading ? (
               <div style={mutedTextStyle}>Загружаем темы...</div>
             ) : topicRows.length === 0 ? (
               <div style={mutedTextStyle}>
-                {normalizedSearch
-                  ? 'По текущему поиску темы не найдены.'
-                  : 'Для этого предмета пока нет тем.'}
+                {normalizedSearch ? 'По текущему поиску темы не найдены.' : 'Для этого предмета пока нет тем.'}
               </div>
             ) : (
               topicRows.map((topic) => {
                 const active = String(topic.id) === selectedTopicId;
+                const hasChildren = (childTopicCount.get(topic.id) ?? 0) > 0;
+                const isCollapsed = collapsedTopicIds.has(topic.id);
 
                 return (
                   <button
@@ -583,55 +552,54 @@ export default function MaterialsPage() {
                     type="button"
                     onClick={() => setSelectedTopicId(String(topic.id))}
                     style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      padding: '7px 10px',
+                      borderRadius: 10,
+                      border: active ? '1px solid rgba(42,171,238,0.22)' : '1px solid transparent',
+                      background: active ? 'rgba(42,171,238,0.1)' : 'transparent',
+                      color: active ? '#1565C0' : '#324055',
+                      fontWeight: active ? 700 : 400,
                       textAlign: 'left',
-                      padding: '12px 14px',
-                      borderRadius: 16,
-                      border: active
-                        ? '1px solid rgba(42,171,238,0.28)'
-                        : '1px solid rgba(24,33,47,0.08)',
-                      background: active ? 'rgba(42,171,238,0.1)' : 'rgba(23,32,51,0.03)',
+                      marginLeft: topic.depth * 14,
                       boxShadow: 'none',
-                      color: '#1f2a3b',
-                      marginLeft: topic.depth * 16,
-                      position: 'relative',
+                      cursor: 'pointer',
+                      transition: 'background 0.12s',
                     }}
                   >
-                    {topic.depth > 0 && (
+                    {hasChildren ? (
                       <span
-                        style={{
-                          position: 'absolute',
-                          left: -10,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          width: 8,
-                          height: 2,
-                          borderRadius: 999,
-                          background: 'rgba(90,106,128,0.45)',
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCollapsedTopicIds((cur) => {
+                            const next = new Set(cur);
+                            if (next.has(topic.id)) next.delete(topic.id);
+                            else next.add(topic.id);
+                            return next;
+                          });
                         }}
-                      />
+                        style={{ fontSize: 10, color: '#aab', width: 12, flexShrink: 0 }}
+                      >
+                        {isCollapsed ? '▸' : '▾'}
+                      </span>
+                    ) : (
+                      <span style={{ width: 12, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: 999, background: active ? '#2AABEE' : '#cbd5e0' }} />
+                      </span>
                     )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{topic.title}</div>
-                      </div>
-                      {(childTopicCount.get(topic.id) ?? 0) > 0 && (
-                        <span
-                          title={collapsedTopicIds.has(topic.id) ? 'Показать подтемы' : 'Скрыть подтемы'}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setCollapsedTopicIds((current) => {
-                              const next = new Set(current);
-                              if (next.has(topic.id)) next.delete(topic.id);
-                              else next.add(topic.id);
-                              return next;
-                            });
-                          }}
-                          style={{ width: 28, height: 28, borderRadius: 999, display: 'inline-grid', placeItems: 'center', background: 'rgba(23,32,51,0.08)' }}
-                        >
-                          {collapsedTopicIds.has(topic.id) ? '▸' : '▾'}
-                        </span>
-                      )}
-                    </div>
+                    <span style={{ flex: 1, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {topic.title}
+                    </span>
+                    {hasChildren && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999,
+                        background: active ? '#2AABEE' : 'rgba(23,32,51,0.07)',
+                        color: active ? '#fff' : '#778',
+                      }}>
+                        {childTopicCount.get(topic.id)}
+                      </span>
+                    )}
                   </button>
                 );
               })
@@ -639,231 +607,202 @@ export default function MaterialsPage() {
           </div>
         </aside>
 
-        <section style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 16, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
-          <article style={{ ...panelStyle, minHeight: 0 }}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: 12,
-                alignItems: 'flex-start',
-                flexWrap: 'wrap',
-                marginBottom: 14,
-              }}
-            >
-              <div style={{ minWidth: 0, flex: '1 1 240px' }}>
-                <h3 style={{ fontSize: 22, marginBottom: 6, overflowWrap: 'anywhere' }}>
-                  {selectedTopic ? selectedTopic.title : 'Выбери тему'}
-                </h3>
-                <div style={mutedTextStyle}>
-                  {selectedTopic
-                    ? selectedTopic.description || 'У темы пока нет описания.'
-                    : 'Выбери тему слева, чтобы увидеть материалы и действия.'}
-                </div>
-              </div>
+        {/* ── Right panel ── */}
+        <section style={{ display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)', gap: 12, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
 
+          {/* Topic header */}
+          <article style={{ ...panelStyle, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0, flex: '1 1 200px' }}>
+              <h2 style={{ fontSize: 19, fontWeight: 800, color: '#1f2a3b', marginBottom: 4, overflowWrap: 'anywhere' }}>
+                {selectedTopic ? selectedTopic.title : 'Выбери тему'}
+              </h2>
+              <div style={mutedTextStyle}>
+                {selectedTopic
+                  ? selectedTopic.description || 'У темы пока нет описания.'
+                  : 'Выбери тему слева, чтобы увидеть материалы.'}
+              </div>
               {selectedTopic && (
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginLeft: 'auto', flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    title="Редактировать тему"
-                    onClick={openEditTopic}
-                    className="icon-button icon-button-dark"
-                  >
-                    ✎
-                  </button>
-                  <button
-                    type="button"
-                    title="Удалить тему"
-                    onClick={handleDeleteTopic}
-                    className="icon-button icon-button-danger"
-                  >
-                    🗑
-                  </button>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  <span style={{ padding: '4px 10px', borderRadius: 999, background: 'rgba(23,32,51,0.06)', color: '#445', fontSize: 12, fontWeight: 600 }}>
+                    {selectedSubject?.name ?? '—'}
+                  </span>
+                  <span style={{ padding: '4px 10px', borderRadius: 999, background: 'rgba(23,32,51,0.06)', color: '#445', fontSize: 12, fontWeight: 600 }}>
+                    {selectedTopic.level_ids?.length
+                      ? selectedTopic.level_ids.map((id) => tutorLevels.find((l) => l.id === id)?.name ?? `#${id}`).join(', ')
+                      : 'Все уровни'}
+                  </span>
                 </div>
               )}
             </div>
-
             {selectedTopic && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <span
-                  style={{
-                    padding: '6px 10px',
-                    borderRadius: 999,
-                    background: 'rgba(23,32,51,0.06)',
-                    color: '#324055',
-                    fontSize: 13,
-                  }}
-                >
-                  Предмет: {selectedSubject?.name ?? '—'}
-                </span>
-                <span
-                  style={{
-                    padding: '6px 10px',
-                    borderRadius: 999,
-                    background: 'rgba(23,32,51,0.06)',
-                    color: '#324055',
-                    fontSize: 13,
-                  }}
-                >
-                  Уровни: {selectedTopic.level_ids?.length
-                    ? selectedTopic.level_ids.map((levelId) => tutorLevels.find((level) => level.id === levelId)?.name ?? `Уровень #${levelId}`).join(', ')
-                    : 'Все уровни'}
-                </span>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <button type="button" onClick={openEditTopic} className="icon-button icon-button-dark" title="Редактировать тему">✎</button>
+                <button type="button" onClick={handleDeleteTopic} className="icon-button icon-button-danger" title="Удалить тему">🗑</button>
               </div>
             )}
           </article>
 
-          <article style={{ ...panelStyle, display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', minHeight: 0, overflow: 'hidden' }}>
-            <div
+          {/* Materials toolbar: filter chips + add button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 800, fontSize: 15, color: '#1f2a3b', marginRight: 4 }}>
+              Материалы{selectedTopic ? ` · ${selectedTopicMaterials.length}` : ''}
+            </span>
+
+            {(['all', 'text', 'pdf', 'video', 'link', 'presentation', 'image'] as const).map((fmt) => {
+              const active = formatFilter === fmt;
+              return (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => setFormatFilter(fmt as typeof formatFilter)}
+                  style={{
+                    padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    border: active ? '1px solid rgba(42,171,238,0.28)' : '1px solid rgba(24,33,47,0.1)',
+                    background: active ? 'rgba(42,171,238,0.12)' : '#f5f7fb',
+                    color: active ? '#1565C0' : '#556',
+                    boxShadow: 'none',
+                  }}
+                >
+                  {fmt === 'all' ? 'Все форматы' : formatLabels[fmt as MaterialFormat]}
+                </button>
+              );
+            })}
+
+            {(['all', 'basic', 'advanced'] as const).map((lvl) => {
+              const active = levelFilter === lvl;
+              return (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => setLevelFilter(lvl as typeof levelFilter)}
+                  style={{
+                    padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    border: active ? '1px solid rgba(42,171,238,0.28)' : '1px solid rgba(24,33,47,0.1)',
+                    background: active ? 'rgba(42,171,238,0.12)' : '#f5f7fb',
+                    color: active ? '#1565C0' : '#556',
+                    boxShadow: 'none',
+                  }}
+                >
+                  {lvl === 'all' ? 'Все уровни' : levelLabels[lvl as MaterialLevel]}
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={openCreateMaterial}
+              disabled={!selectedTopic}
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: 12,
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                marginBottom: 14,
+                marginLeft: 'auto', padding: '7px 16px', borderRadius: 11,
+                background: selectedTopic ? '#2AABEE' : 'rgba(23,32,51,0.1)',
+                color: selectedTopic ? '#fff' : '#aaa',
+                fontSize: 13, fontWeight: 700, border: 'none',
+                boxShadow: selectedTopic ? '0 4px 12px rgba(42,171,238,0.3)' : 'none',
+                cursor: selectedTopic ? 'pointer' : 'default',
               }}
             >
-              <div>
-                <h3 style={{ fontSize: 20, marginBottom: 6 }}>Материалы темы</h3>
-                <div style={mutedTextStyle}>
-                  Добавляй текстовые конспекты, ссылки и другие материалы по выбранной теме.
-                </div>
-              </div>
+              + Добавить
+            </button>
+          </div>
 
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  title="Добавить материал"
-                  onClick={openCreateMaterial}
-                  disabled={!selectedTopic}
-                  className="add-trigger"
-                >
-                  +
-                </button>
-              </div>
+          {/* Material cards */}
+          {!selectedTopic ? (
+            <div style={mutedTextStyle}>Сначала выбери тему слева.</div>
+          ) : selectedTopicMaterials.length === 0 ? (
+            <div style={mutedTextStyle}>
+              {normalizedSearch || formatFilter !== 'all' || levelFilter !== 'all'
+                ? 'По текущим фильтрам материалы не найдены.'
+                : 'У этой темы пока нет материалов.'}
             </div>
+          ) : (
+            <div style={{ display: 'grid', alignContent: 'start', gap: 8, minHeight: 0, overflowY: isMobile ? 'visible' : 'auto', scrollbarWidth: 'thin', paddingRight: 2 }}>
+              {selectedTopicMaterials.map((material) => {
+                const formatColor: Record<MaterialFormat, string> = {
+                  pdf: '#D32F2F', video: '#1565C0', presentation: '#2E7D32',
+                  image: '#6A1B9A', link: '#0d7fc5', text: '#546e7a',
+                };
+                const color = formatColor[material.format];
+                const isExpanded = expandedMaterialIds.has(material.id);
+                const isTextMaterial = material.format === 'text';
+                const canOpen = Boolean(material.content_url);
+                const displayTitle = getMaterialTitle(material);
 
-            {!selectedTopic ? (
-              <div style={mutedTextStyle}>Сначала выбери тему слева.</div>
-            ) : selectedTopicMaterials.length === 0 ? (
-              <div style={mutedTextStyle}>
-                {normalizedSearch || formatFilter !== 'all' || levelFilter !== 'all'
-                  ? 'По текущим фильтрам материалы не найдены.'
-                  : 'У этой темы пока нет материалов.'}
-              </div>
-            ) : (
-              <div style={{ display: 'grid', alignContent: 'start', border: '1px solid rgba(24,33,47,0.08)', borderRadius: 18, overflow: 'auto', minHeight: 0, scrollbarWidth: 'thin' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr auto' : 'minmax(260px, 1fr) 150px 90px 120px 132px', gap: 12, alignItems: 'center', padding: '12px 14px', background: 'rgba(248,250,252,0.9)', color: '#687486', fontSize: 12, fontWeight: 800 }}>
-                  <span>Содержимое материала</span>
-                  {!isMobile && <span>Тип</span>}
-                  {!isMobile && <span>Размер</span>}
-                  {!isMobile && <span>Добавлен</span>}
-                  <span style={{ textAlign: 'right' }}>Действия</span>
-                </div>
-
-                {selectedTopicMaterials.map((material) => {
-                  const formatColor =
-                    material.format === 'pdf'
-                      ? '#D32F2F'
-                      : material.format === 'video'
-                        ? '#1565C0'
-                        : material.format === 'presentation'
-                          ? '#2E7D32'
-                          : material.format === 'image'
-                            ? '#6A1B9A'
-                            : material.format === 'link'
-                              ? '#2AABEE'
-                              : '#607D8B';
-                  const canOpen = Boolean(material.content_url);
-
-                  return (
+                return (
+                  <div
+                    key={material.id}
+                    style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(24,33,47,0.08)', boxShadow: '0 2px 8px rgba(15,23,42,0.04)', overflow: 'hidden' }}
+                  >
                     <div
-                      key={material.id}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: isMobile ? '1fr auto' : 'minmax(260px, 1fr) 150px 90px 120px 132px',
-                        gap: 12,
-                        alignItems: 'center',
-                        padding: '14px',
-                        background: '#fff',
-                        borderTop: '1px solid rgba(24,33,47,0.06)',
+                      style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '12px 14px', cursor: isTextMaterial || canOpen ? 'pointer' : 'default' }}
+                      onClick={() => {
+                        if (isTextMaterial) {
+                          setExpandedMaterialIds((cur) => {
+                            const next = new Set(cur);
+                            if (next.has(material.id)) next.delete(material.id);
+                            else next.add(material.id);
+                            return next;
+                          });
+                        } else if (canOpen && material.content_url) {
+                          window.open(material.content_url, '_blank', 'noreferrer');
+                        }
                       }}
                     >
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', minWidth: 0 }}>
-                        <span style={{ width: 42, height: 42, borderRadius: 12, display: 'inline-grid', placeItems: 'center', flex: '0 0 auto', background: `${formatColor}12`, color: formatColor, fontWeight: 900 }}>
-                          {material.format === 'link' ? '↗' : material.format === 'image' ? '▧' : '▤'}
-                        </span>
-                        <div style={{ minWidth: 0 }}>
-                          <div
-                            title={getMaterialContentPreview(material)}
-                            style={{
-                              color: '#1f2a3b',
-                              fontWeight: 900,
-                              overflow: 'hidden',
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              wordBreak: 'break-word',
-                              lineHeight: 1.25,
-                            }}
-                          >
-                            {getMaterialContentPreview(material)}
-                          </div>
-                          {isMobile && (
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                              <span style={{ padding: '4px 8px', borderRadius: 999, background: `${formatColor}12`, color: formatColor, fontSize: 12, fontWeight: 800 }}>{formatLabels[material.format]}</span>
-                              <span style={{ padding: '4px 8px', borderRadius: 999, background: 'rgba(23,32,51,0.06)', color: '#324055', fontSize: 12 }}>{levelLabels[material.level]}</span>
-                            </div>
+                      <span style={{ width: 40, height: 40, borderRadius: 11, background: `${color}18`, color, display: 'grid', placeItems: 'center', fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
+                        {material.format === 'video' ? '▶' : material.format === 'text' ? '▤' : '↗'}
+                      </span>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: '#1f2a3b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>
+                          {displayTitle}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span style={{ padding: '3px 8px', borderRadius: 999, background: `${color}18`, color, fontSize: 11, fontWeight: 700 }}>
+                            {formatLabels[material.format]}
+                          </span>
+                          <span style={{ padding: '3px 8px', borderRadius: 999, background: 'rgba(23,32,51,0.06)', color: '#556', fontSize: 11 }}>
+                            {levelLabels[material.level]}
+                          </span>
+                          {isTextMaterial && (
+                            <span style={{ fontSize: 11, color: '#9aabb8' }}>
+                              {isExpanded ? '▾ свернуть' : '▸ развернуть'}
+                            </span>
+                          )}
+                          {canOpen && material.content_url && !isTextMaterial && (
+                            <span style={{ fontSize: 11, color: '#9aabb8' }}>
+                              ▸ {getDomainHint(material.content_url)}
+                            </span>
                           )}
                         </div>
                       </div>
 
-                      {!isMobile && (
-                        <span style={{ justifySelf: 'start', padding: '5px 9px', borderRadius: 999, background: `${formatColor}12`, color: formatColor, fontSize: 12, fontWeight: 800 }}>
-                          {formatLabels[material.format]}
-                        </span>
-                      )}
-                      {!isMobile && <span style={{ color: '#687486', fontSize: 13 }}>—</span>}
-                      {!isMobile && <span style={{ color: '#687486', fontSize: 13 }}>{new Date(material.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span>}
-
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                         {canOpen && (
                           <a
-                            href={getMediaUrl(material.content_url ?? '')}
+                            href={material.content_url ?? ''}
                             target="_blank"
                             rel="noreferrer"
-                            title="Открыть материал"
+                            title="Открыть"
                             className="icon-button ghost-button"
-                            style={{ textDecoration: 'none' }}
+                            style={{ textDecoration: 'none', width: 30, height: 30, borderRadius: 8, background: '#EFF9FF', color: '#2AABEE', display: 'grid', placeItems: 'center', fontSize: 14 }}
                           >
                             ↗
                           </a>
                         )}
-                        <button
-                          type="button"
-                          title="Редактировать материал"
-                          onClick={() => openEditMaterial(material)}
-                          className="icon-button icon-button-dark"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          type="button"
-                          title="Удалить материал"
-                          onClick={() => handleDeleteMaterial(material)}
-                          className="icon-button icon-button-danger"
-                        >
-                          🗑
-                        </button>
+                        <button type="button" title="Редактировать" onClick={() => openEditMaterial(material)} className="icon-button icon-button-dark" style={{ width: 30, height: 30, borderRadius: 8 }}>✎</button>
+                        <button type="button" title="Удалить" onClick={() => handleDeleteMaterial(material)} className="icon-button icon-button-danger" style={{ width: 30, height: 30, borderRadius: 8 }}>🗑</button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </article>
+
+                    {isTextMaterial && isExpanded && material.content_text && (
+                      <div style={{ borderTop: '1px solid rgba(24,33,47,0.06)', padding: '14px 16px 14px 66px', background: '#fafcff', fontSize: 13, color: '#324055', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+                        {material.content_text}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       </section>
 
@@ -987,9 +926,16 @@ export default function MaterialsPage() {
               <button type="button" title="Закрыть" onClick={() => setMaterialModal(null)} className="modal-close">×</button>
             </div>
 
-            <div
-              className="modal-row"
-            >
+            <label className="modal-field">
+              Название материала
+              <input
+                value={materialTitle}
+                onChange={(event) => setMaterialTitle(event.target.value)}
+                placeholder="Например: Формула дискриминанта, Демоверсия ЕГЭ 2024"
+              />
+            </label>
+
+            <div className="modal-row">
               <label className="modal-field">
                 Формат
                 <select
