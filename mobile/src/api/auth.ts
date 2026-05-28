@@ -17,13 +17,13 @@ export async function studentLogin(data: TelegramAuthData): Promise<string> {
 
 export async function studentRegister(
   data: TelegramAuthData,
-  invitation_token: string,
+  invitation_token: string | null,
   full_name: string,
   phone_number: string,
 ): Promise<string> {
   const res = await client.post('/student/auth/register', {
     ...data,
-    invitation_token,
+    ...(invitation_token ? { invitation_token } : {}),
     full_name,
     phone_number,
   });
