@@ -5,6 +5,7 @@ export type MaterialFormat = 'text' | 'pdf' | 'video' | 'presentation' | 'image'
 
 export interface Material {
   id: number;
+  title: string | null;
   content_text: string | null;
   content_url: string | null;
   level: MaterialLevel;
@@ -22,6 +23,7 @@ export interface MaterialsQuery {
 
 export interface CreateMaterialPayload {
   topic_id: number;
+  title?: string | null;
   level: MaterialLevel;
   format: MaterialFormat;
   content_text?: string | null;
@@ -29,6 +31,7 @@ export interface CreateMaterialPayload {
 }
 
 export interface UpdateMaterialPayload {
+  title?: string | null;
   level?: MaterialLevel;
   format?: MaterialFormat;
   content_text?: string | null;
