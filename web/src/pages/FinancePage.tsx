@@ -495,7 +495,14 @@ export default function FinancePage() {
     }
   }, [relationOptions, selectedTutorStudentId]);
 
-  const receivableLessons = [...unpaidLessons, ...paymentPendingLessons];
+  const allPaymentPendingLessons = lessons
+    .filter(isRealFinancialLesson)
+    .filter(
+      (lesson) =>
+        lesson.conduct_status === 'conducted' && lesson.payment_status === 'payment_pending'
+    );
+
+  const receivableLessons = [...unpaidLessons, ...allPaymentPendingLessons];
 
   const debtRows = receivableLessons
     .map((lesson) => {
