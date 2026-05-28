@@ -486,7 +486,7 @@ export default function MaterialsPage() {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)', gap: 16, height: isMobile ? 'auto' : '100%', minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: isMobile ? 'auto' : '100%', minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
       <h1 className="page-heading">Материалы</h1>
 
       {/* ── Toolbar: search + subject only ── */}
@@ -514,15 +514,16 @@ export default function MaterialsPage() {
 
       <section
         style={{
-          display: 'grid',
-          gridTemplateColumns: isTablet ? '1fr' : '260px minmax(0, 1fr)',
+          display: 'flex',
+          flexDirection: isTablet ? 'column' : 'row',
           gap: 16,
+          flex: 1,
           minHeight: 0,
           overflow: isMobile ? 'visible' : 'hidden',
         }}
       >
         {/* ── Sidebar: flat indented topic tree ── */}
-        <aside style={{ ...panelStyle, display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 0, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden', padding: 0 }}>
+        <aside style={{ ...panelStyle, display: 'flex', flexDirection: 'column', flexShrink: 0, width: isTablet ? 'auto' : 260, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden', padding: 0 }}>
           <div style={{ padding: '14px 14px 12px', borderBottom: '1px solid rgba(24,33,47,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontWeight: 800, fontSize: 15, color: '#1f2a3b' }}>Темы</div>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -545,7 +546,7 @@ export default function MaterialsPage() {
             </div>
           </div>
 
-          <div style={{ padding: '10px 10px', display: 'grid', alignContent: 'start', gap: 2, minHeight: 0, overflowY: isMobile ? 'visible' : 'auto', scrollbarWidth: 'thin' }}>
+          <div style={{ padding: '10px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2, overflowY: isMobile ? 'visible' : 'auto', scrollbarWidth: 'thin' }}>
             {loading ? (
               <div style={mutedTextStyle}>Загружаем темы...</div>
             ) : topicRows.length === 0 ? (
@@ -574,6 +575,7 @@ export default function MaterialsPage() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: 7,
+                      flexShrink: 0,
                       padding: '7px 10px',
                       paddingLeft: (topic.depth * 14) + 10,
                       borderRadius: 10,
@@ -631,10 +633,10 @@ export default function MaterialsPage() {
         </aside>
 
         {/* ── Right panel ── */}
-        <section style={{ display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)', gap: 12, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minWidth: 0, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
 
           {/* Topic header */}
-          <article style={{ ...panelStyle, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <article style={{ ...panelStyle, flexShrink: 0, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0, flex: '1 1 200px' }}>
               <h2 style={{ fontSize: 19, fontWeight: 800, color: '#1f2a3b', marginBottom: 4, overflowWrap: 'anywhere' }}>
                 {selectedTopic ? selectedTopic.title : 'Выбери тему'}
@@ -666,7 +668,7 @@ export default function MaterialsPage() {
           </article>
 
           {/* Materials toolbar: filter chips + add button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 800, fontSize: 15, color: '#1f2a3b', marginRight: 4 }}>
               Материалы{selectedTopic ? ` · ${selectedTopicMaterials.length}` : ''}
             </span>
@@ -709,6 +711,7 @@ export default function MaterialsPage() {
           </div>
 
           {/* Material cards */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: isMobile ? 'visible' : 'auto', scrollbarWidth: 'thin', paddingRight: 2 }}>
           {!selectedTopic ? (
             <div style={mutedTextStyle}>Сначала выбери тему слева.</div>
           ) : selectedTopicMaterials.length === 0 ? (
@@ -718,7 +721,7 @@ export default function MaterialsPage() {
                 : 'У этой темы пока нет материалов.'}
             </div>
           ) : (
-            <div style={{ display: 'grid', alignContent: 'start', gap: 8, minHeight: 0, overflowY: isMobile ? 'visible' : 'auto', scrollbarWidth: 'thin', paddingRight: 2 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {selectedTopicMaterials.map((material) => {
                 const color = formatColor[material.format];
                 const isExpanded = expandedMaterialIds.has(material.id);
@@ -803,6 +806,7 @@ export default function MaterialsPage() {
               })}
             </div>
           )}
+          </div>
         </section>
       </section>
 
