@@ -459,6 +459,7 @@ export default function Layout({ children }: LayoutProps) {
             padding: isMobile ? 12 : isTablet ? 16 : 22,
             overflow: isMobile ? 'visible' : 'hidden',
             display: 'grid',
+            gridTemplateRows: '1fr',
           }}
         >
           {children}

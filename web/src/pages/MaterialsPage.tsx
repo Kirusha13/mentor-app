@@ -530,7 +530,7 @@ export default function MaterialsPage() {
                 title="Создать подтему"
                 type="button"
                 onClick={openCreateChildTopic}
-                style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid rgba(24,33,47,0.1)', background: '#f5f7fb', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontSize: 14, color: '#556', boxShadow: 'none', cursor: 'pointer' }}
+                style={{ width: 30, height: 30, borderRadius: 999, border: '1px solid rgba(24,33,47,0.1)', background: '#f5f7fb', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontSize: 14, color: '#556', boxShadow: 'none', cursor: 'pointer' }}
               >
                 ⤵
               </button>
@@ -538,7 +538,7 @@ export default function MaterialsPage() {
                 title="Создать тему"
                 type="button"
                 onClick={openCreateRootTopic}
-                style={{ width: 30, height: 30, borderRadius: 9, border: 'none', background: '#2AABEE', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontSize: 18, color: '#fff', boxShadow: 'none', cursor: 'pointer', fontWeight: 700 }}
+                style={{ width: 30, height: 30, borderRadius: 999, border: 'none', background: '#2AABEE', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontSize: 18, color: '#fff', boxShadow: 'none', cursor: 'pointer', fontWeight: 700 }}
               >
                 +
               </button>
