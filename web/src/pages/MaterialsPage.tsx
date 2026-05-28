@@ -486,7 +486,7 @@ export default function MaterialsPage() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: isMobile ? 'auto' : '100%', minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: isMobile ? 'none' : 1, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
       <h1 className="page-heading">Материалы</h1>
 
       {/* ── Toolbar: search + subject only ── */}
@@ -524,7 +524,7 @@ export default function MaterialsPage() {
       >
         {/* ── Sidebar: flat indented topic tree ── */}
         <aside style={{ ...panelStyle, display: 'flex', flexDirection: 'column', flexShrink: 0, width: isTablet ? 'auto' : 260, minHeight: 0, overflow: isMobile ? 'visible' : 'hidden', padding: 0 }}>
-          <div style={{ padding: '14px 14px 12px', borderBottom: '1px solid rgba(24,33,47,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ flexShrink: 0, padding: '14px 14px 12px', borderBottom: '1px solid rgba(24,33,47,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontWeight: 800, fontSize: 15, color: '#1f2a3b' }}>Темы</div>
             <div style={{ display: 'flex', gap: 6 }}>
               <button

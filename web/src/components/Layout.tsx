@@ -458,8 +458,8 @@ export default function Layout({ children }: LayoutProps) {
             backdropFilter: 'blur(18px)',
             padding: isMobile ? 12 : isTablet ? 16 : 22,
             overflow: isMobile ? 'visible' : 'hidden',
-            display: 'grid',
-            gridTemplateRows: '1fr',
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
           {children}
