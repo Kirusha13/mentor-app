@@ -48,6 +48,11 @@ const levelLabels: Record<MaterialLevel, string> = {
   advanced: 'Углублённый',
 };
 
+const formatColor: Record<MaterialFormat, string> = {
+  pdf: '#D32F2F', video: '#1565C0', presentation: '#2E7D32',
+  image: '#6A1B9A', link: '#0d7fc5', text: '#546e7a',
+};
+
 type TopicModalState =
   | { mode: 'create-root'; topic: null }
   | { mode: 'create-child'; topic: TheoryTopic }
@@ -238,6 +243,10 @@ export default function MaterialsPage() {
     });
   }, [requestedTopicId, topicRows]);
 
+  useEffect(() => {
+    setExpandedMaterialIds(new Set());
+  }, [selectedTopicId]);
+
   const selectedSubject = useMemo(
     () => subjects.find((subject) => String(subject.id) === selectedSubjectId) ?? null,
     [selectedSubjectId, subjects]
@@ -421,6 +430,11 @@ export default function MaterialsPage() {
     const trimmedUrl = materialUrl.trim();
     const usesText = materialFormat === 'text';
 
+    if (!materialTitle.trim()) {
+      alert('Укажи название материала.');
+      return;
+    }
+
     if (usesText && !trimmedText) {
       alert('Для текстового материала укажи содержание.');
       return;
@@ -431,16 +445,11 @@ export default function MaterialsPage() {
       return;
     }
 
-    if (!materialTitle.trim()) {
-      alert('Укажи название материала.');
-      return;
-    }
-
     try {
       setSaving(true);
       const payload = {
         topic_id: selectedTopic.id,
-        title: materialTitle.trim() || null,
+        title: materialTitle.trim(),
         format: materialFormat,
         level: materialLevel,
         content_text: usesText ? trimmedText : null,
@@ -574,7 +583,9 @@ export default function MaterialsPage() {
                     }}
                   >
                     {hasChildren ? (
-                      <span
+                      <button
+                        type="button"
+                        aria-expanded={!isCollapsed}
                         onClick={(e) => {
                           e.stopPropagation();
                           setCollapsedTopicIds((cur) => {
@@ -584,10 +595,10 @@ export default function MaterialsPage() {
                             return next;
                           });
                         }}
-                        style={{ fontSize: 10, color: '#aab', width: 12, flexShrink: 0 }}
+                        style={{ fontSize: 10, color: '#aab', width: 12, flexShrink: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', boxShadow: 'none' }}
                       >
                         {isCollapsed ? '▸' : '▾'}
-                      </span>
+                      </button>
                     ) : (
                       <span style={{ width: 12, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                         <span style={{ width: 6, height: 6, borderRadius: 999, background: active ? '#2AABEE' : '#cbd5e0' }} />
@@ -722,10 +733,6 @@ export default function MaterialsPage() {
           ) : (
             <div style={{ display: 'grid', alignContent: 'start', gap: 8, minHeight: 0, overflowY: isMobile ? 'visible' : 'auto', scrollbarWidth: 'thin', paddingRight: 2 }}>
               {selectedTopicMaterials.map((material) => {
-                const formatColor: Record<MaterialFormat, string> = {
-                  pdf: '#D32F2F', video: '#1565C0', presentation: '#2E7D32',
-                  image: '#6A1B9A', link: '#0d7fc5', text: '#546e7a',
-                };
                 const color = formatColor[material.format];
                 const isExpanded = expandedMaterialIds.has(material.id);
                 const isTextMaterial = material.format === 'text';
@@ -748,7 +755,8 @@ export default function MaterialsPage() {
                             return next;
                           });
                         } else if (canOpen && material.content_url) {
-                          window.open(material.content_url, '_blank', 'noreferrer');
+                          const win = window.open(material.content_url, '_blank');
+                          if (win) win.opener = null;
                         }
                       }}
                     >
