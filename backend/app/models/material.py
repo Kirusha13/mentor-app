@@ -33,6 +33,7 @@ class Material(TimestampMixin, Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     content_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     level: Mapped[MaterialLevel] = mapped_column(

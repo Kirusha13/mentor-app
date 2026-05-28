@@ -7,6 +7,7 @@ from app.models.material import MaterialFormat, MaterialLevel
 
 class MaterialOut(BaseModel):
     id: int
+    title: str | None
     content_text: str | None
     content_url: str | None
     level: MaterialLevel
@@ -20,6 +21,7 @@ class MaterialOut(BaseModel):
 
 class MaterialCreate(BaseModel):
     topic_id: int
+    title: str | None = None
     level: MaterialLevel
     format: MaterialFormat
     content_text: str | None = None
@@ -33,6 +35,7 @@ class MaterialCreate(BaseModel):
 
 
 class MaterialUpdate(BaseModel):
+    title: str | None = None
     level: MaterialLevel | None = None
     format: MaterialFormat | None = None
     content_text: str | None = None
