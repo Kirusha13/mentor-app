@@ -116,7 +116,6 @@ export default function MaterialsPage() {
   const [materialModal, setMaterialModal] = useState<MaterialModalState>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
-  const [formatFilter, setFormatFilter] = useState<'all' | MaterialFormat>('all');
   const [levelFilter, setLevelFilter] = useState<'all' | MaterialLevel>('all');
   const [collapsedTopicIds, setCollapsedTopicIds] = useState<Set<number>>(() => new Set());
   const [expandedMaterialIds, setExpandedMaterialIds] = useState<Set<number>>(() => new Set());
@@ -263,7 +262,6 @@ export default function MaterialsPage() {
         ? materials
             .filter((material) => {
               if (material.topic_id !== selectedTopic.id) return false;
-              if (formatFilter !== 'all' && material.format !== formatFilter) return false;
               if (levelFilter !== 'all' && material.level !== levelFilter) return false;
               if (!normalizedSearch) return true;
 
@@ -281,7 +279,7 @@ export default function MaterialsPage() {
             })
             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         : [],
-    [formatFilter, levelFilter, materials, normalizedSearch, selectedTopic]
+    [levelFilter, materials, normalizedSearch, selectedTopic]
   );
 
   const openCreateRootTopic = () => {
@@ -532,7 +530,7 @@ export default function MaterialsPage() {
                 title="Создать подтему"
                 type="button"
                 onClick={openCreateChildTopic}
-                style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid rgba(24,33,47,0.1)', background: '#f5f7fb', display: 'grid', placeItems: 'center', fontSize: 14, color: '#556', boxShadow: 'none', cursor: 'pointer' }}
+                style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid rgba(24,33,47,0.1)', background: '#f5f7fb', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontSize: 14, color: '#556', boxShadow: 'none', cursor: 'pointer' }}
               >
                 ⤵
               </button>
@@ -540,7 +538,7 @@ export default function MaterialsPage() {
                 title="Создать тему"
                 type="button"
                 onClick={openCreateRootTopic}
-                style={{ width: 30, height: 30, borderRadius: 9, border: 'none', background: '#2AABEE', display: 'grid', placeItems: 'center', fontSize: 18, color: '#fff', boxShadow: 'none', cursor: 'pointer', fontWeight: 700 }}
+                style={{ width: 30, height: 30, borderRadius: 9, border: 'none', background: '#2AABEE', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontSize: 18, color: '#fff', boxShadow: 'none', cursor: 'pointer', fontWeight: 700 }}
               >
                 +
               </button>
@@ -671,26 +669,6 @@ export default function MaterialsPage() {
               Материалы{selectedTopic ? ` · ${selectedTopicMaterials.length}` : ''}
             </span>
 
-            {(['all', 'text', 'pdf', 'video', 'link', 'presentation', 'image'] as const).map((fmt) => {
-              const active = formatFilter === fmt;
-              return (
-                <button
-                  key={fmt}
-                  type="button"
-                  onClick={() => setFormatFilter(fmt as typeof formatFilter)}
-                  style={{
-                    padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                    border: active ? '1px solid rgba(42,171,238,0.28)' : '1px solid rgba(24,33,47,0.1)',
-                    background: active ? 'rgba(42,171,238,0.12)' : '#f5f7fb',
-                    color: active ? '#1565C0' : '#556',
-                    boxShadow: 'none',
-                  }}
-                >
-                  {fmt === 'all' ? 'Все форматы' : formatLabels[fmt as MaterialFormat]}
-                </button>
-              );
-            })}
-
             {(['all', 'basic', 'advanced'] as const).map((lvl) => {
               const active = levelFilter === lvl;
               return (
@@ -733,7 +711,7 @@ export default function MaterialsPage() {
             <div style={mutedTextStyle}>Сначала выбери тему слева.</div>
           ) : selectedTopicMaterials.length === 0 ? (
             <div style={mutedTextStyle}>
-              {normalizedSearch || formatFilter !== 'all' || levelFilter !== 'all'
+              {normalizedSearch || levelFilter !== 'all'
                 ? 'По текущим фильтрам материалы не найдены.'
                 : 'У этой темы пока нет материалов.'}
             </div>
@@ -813,9 +791,9 @@ export default function MaterialsPage() {
                       </div>
                     </div>
 
-                    {isTextMaterial && isExpanded && material.content_text && (
-                      <div style={{ borderTop: '1px solid rgba(24,33,47,0.06)', padding: '14px 16px 14px 66px', background: '#fafcff', fontSize: 13, color: '#324055', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
-                        {material.content_text}
+                    {isTextMaterial && isExpanded && (
+                      <div style={{ borderTop: '1px solid rgba(24,33,47,0.06)', padding: '14px 16px 14px 20px', background: '#fafcff', fontSize: 13, color: '#324055', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+                        {material.content_text ?? <em style={{ color: '#aaa' }}>Содержание не добавлено</em>}
                       </div>
                     )}
                   </div>
