@@ -431,6 +431,11 @@ export default function MaterialsPage() {
       return;
     }
 
+    if (!materialTitle.trim()) {
+      alert('Укажи название материала.');
+      return;
+    }
+
     try {
       setSaving(true);
       const payload = {
@@ -701,7 +706,7 @@ export default function MaterialsPage() {
                 cursor: selectedTopic ? 'pointer' : 'default',
               }}
             >
-              + Добавить
+              + Добавить материал
             </button>
           </div>
 
@@ -748,7 +753,7 @@ export default function MaterialsPage() {
                       }}
                     >
                       <span style={{ width: 40, height: 40, borderRadius: 11, background: `${color}18`, color, display: 'grid', placeItems: 'center', fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
-                        {material.format === 'video' ? '▶' : material.format === 'text' ? '▤' : '↗'}
+                        {material.format === 'video' ? '▶' : material.format === 'text' ? '▤' : material.format === 'image' ? '▧' : material.format === 'presentation' ? '▦' : '↗'}
                       </span>
 
                       <div style={{ flex: 1, minWidth: 0 }}>
