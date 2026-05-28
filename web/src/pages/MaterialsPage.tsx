@@ -575,15 +575,17 @@ export default function MaterialsPage() {
                       alignItems: 'center',
                       gap: 7,
                       padding: '7px 10px',
+                      paddingLeft: (topic.depth * 14) + 10,
                       borderRadius: 10,
-                      border: active ? '1px solid rgba(42,171,238,0.22)' : '1px solid transparent',
-                      background: active ? 'rgba(42,171,238,0.1)' : 'transparent',
+                      border: active ? '1px solid rgba(42,171,238,0.4)' : '1px solid rgba(42,171,238,0.18)',
+                      background: active ? 'rgba(42,171,238,0.12)' : 'rgba(42,171,238,0.04)',
                       color: active ? '#1565C0' : '#324055',
                       fontWeight: active ? 700 : 400,
                       textAlign: 'left',
-                      marginLeft: topic.depth * 14,
+                      overflow: 'hidden',
+                      minWidth: 0,
                       cursor: 'pointer',
-                      transition: 'background 0.12s',
+                      transition: 'background 0.12s, border-color 0.12s',
                       userSelect: 'none',
                     }}
                   >
@@ -781,13 +783,13 @@ export default function MaterialsPage() {
                             rel="noreferrer"
                             title="Открыть"
                             className="icon-button ghost-button"
-                            style={{ textDecoration: 'none', width: 30, height: 30, borderRadius: 8, background: '#EFF9FF', color: '#2AABEE', display: 'grid', placeItems: 'center', fontSize: 14 }}
+                            style={{ textDecoration: 'none', width: 30, height: 30, borderRadius: 999, background: '#EFF9FF', color: '#2AABEE', display: 'grid', placeItems: 'center', fontSize: 14 }}
                           >
                             ↗
                           </a>
                         )}
-                        <button type="button" title="Редактировать" onClick={() => openEditMaterial(material)} className="icon-button icon-button-dark" style={{ width: 30, height: 30, borderRadius: 8 }}>✎</button>
-                        <button type="button" title="Удалить" onClick={() => handleDeleteMaterial(material)} className="icon-button icon-button-danger" style={{ width: 30, height: 30, borderRadius: 8 }}>🗑</button>
+                        <button type="button" title="Редактировать" onClick={() => openEditMaterial(material)} className="icon-button icon-button-dark" style={{ width: 30, height: 30, borderRadius: 999 }}>✎</button>
+                        <button type="button" title="Удалить" onClick={() => handleDeleteMaterial(material)} className="icon-button icon-button-danger" style={{ width: 30, height: 30, borderRadius: 999 }}>🗑</button>
                       </div>
                     </div>
 
