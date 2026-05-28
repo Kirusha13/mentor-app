@@ -561,10 +561,17 @@ export default function MaterialsPage() {
                 const isCollapsed = collapsedTopicIds.has(topic.id);
 
                 return (
-                  <button
+                  <div
                     key={topic.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedTopicId(String(topic.id))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedTopicId(String(topic.id));
+                      }
+                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -577,9 +584,9 @@ export default function MaterialsPage() {
                       fontWeight: active ? 700 : 400,
                       textAlign: 'left',
                       marginLeft: topic.depth * 14,
-                      boxShadow: 'none',
                       cursor: 'pointer',
                       transition: 'background 0.12s',
+                      userSelect: 'none',
                     }}
                   >
                     {hasChildren ? (
@@ -616,7 +623,7 @@ export default function MaterialsPage() {
                         {childTopicCount.get(topic.id)}
                       </span>
                     )}
-                  </button>
+                  </div>
                 );
               })
             )}

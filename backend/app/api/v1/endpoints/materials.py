@@ -77,7 +77,7 @@ async def update_material(
     db: AsyncSession = Depends(get_db),
 ):
     material = await _get_material_for_tutor(db, material_id, tutor.id)
-    for field, value in data.model_dump(exclude_none=True).items():
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(material, field, value)
     await db.commit()
     await db.refresh(material)
