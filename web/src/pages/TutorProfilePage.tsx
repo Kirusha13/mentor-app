@@ -299,10 +299,10 @@ export default function TutorProfilePage() {
   const handleCopyToken = async (token: string) => {
     try {
       await navigator.clipboard.writeText(token);
-      alert('Invitation token скопирован');
+      alert('Код приглашения скопирован');
     } catch (error) {
       console.error('Ошибка копирования токена:', error);
-      alert('Не удалось скопировать token');
+      alert('Не удалось скопировать код приглашения');
     }
   };
 
@@ -651,7 +651,7 @@ export default function TutorProfilePage() {
                               lineHeight: 1.35,
                             }}
                           >
-                            <span style={{ fontWeight: 700, color: '#435066' }}>Token:</span> {subject.invitation_token || '—'}
+                            <span style={{ fontWeight: 700, color: '#435066' }}>Код приглашения:</span> {subject.invitation_token || '—'}
                           </p>
                         </>
                       )}
@@ -680,7 +680,7 @@ export default function TutorProfilePage() {
                         <>
                           {subject.invitation_token && (
                             <button
-                              title="Скопировать token"
+                              title="Скопировать код приглашения"
                               onClick={() => handleCopyToken(subject.invitation_token)}
                               className="icon-button icon-button-ghost"
                             >
