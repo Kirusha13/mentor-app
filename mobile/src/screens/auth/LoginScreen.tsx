@@ -14,11 +14,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { studentLogin, studentRegister, TelegramAuthData } from '../../api/auth';
+import {
+  studentLogin,
+  studentRegister,
+  studentLoginVK,
+  studentRegisterVK,
+  TelegramAuthData,
+  VKMobileAuthData,
+} from '../../api/auth';
 import { API_BASE_URL } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 
 const TELEGRAM_LOGIN_URL = API_BASE_URL.replace('/api/v1', '') + '/telegram-login';
+const VK_LOGIN_URL = API_BASE_URL.replace('/api/v1', '') + '/vk-login';
 
 type Step = 'start' | 'form';
 
@@ -38,6 +46,10 @@ export default function LoginScreen() {
   const inviteTokenRef = useRef(inviteToken);
   useEffect(() => { inviteTokenRef.current = inviteToken; }, [inviteToken]);
 
+  const [vkData, setVkData] = useState<VKMobileAuthData | null>(null);
+  const [vkLoading, setVkLoading] = useState(false);
+  const vkHandledRef = useRef(false);
+
   const handleTelegramData = useCallback(async (data: TelegramAuthData) => {
     const token = inviteTokenRef.current;
     setLoading(true);
@@ -54,6 +66,25 @@ export default function LoginScreen() {
       Alert.alert('Ошибка', e?.response?.data?.detail ?? 'Не удалось войти');
     } finally {
       setLoading(false);
+    }
+  }, [signIn]);
+
+  const handleVKData = useCallback(async (data: VKMobileAuthData) => {
+    const token = inviteTokenRef.current;
+    setVkLoading(true);
+    try {
+      if (token) {
+        setVkData(data);
+        setFullName([data.first_name, data.last_name].filter(Boolean).join(' '));
+        setStep('form');
+      } else {
+        const accessToken = await studentLoginVK(data);
+        await signIn(accessToken);
+      }
+    } catch (e: any) {
+      Alert.alert('Ошибка', e?.response?.data?.detail ?? 'Не удалось войти через VK');
+    } finally {
+      setVkLoading(false);
     }
   }, [signIn]);
 
@@ -76,6 +107,24 @@ export default function LoginScreen() {
     }
   };
 
+  const parseVKUrl = (url: string): VKMobileAuthData | null => {
+    try {
+      const parsed = Linking.parse(url);
+      const p = parsed.queryParams as Record<string, string> | null;
+      if (!p?.vk_id || !p?.sign || !p?.expires_at || !p?.first_name) return null;
+      return {
+        vk_id: Number(p.vk_id),
+        first_name: p.first_name,
+        last_name: p.last_name,
+        photo_url: p.photo_url,
+        expires_at: p.expires_at,
+        sign: p.sign,
+      };
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     const handleUrl = ({ url }: { url: string }) => {
       const parsed = Linking.parse(url);
@@ -92,6 +141,15 @@ export default function LoginScreen() {
           tgHandledRef.current = true;
           WebBrowser.dismissBrowser();
           handleTelegramData(data);
+        }
+      }
+
+      if (parsed.path === 'auth-vk' || parsed.path === '--/auth-vk') {
+        const data = parseVKUrl(url);
+        if (data && !vkHandledRef.current) {
+          vkHandledRef.current = true;
+          WebBrowser.dismissBrowser();
+          handleVKData(data);
         }
       }
     };
@@ -134,6 +192,36 @@ export default function LoginScreen() {
     }
   };
 
+  const openVKAuth = async () => {
+    if (showTokenInput && !inviteToken.trim()) {
+      Alert.alert('Нужен код приглашения', 'Введите код от репетитора, чтобы создать аккаунт');
+      return;
+    }
+    vkHandledRef.current = false;
+    setVkLoading(true);
+    try {
+      const redirectUrl = Linking.createURL('auth-vk');
+      const result = await WebBrowser.openAuthSessionAsync(
+        `${VK_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}&role=student`,
+        redirectUrl,
+      );
+      if (result.type === 'success' && !vkHandledRef.current) {
+        vkHandledRef.current = true;
+        const data = parseVKUrl(result.url);
+        if (data) {
+          await handleVKData(data);
+          return;
+        }
+      }
+    } catch (e: any) {
+      Alert.alert('Ошибка', e?.response?.data?.detail ?? 'Не удалось открыть браузер');
+    } finally {
+      if (!vkHandledRef.current) {
+        setVkLoading(false);
+      }
+    }
+  };
+
   const handleRegisterSubmit = async () => {
     if (!fullName.trim() || !phone.trim()) {
       Alert.alert('Ошибка', 'Заполните все поля');
@@ -144,10 +232,15 @@ export default function LoginScreen() {
       Alert.alert('Ошибка', 'Класс должен быть числом от 1 до 11');
       return;
     }
-    if (!tgData) return;
+    if (!tgData && !vkData) return;
     setLoading(true);
     try {
-      const token = await studentRegister(tgData, inviteToken, fullName.trim(), phone.trim(), parsedGrade);
+      let token: string;
+      if (tgData) {
+        token = await studentRegister(tgData, inviteToken, fullName.trim(), phone.trim(), parsedGrade);
+      } else {
+        token = await studentRegisterVK(vkData!, inviteToken, fullName.trim(), phone.trim(), parsedGrade);
+      }
       await signIn(token);
     } catch (e: any) {
       Alert.alert('Ошибка', e?.response?.data?.detail ?? 'Ошибка регистрации');
@@ -255,6 +348,24 @@ export default function LoginScreen() {
               <Ionicons name="paper-plane" size={20} color="#fff" />
               <Text style={styles.tgBtnText}>
                 {showTokenInput ? 'Подключить Telegram' : 'Войти через Telegram'}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Кнопка VK */}
+        <TouchableOpacity
+          style={[styles.tgBtn, { backgroundColor: '#0077FF' }]}
+          onPress={openVKAuth}
+          disabled={loading || vkLoading}
+        >
+          {vkLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <View style={styles.tgBtnInner}>
+              <Ionicons name="logo-vk" size={20} color="#fff" />
+              <Text style={styles.tgBtnText}>
+                {showTokenInput ? 'Подключить VK ID' : 'Войти через VK ID'}
               </Text>
             </View>
           )}
