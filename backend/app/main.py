@@ -1,9 +1,5 @@
-import base64
-import hashlib
 import json
 import os
-import secrets
-import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -161,29 +157,20 @@ _ALLOWED_VK_REDIRECT_SCHEMES = (
 
 @app.get("/vk-login")
 async def vk_login_page(request: Request):
-    """Редирект на VK ID OAuth 2.0 с PKCE.
+    """Редирект на VK OAuth.
     Параметры: redirect (deep link или URL возврата), role (tutor/student)."""
     redirect = request.query_params.get("redirect", "mentor://auth-vk")
     role = request.query_params.get("role", "student")
-
-    device_id = str(uuid.uuid4())
-    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("=")
-    code_challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(code_verifier.encode()).digest()
-    ).decode().rstrip("=")
-
     vk_callback_uri = settings.BACKEND_URL + _VK_CALLBACK_PATH
-    state = encode_state(redirect=redirect, role=role, device_id=device_id, code_verifier=code_verifier)
+    state = encode_state(redirect=redirect, role=role)
 
-    authorize_url = "https://id.vk.com/oauth2/auth?" + urlencode({
+    authorize_url = "https://oauth.vk.com/authorize?" + urlencode({
         "client_id": settings.VK_APP_ID,
         "redirect_uri": vk_callback_uri,
         "response_type": "code",
         "state": state,
         "scope": "",
-        "device_id": device_id,
-        "code_challenge": code_challenge,
-        "code_challenge_method": "S256",
+        "display": "page",
     })
     return RedirectResponse(url=authorize_url, status_code=302)
 
@@ -201,14 +188,8 @@ async def vk_callback(request: Request):
     redirect_base = state.get("redirect", "mentor://auth-vk")
     role = state.get("role", "student")
 
-    device_id = state.get("device_id", "")
-    code_verifier = state.get("code_verifier", "")
-
     vk_callback_uri = settings.BACKEND_URL + _VK_CALLBACK_PATH
-    user = await exchange_code_for_vk_user(
-        code=code, redirect_uri=vk_callback_uri,
-        device_id=device_id, code_verifier=code_verifier,
-    )
+    user = await exchange_code_for_vk_user(code=code, redirect_uri=vk_callback_uri)
     if not user:
         return HTMLResponse("<html><body>Не удалось получить данные VK.</body></html>", status_code=400)
 
