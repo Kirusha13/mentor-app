@@ -14,7 +14,7 @@ import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -149,35 +149,6 @@ async def health():
     return {"status": "ok"}
 
 
-_vk_sdk_cache: str | None = None
-_VK_SDK_URLS = [
-    "https://unpkg.com/@vkid/sdk/dist-cdn/index.js",
-    "https://cdn.jsdelivr.net/npm/@vkid/sdk/dist-cdn/index.js",
-    "https://unpkg.com/@vkid/sdk",
-    "https://cdn.jsdelivr.net/npm/@vkid/sdk",
-]
-
-
-@app.get("/vk-sdk.js")
-async def vk_sdk_proxy():
-    """Проксирует @vkid/sdk с CDN чтобы избежать CORB при загрузке из браузера."""
-    global _vk_sdk_cache
-    if _vk_sdk_cache is None:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
-            for url in _VK_SDK_URLS:
-                try:
-                    resp = await client.get(url)
-                    ct = resp.headers.get("content-type", "")
-                    if resp.status_code == 200 and ("javascript" in ct or "text/plain" in ct or len(resp.text) > 1000):
-                        _vk_sdk_cache = resp.text
-                        break
-                except Exception:
-                    continue
-    if _vk_sdk_cache:
-        return Response(content=_vk_sdk_cache, media_type="application/javascript",
-                        headers={"Cache-Control": "public, max-age=3600"})
-    return Response(status_code=503, content="VK SDK unavailable")
-
 
 def _vk_js_redirect(url: str) -> HTMLResponse:
     safe_url = json.dumps(url)
@@ -290,66 +261,6 @@ async def vk_callback(request: Request):
 
     return _vk_js_redirect(location)
 
-
-@app.post("/vk-exchange")
-async def vk_exchange(request: Request):
-    """Обменивает code+device_id на JWT (tutor) или подписанные данные (student)."""
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-
-    code = body.get("code")
-    device_id = body.get("device_id", "")
-    redirect_base = body.get("redirect", "")
-    role = body.get("role", "student")
-
-    if not code:
-        return JSONResponse({"error": "Код авторизации не передан"}, status_code=400)
-
-    user = await exchange_code_for_vk_user(
-        code=code, device_id=device_id, redirect_uri="", code_verifier="",
-    )
-    if not user:
-        return JSONResponse({"error": "Не удалось получить данные VK. Попробуйте снова."}, status_code=400)
-
-    if role == "tutor":
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(Tutor).where(Tutor.vk_id == user["vk_id"]))
-            tutor = result.scalar_one_or_none()
-            now = datetime.now(timezone.utc)
-            full_name = " ".join(p for p in [user["first_name"], user.get("last_name") or ""] if p).strip()
-            if tutor is None:
-                tutor = Tutor(
-                    vk_id=user["vk_id"],
-                    full_name=full_name or "Без имени",
-                    avatar_url=user.get("photo_url"),
-                    registered_at=now,
-                    last_visited_at=now,
-                )
-                db.add(tutor)
-            else:
-                tutor.last_visited_at = now
-                tutor.avatar_url = user.get("photo_url") or tutor.avatar_url
-            await db.commit()
-            await db.refresh(tutor)
-            access_token = create_access_token(subject=str(tutor.id))
-
-        if not any(redirect_base.startswith(s) for s in _ALLOWED_VK_REDIRECT_SCHEMES):
-            redirect_base = "https://mentor-app-kappa-nine.vercel.app/auth/callback"
-        location = redirect_base + "?" + urlencode({"access_token": access_token})
-    else:
-        vk_payload, sign = sign_vk_mobile_data(
-            vk_id=user["vk_id"],
-            first_name=user["first_name"],
-            last_name=user.get("last_name"),
-            photo_url=user.get("photo_url"),
-        )
-        if not any(redirect_base.startswith(s) for s in _ALLOWED_VK_REDIRECT_SCHEMES):
-            redirect_base = "mentor://auth-vk"
-        location = redirect_base + "?" + urlencode({**vk_payload, "sign": sign})
-
-    return JSONResponse({"location": location})
 
 
 @app.get("/telegram-login", response_class=HTMLResponse)
