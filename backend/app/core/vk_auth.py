@@ -9,10 +9,28 @@ import httpx
 
 from app.core.config import settings
 
-VK_OAUTH_TOKEN_URL = "https://oauth.vk.com/access_token"
-VK_API_USERS_URL = "https://api.vk.com/method/users.get"
-VK_API_VERSION = "5.199"
+VK_USER_INFO_URL = "https://id.vk.com/oauth2/user_info"
 VK_SIGN_TTL = 600
+
+
+async def get_vk_user_from_token(access_token: str, app_id: str) -> dict | None:
+    """Получает профиль пользователя из VK ID по access_token.
+    Возвращает {vk_id, first_name, last_name, photo_url} или None при ошибке."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(VK_USER_INFO_URL, data={
+            "client_id": app_id,
+            "access_token": access_token,
+        })
+        data = resp.json()
+        user = data.get("user")
+        if not user:
+            return None
+        return {
+            "vk_id": int(user.get("user_id")),
+            "first_name": user.get("first_name", ""),
+            "last_name": user.get("last_name") or None,
+            "photo_url": user.get("avatar") or None,
+        }
 
 
 def generate_pkce_pair() -> tuple[str, str]:
@@ -44,47 +62,6 @@ def decode_state(state: str) -> dict | None:
         return json.loads(base64.urlsafe_b64decode(b64 + "=="))
     except Exception:
         return None
-
-
-async def exchange_code_for_vk_user(code: str, redirect_uri: str) -> dict | None:
-    """Обменивает code на профиль через классический VK OAuth (oauth.vk.com).
-    Возвращает {vk_id, first_name, last_name, photo_url} или None при ошибке."""
-    async with httpx.AsyncClient(timeout=10) as client:
-        token_resp = await client.get(VK_OAUTH_TOKEN_URL, params={
-            "client_id": settings.VK_APP_ID,
-            "client_secret": settings.VK_APP_SECRET,
-            "redirect_uri": redirect_uri,
-            "code": code,
-        })
-        token_data = token_resp.json()
-
-        if "error" in token_data or "access_token" not in token_data:
-            return None
-
-        access_token = token_data["access_token"]
-        user_id = token_data.get("user_id")
-        if not user_id:
-            return None
-
-        users_resp = await client.get(VK_API_USERS_URL, params={
-            "user_ids": str(user_id),
-            "fields": "first_name,last_name,photo_200",
-            "access_token": access_token,
-            "v": VK_API_VERSION,
-        })
-        users_data = users_resp.json()
-
-        users = users_data.get("response")
-        if not users:
-            return None
-
-        user = users[0]
-        return {
-            "vk_id": int(user.get("id")),
-            "first_name": user.get("first_name", ""),
-            "last_name": user.get("last_name") or None,
-            "photo_url": user.get("photo_200") or None,
-        }
 
 
 def sign_vk_mobile_data(

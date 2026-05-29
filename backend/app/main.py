@@ -1,21 +1,16 @@
-import base64
-import hashlib
 import json
 import os
-import secrets
-import time
-import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
-import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -23,9 +18,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.security import create_access_token
 from app.core.vk_auth import (
-    decode_state,
-    encode_state,
-    exchange_code_for_vk_user,
+    get_vk_user_from_token,
     sign_vk_mobile_data,
 )
 from app.api.v1.router import api_router
@@ -149,14 +142,6 @@ async def health():
 
 
 
-def _vk_js_redirect(url: str) -> HTMLResponse:
-    safe_url = json.dumps(url)
-    return HTMLResponse(
-        f'<!DOCTYPE html><html><head><meta charset="UTF-8"></head>'
-        f'<body><script>window.location.replace({safe_url});</script></body></html>'
-    )
-
-
 _ALLOWED_REDIRECT_SCHEMES = (
     "mentor://",
     "exp://",
@@ -168,7 +153,7 @@ _ALLOWED_REDIRECT_SCHEMES = (
 )
 
 
-@app.get("/vk-login")
+@app.get("/vk-login", response_class=HTMLResponse)
 async def vk_login(request: Request):
     redirect_param = request.query_params.get("redirect", "")
     role = request.query_params.get("role", "student")
@@ -176,51 +161,185 @@ async def vk_login(request: Request):
     if not any(redirect_param.startswith(s) for s in _ALLOWED_REDIRECT_SCHEMES):
         redirect_param = "https://mentor-app-kappa-nine.vercel.app/auth/callback"
 
-    state = encode_state(redirect=redirect_param, role=role)
+    safe_redirect = json.dumps(redirect_param)
+    safe_role = json.dumps(role)
+    safe_app_id = json.dumps(str(settings.VK_APP_ID))
+    safe_callback = json.dumps(settings.BACKEND_URL + "/vk-callback")
+    safe_err_url = json.dumps("https://mentor-app-kappa-nine.vercel.app/login?error=vk_sdk_unavailable")
 
-    params = urlencode({
-        "client_id": settings.VK_APP_ID,
-        "redirect_uri": settings.BACKEND_URL + "/vk-callback",
-        "response_type": "code",
-        "state": state,
-        "display": "page",
-        "scope": "vkid.personal_info",
-        "v": "5.199",
-    })
-    return RedirectResponse(f"https://oauth.vk.com/authorize?{params}")
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Войти через VK ID</title>
+  <style>
+    :root {{ color-scheme: light; }}
+    body {{
+      min-height: 100vh; margin: 0;
+      display: grid; place-items: center;
+      background: radial-gradient(circle at 12% 18%, rgba(0,119,255,.10), transparent 30%),
+                  radial-gradient(circle at 90% 8%, rgba(0,119,255,.14), transparent 28%), #f5f5f5;
+      font-family: Inter, -apple-system, sans-serif; color: #1a1a1a;
+    }}
+    .card {{
+      width: min(440px, 100%); padding: 34px; border-radius: 28px;
+      background: #fff; border: 1px solid #e0e0e0;
+      box-shadow: 0 24px 70px rgba(15,23,42,.14);
+      text-align: center; display: grid; justify-items: center; gap: 14px;
+    }}
+    .icon {{
+      width: 64px; height: 64px; border-radius: 50%;
+      background: #e8f0fe; color: #0077ff;
+      display: grid; place-items: center; font-size: 28px; font-weight: 900;
+    }}
+    h1 {{ font-size: 26px; margin: 0 0 4px; }}
+    p {{ color: #555; line-height: 1.5; margin: 0; }}
+    .loader {{
+      width: 42px; height: 42px; border-radius: 50%;
+      border: 4px solid #e8f0fe; border-top-color: #0077ff;
+      animation: spin .9s linear infinite;
+    }}
+    @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">VK</div>
+    <div>
+      <h1>Войти через VK ID</h1>
+      <p>Открываем страницу авторизации...</p>
+    </div>
+    <div class="loader" aria-label="Загрузка"></div>
+  </div>
+  <script type="module">
+    sessionStorage.setItem('vk_redirect', {safe_redirect});
+    sessionStorage.setItem('vk_role', {safe_role});
+
+    import * as VKID from 'https://unpkg.com/@vkid/sdk@2/dist/index.js';
+
+    VKID.Config.init({{
+      app: parseInt({safe_app_id}, 10),
+      redirectUrl: {safe_callback},
+    }});
+
+    try {{
+      VKID.Auth.login();
+    }} catch (e) {{
+      window.location.replace({safe_err_url});
+    }}
+  </script>
+</body>
+</html>""")
 
 
 @app.get("/vk-callback", response_class=HTMLResponse)
 async def vk_callback(request: Request):
-    code = request.query_params.get("code")
-    raw_state = request.query_params.get("state", "")
+    safe_app_id = json.dumps(str(settings.VK_APP_ID))
+    safe_callback = json.dumps(settings.BACKEND_URL + "/vk-callback")
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Завершаем вход через VK ID</title>
+  <style>
+    :root {{ color-scheme: light; }}
+    body {{
+      min-height: 100vh; margin: 0;
+      display: grid; place-items: center;
+      background: radial-gradient(circle at 12% 18%, rgba(0,119,255,.10), transparent 30%),
+                  radial-gradient(circle at 90% 8%, rgba(0,119,255,.14), transparent 28%), #f5f5f5;
+      font-family: Inter, -apple-system, sans-serif; color: #1a1a1a;
+    }}
+    .card {{
+      width: min(440px, 100%); padding: 34px; border-radius: 28px;
+      background: #fff; border: 1px solid #e0e0e0;
+      box-shadow: 0 24px 70px rgba(15,23,42,.14);
+      text-align: center; display: grid; justify-items: center; gap: 14px;
+    }}
+    .icon {{
+      width: 64px; height: 64px; border-radius: 50%;
+      background: #e8f0fe; color: #0077ff;
+      display: grid; place-items: center; font-size: 28px; font-weight: 900;
+    }}
+    h1 {{ font-size: 26px; margin: 0 0 4px; }}
+    p {{ color: #555; line-height: 1.5; margin: 0; }}
+    .loader {{
+      width: 42px; height: 42px; border-radius: 50%;
+      border: 4px solid #e8f0fe; border-top-color: #0077ff;
+      animation: spin .9s linear infinite;
+    }}
+    @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">VK</div>
+    <div>
+      <h1>Завершаем вход</h1>
+      <p>Проверяем авторизацию VK ID...</p>
+    </div>
+    <div class="loader" aria-label="Загрузка"></div>
+  </div>
+  <script type="module">
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const deviceId = params.get('device_id');
+    const vkRedirect = sessionStorage.getItem('vk_redirect') || '';
+    const vkRole = sessionStorage.getItem('vk_role') || 'student';
+    const errBase = 'https://mentor-app-kappa-nine.vercel.app/login';
 
-    state = decode_state(raw_state)
-    if not state or not code:
-        return _vk_js_redirect(
-            "https://mentor-app-kappa-nine.vercel.app/login?error=vk_auth_failed"
-        )
+    if (!code) {{
+      window.location.replace(errBase + '?error=vk_no_code');
+    }} else {{
+      import * as VKID from 'https://unpkg.com/@vkid/sdk@2/dist/index.js';
 
-    if time.time() - state.get("ts", 0) > 600:
-        redirect_base = state.get(
-            "redirect", "https://mentor-app-kappa-nine.vercel.app/login"
-        )
-        return _vk_js_redirect(redirect_base + "?error=state_expired")
+      VKID.Config.init({{
+        app: parseInt({safe_app_id}, 10),
+        redirectUrl: {safe_callback},
+      }});
 
-    redirect_base = state.get("redirect", "")
-    role = state.get("role", "student")
+      try {{
+        const data = await VKID.Auth.exchangeCode(code, deviceId);
+        const accessToken = data?.access_token || data?.data?.access_token;
+        if (!accessToken) throw new Error('no token');
 
+        const resp = await fetch('/vk-process', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{ access_token: accessToken, role: vkRole, redirect: vkRedirect }}),
+        }});
+        if (!resp.ok) throw new Error('process failed');
+        const {{ location }} = await resp.json();
+        window.location.replace(location);
+      }} catch (e) {{
+        window.location.replace(errBase + '?error=vk_exchange_failed');
+      }}
+    }}
+  </script>
+</body>
+</html>""")
+
+
+class VKProcessRequest(BaseModel):
+    access_token: str
+    role: str
+    redirect: str
+
+
+@app.post("/vk-process")
+async def vk_process(body: VKProcessRequest):
+    redirect_base = body.redirect
     if not any(redirect_base.startswith(s) for s in _ALLOWED_REDIRECT_SCHEMES):
         redirect_base = "https://mentor-app-kappa-nine.vercel.app/auth/callback"
 
-    user = await exchange_code_for_vk_user(
-        code=code,
-        redirect_uri=settings.BACKEND_URL + "/vk-callback",
-    )
+    user = await get_vk_user_from_token(body.access_token, str(settings.VK_APP_ID))
     if not user:
-        return _vk_js_redirect(redirect_base + "?error=vk_exchange_failed")
+        err = redirect_base + "?error=vk_user_info_failed"
+        return JSONResponse({"location": err})
 
-    if role == "tutor":
+    if body.role == "tutor":
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Tutor).where(Tutor.vk_id == user["vk_id"]))
             tutor = result.scalar_one_or_none()
@@ -253,7 +372,7 @@ async def vk_callback(request: Request):
         )
         location = redirect_base + "?" + urlencode({**vk_payload, "sign": sign})
 
-    return _vk_js_redirect(location)
+    return JSONResponse({"location": location})
 
 
 
