@@ -15,7 +15,16 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
+from app.core.security import create_access_token
+from app.core.vk_auth import (
+    build_vk_authorize_url,
+    decode_state,
+    encode_state,
+    exchange_code_for_vk_user,
+    sign_vk_mobile_data,
+)
 from app.api.v1.router import api_router
+from app.models.tutor import Tutor
 from app.models.lesson import ConductStatus, Lesson
 from app.models.student import Student
 from app.services.subscription_service import apply_conduct_status_transition
@@ -87,13 +96,15 @@ async def send_reminders():
             student = await db.get(Student, lesson.tutor_student.student_id)
             student_tz = ZoneInfo(student.timezone) if student and student.timezone else APP_TIMEZONE
             local_time = lesson.starts_at.astimezone(student_tz)
-            await send_to_user(
-                student.telegram_id if student else None,
-                f"Напоминание: завтра занятие в {local_time.strftime('%H:%M')}",
-            )
+            if student and student.telegram_id:
+                await send_to_user(
+                    student.telegram_id,
+                    f"Напоминание: завтра занятие в {local_time.strftime('%H:%M')}",
+                )
             lesson.reminder_sent = True
 
         await db.commit()
+
 
 
 @asynccontextmanager
@@ -130,6 +141,137 @@ app.mount("/media", StaticFiles(directory=settings.MEDIA_DIR), name="media")
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+_VK_CALLBACK_PATH = "/vk-callback"
+
+_ALLOWED_VK_REDIRECT_SCHEMES = (
+    "mentor://",
+    "exp://",
+    "https://mentor-app-kappa-nine.vercel.app/",
+    "http://localhost:5173/",
+    "http://127.0.0.1:5173/",
+    "http://localhost:3000/",
+    "http://127.0.0.1:3000/",
+)
+
+
+@app.get("/vk-login", response_class=HTMLResponse)
+async def vk_login_page(request: Request):
+    """Промежуточная страница, которая инициирует VK OAuth.
+    Параметры: redirect (deep link или URL возврата), role (tutor/student)."""
+    redirect = request.query_params.get("redirect", "mentor://auth-vk")
+    role = request.query_params.get("role", "student")
+    vk_callback_uri = settings.BACKEND_URL + _VK_CALLBACK_PATH
+    state = encode_state(redirect=redirect, role=role)
+    authorize_url = build_vk_authorize_url(redirect_uri=vk_callback_uri, state=state)
+    # Сразу редиректим на VK, без промежуточной HTML-страницы
+    return HTMLResponse(
+        content=f'<html><head><meta http-equiv="refresh" content="0;url={authorize_url}"></head></html>'
+    )
+
+
+@app.get(_VK_CALLBACK_PATH, response_class=HTMLResponse)
+async def vk_callback(request: Request):
+    """VK перенаправляет сюда после авторизации."""
+    code = request.query_params.get("code")
+    state_raw = request.query_params.get("state", "")
+
+    state = decode_state(state_raw) if state_raw else None
+    if not state or not code:
+        return HTMLResponse("<html><body>Ошибка авторизации VK.</body></html>", status_code=400)
+
+    redirect_base = state.get("redirect", "mentor://auth-vk")
+    role = state.get("role", "student")
+
+    vk_callback_uri = settings.BACKEND_URL + _VK_CALLBACK_PATH
+    user = await exchange_code_for_vk_user(code=code, redirect_uri=vk_callback_uri)
+    if not user:
+        return HTMLResponse("<html><body>Не удалось получить данные VK.</body></html>", status_code=400)
+
+    if role == "tutor":
+        # Для репетитора создаём/находим Tutor и сразу выдаём JWT
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Tutor).where(Tutor.vk_id == user["vk_id"]))
+            tutor = result.scalar_one_or_none()
+            now = datetime.now(timezone.utc)
+            full_name = " ".join(p for p in [user["first_name"], user["last_name"]] if p).strip()
+            if tutor is None:
+                tutor = Tutor(
+                    vk_id=user["vk_id"],
+                    full_name=full_name or "Без имени",
+                    avatar_url=user.get("photo_url"),
+                    registered_at=now,
+                    last_visited_at=now,
+                )
+                db.add(tutor)
+            else:
+                tutor.last_visited_at = now
+                tutor.avatar_url = user.get("photo_url") or tutor.avatar_url
+            await db.commit()
+            await db.refresh(tutor)
+            access_token = create_access_token(subject=str(tutor.id))
+
+        if not any(redirect_base.startswith(s) for s in _ALLOWED_VK_REDIRECT_SCHEMES):
+            redirect_base = "https://mentor-app-kappa-nine.vercel.app/auth-callback"
+
+        deep_link = redirect_base + "?" + urlencode({"access_token": access_token})
+        safe_link = json.dumps(deep_link)
+    else:
+        # Для ученика подписываем данные и передаём в deep link
+        payload, sign = sign_vk_mobile_data(
+            vk_id=user["vk_id"],
+            first_name=user["first_name"],
+            last_name=user.get("last_name"),
+            photo_url=user.get("photo_url"),
+        )
+        if not any(redirect_base.startswith(s) for s in _ALLOWED_VK_REDIRECT_SCHEMES):
+            redirect_base = "mentor://auth-vk"
+
+        params = {**payload, "sign": sign}
+        deep_link = redirect_base + "?" + urlencode(params)
+        safe_link = json.dumps(deep_link)
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Завершаем вход</title>
+  <style>
+    body {{
+      min-height: 100vh; margin: 0;
+      display: grid; place-items: center;
+      background: #f6f8fc;
+      font-family: Inter, sans-serif; color: #142038;
+    }}
+    .card {{
+      width: min(420px, calc(100vw - 32px));
+      padding: 36px; border-radius: 28px;
+      background: #fff; border: 1px solid rgba(20,32,56,0.08);
+      box-shadow: 0 28px 90px rgba(20,32,56,0.16); text-align: center;
+    }}
+    .logo {{ width: 58px; height: 58px; margin: 0 auto 16px; border-radius: 50%;
+      background: #eaf3ff; color: #2f8df4; display: grid; place-items: center;
+      font-size: 28px; font-weight: 900; }}
+    h1 {{ margin: 0 0 10px; font-size: 28px; }}
+    p {{ margin: 0; color: #69758a; font-size: 16px; }}
+    .loader {{ width: 44px; height: 44px; margin: 24px auto 0;
+      border-radius: 50%; border: 4px solid #eaf3ff; border-top-color: #2f8df4;
+      animation: spin 0.9s linear infinite; }}
+    @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="logo">M</div>
+    <h1>Завершаем вход</h1>
+    <p>Проверяем VK-аккаунт и открываем Mentor App.</p>
+    <div class="loader"></div>
+  </main>
+  <script>window.location.replace({safe_link});</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 @app.get("/telegram-login", response_class=HTMLResponse)

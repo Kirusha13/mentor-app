@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str
     TELEGRAM_BOT_USERNAME: str  # без @, например: MentorAuthBot
 
+    # VK ID
+    VK_APP_ID: int = 0
+    VK_APP_SECRET: str = ""
+    BACKEND_URL: str = "http://localhost:8000"  # публичный URL бэкенда (без слеша в конце)
+
     # File storage
     MEDIA_DIR: str = "media"
 

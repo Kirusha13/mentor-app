@@ -51,8 +51,12 @@ export default function LoginPage() {
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 720px)');
 
-  const handleLogin = () => {
+  const handleTelegramLogin = () => {
     window.location.href = `${API_BASE}/telegram-login?redirect=${encodeURIComponent(CALLBACK_URL)}`;
+  };
+
+  const handleVKLogin = () => {
+    window.location.href = `${API_BASE}/vk-login?redirect=${encodeURIComponent(CALLBACK_URL)}&role=tutor`;
   };
 
   return (
@@ -322,20 +326,36 @@ export default function LoginPage() {
             </div>
           )}
 
-          <button
-            onClick={handleLogin}
-            style={{
-              width: '100%',
-              minHeight: 58,
-              borderRadius: 17,
-              fontSize: 17,
-              fontWeight: 900,
-              background: 'linear-gradient(135deg, #2AABEE, #229ED9)',
-              boxShadow: '0 18px 34px rgba(242,95,12,0.26)',
-            }}
-          >
-            ▸ Войти через Telegram
-          </button>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <button
+              onClick={handleTelegramLogin}
+              style={{
+                width: '100%',
+                minHeight: 58,
+                borderRadius: 17,
+                fontSize: 17,
+                fontWeight: 900,
+                background: 'linear-gradient(135deg, #2AABEE, #229ED9)',
+                boxShadow: '0 18px 34px rgba(42,171,238,0.26)',
+              }}
+            >
+              ▸ Войти через Telegram
+            </button>
+            <button
+              onClick={handleVKLogin}
+              style={{
+                width: '100%',
+                minHeight: 58,
+                borderRadius: 17,
+                fontSize: 17,
+                fontWeight: 900,
+                background: 'linear-gradient(135deg, #0077FF, #005CC8)',
+                boxShadow: '0 18px 34px rgba(0,119,255,0.22)',
+              }}
+            >
+              ▸ Войти через VK ID
+            </button>
+          </div>
 
           <div
             style={{

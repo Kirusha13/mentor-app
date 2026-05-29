@@ -14,6 +14,15 @@ export default function AuthCallbackPage() {
     handled.current = true;
 
     const params = Object.fromEntries(new URLSearchParams(window.location.search));
+
+    // VK: бэкенд передаёт готовый JWT прямо в access_token
+    if (params.access_token) {
+      login(params.access_token);
+      const redirectPath = consumePostLoginRedirect();
+      navigate(redirectPath || '/', { replace: true });
+      return;
+    }
+
     if (!params.hash || !params.id) {
       navigate('/login', { replace: true });
       return;
