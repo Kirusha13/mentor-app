@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import secrets
+import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -196,8 +197,6 @@ _ALLOWED_VK_REDIRECT_SCHEMES = (
     "http://127.0.0.1:3000/",
 )
 
-_VK_CALLBACK_URI = "/vk-callback"
-
 
 @app.get("/vk-login")
 async def vk_login(request: Request):
@@ -222,24 +221,74 @@ async def vk_login(request: Request):
     return RedirectResponse(f"https://id.vk.com/oauth2/authorize?{params}")
 
 
-@app.get(_VK_CALLBACK_URI, response_class=HTMLResponse)
+@app.get("/vk-callback", response_class=HTMLResponse)
 async def vk_callback(request: Request):
-    """SDK-попап редиректит сюда — загружаем SDK для передачи code в родительское окно."""
-    app_id = settings.VK_APP_ID
-    j_callback = json.dumps(settings.BACKEND_URL + _VK_CALLBACK_URI)
-    html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
-<script>
-  var s=document.createElement('script');
-  s.src='/vk-sdk.js';
-  s.onload=function(){{
-    if(typeof VKID!=='undefined'){{
-      VKID.Config.init({{app:{app_id},redirectUrl:{j_callback},
-        responseMode:VKID.ConfigResponseMode.Callback,source:VKID.ConfigSource.LOWCODE,scope:''}});
-    }}
-  }};
-  document.head.appendChild(s);
-</script></body></html>"""
-    return HTMLResponse(content=html)
+    code = request.query_params.get("code")
+    device_id = request.query_params.get("device_id", "")
+    raw_state = request.query_params.get("state", "")
+
+    state = decode_state(raw_state)
+    if not state or not code:
+        return _vk_js_redirect(
+            "https://mentor-app-kappa-nine.vercel.app/login?error=vk_auth_failed"
+        )
+
+    if time.time() - state.get("ts", 0) > 600:
+        redirect_base = state.get(
+            "redirect", "https://mentor-app-kappa-nine.vercel.app/login"
+        )
+        return _vk_js_redirect(redirect_base + "?error=state_expired")
+
+    redirect_base = state.get("redirect", "")
+    role = state.get("role", "student")
+    code_verifier = state.get("code_verifier", "")
+
+    if not any(redirect_base.startswith(s) for s in _ALLOWED_VK_REDIRECT_SCHEMES):
+        redirect_base = "https://mentor-app-kappa-nine.vercel.app/auth/callback"
+
+    user = await exchange_code_for_vk_user(
+        code=code,
+        device_id=device_id,
+        redirect_uri=settings.BACKEND_URL + "/vk-callback",
+        code_verifier=code_verifier,
+    )
+    if not user:
+        return _vk_js_redirect(redirect_base + "?error=vk_exchange_failed")
+
+    if role == "tutor":
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Tutor).where(Tutor.vk_id == user["vk_id"]))
+            tutor = result.scalar_one_or_none()
+            now = datetime.now(timezone.utc)
+            full_name = " ".join(
+                p for p in [user["first_name"], user.get("last_name") or ""] if p
+            ).strip()
+            if tutor is None:
+                tutor = Tutor(
+                    vk_id=user["vk_id"],
+                    full_name=full_name or "Без имени",
+                    avatar_url=user.get("photo_url"),
+                    registered_at=now,
+                    last_visited_at=now,
+                )
+                db.add(tutor)
+            else:
+                tutor.last_visited_at = now
+                tutor.avatar_url = user.get("photo_url") or tutor.avatar_url
+            await db.commit()
+            await db.refresh(tutor)
+            access_token = create_access_token(subject=str(tutor.id))
+        location = redirect_base + "?" + urlencode({"access_token": access_token})
+    else:
+        vk_payload, sign = sign_vk_mobile_data(
+            vk_id=user["vk_id"],
+            first_name=user["first_name"],
+            last_name=user.get("last_name"),
+            photo_url=user.get("photo_url"),
+        )
+        location = redirect_base + "?" + urlencode({**vk_payload, "sign": sign})
+
+    return _vk_js_redirect(location)
 
 
 @app.post("/vk-exchange")
