@@ -13,9 +13,13 @@ VK_USER_INFO_URL = "https://id.vk.com/oauth2/user_info"
 VK_SIGN_TTL = 600
 
 
-def encode_state(redirect: str, role: str) -> str:
-    payload = json.dumps({"redirect": redirect, "role": role, "ts": int(time.time())}, separators=(",", ":"))
-    b64 = base64.urlsafe_b64encode(payload.encode()).decode()
+def encode_state(redirect: str, role: str, device_id: str = "", code_verifier: str = "") -> str:
+    payload: dict = {"redirect": redirect, "role": role, "ts": int(time.time())}
+    if device_id:
+        payload["device_id"] = device_id
+    if code_verifier:
+        payload["code_verifier"] = code_verifier
+    b64 = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
     sig = hmac.new(settings.SECRET_KEY.encode(), b64.encode(), hashlib.sha256).hexdigest()[:16]
     return f"{b64}.{sig}"
 
@@ -32,7 +36,9 @@ def decode_state(state: str) -> dict | None:
         return None
 
 
-async def exchange_code_for_vk_user(code: str, device_id: str) -> dict | None:
+async def exchange_code_for_vk_user(
+    code: str, device_id: str, redirect_uri: str, code_verifier: str
+) -> dict | None:
     """Обменивает code+device_id на профиль через VK ID OAuth 2.0.
     Возвращает {vk_id, first_name, last_name, photo_url} или None при ошибке."""
     async with httpx.AsyncClient(timeout=10) as client:
@@ -40,8 +46,10 @@ async def exchange_code_for_vk_user(code: str, device_id: str) -> dict | None:
             "grant_type": "authorization_code",
             "code": code,
             "device_id": device_id,
+            "code_verifier": code_verifier,
             "client_id": settings.VK_APP_ID,
             "client_secret": settings.VK_APP_SECRET,
+            "redirect_uri": redirect_uri,
         })
         token_data = token_resp.json()
 
