@@ -158,7 +158,7 @@ def _vk_js_redirect(url: str) -> HTMLResponse:
     )
 
 
-_ALLOWED_VK_REDIRECT_SCHEMES = (
+_ALLOWED_REDIRECT_SCHEMES = (
     "mentor://",
     "exp://",
     "https://mentor-app-kappa-nine.vercel.app/",
@@ -174,7 +174,7 @@ async def vk_login(request: Request):
     redirect_param = request.query_params.get("redirect", "")
     role = request.query_params.get("role", "student")
 
-    if not any(redirect_param.startswith(s) for s in _ALLOWED_VK_REDIRECT_SCHEMES):
+    if not any(redirect_param.startswith(s) for s in _ALLOWED_REDIRECT_SCHEMES):
         redirect_param = "https://mentor-app-kappa-nine.vercel.app/auth/callback"
 
     code_verifier, code_challenge = generate_pkce_pair()
@@ -214,7 +214,7 @@ async def vk_callback(request: Request):
     role = state.get("role", "student")
     code_verifier = state.get("code_verifier", "")
 
-    if not any(redirect_base.startswith(s) for s in _ALLOWED_VK_REDIRECT_SCHEMES):
+    if not any(redirect_base.startswith(s) for s in _ALLOWED_REDIRECT_SCHEMES):
         redirect_base = "https://mentor-app-kappa-nine.vercel.app/auth/callback"
 
     user = await exchange_code_for_vk_user(
@@ -618,17 +618,6 @@ async def telegram_login_page(request: Request):
 </body>
 </html>"""
     return HTMLResponse(content=html)
-
-
-_ALLOWED_REDIRECT_SCHEMES = (
-    "mentor://",
-    "exp://",
-    "https://mentor-app-kappa-nine.vercel.app/",
-    "http://localhost:5173/",
-    "http://127.0.0.1:5173/",
-    "http://localhost:3000/",
-    "http://127.0.0.1:3000/",
-)
 
 
 @app.get("/telegram-callback", response_class=HTMLResponse)
