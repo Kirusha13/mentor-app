@@ -187,7 +187,6 @@ async def vk_login(request: Request):
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
         "state": state,
-        "scope": "",
     })
     return RedirectResponse(f"https://id.vk.com/oauth2/authorize?{params}")
 
