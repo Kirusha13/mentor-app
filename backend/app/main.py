@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -155,101 +156,25 @@ _ALLOWED_VK_REDIRECT_SCHEMES = (
 )
 
 
-@app.get("/vk-login", response_class=HTMLResponse)
+@app.get("/vk-login")
 async def vk_login_page(request: Request):
-    """Страница с VK ID OneTap виджетом для входа.
+    """Редирект на VK ID OAuth 2.0.
     Параметры: redirect (deep link или URL возврата), role (tutor/student)."""
     redirect = request.query_params.get("redirect", "mentor://auth-vk")
     role = request.query_params.get("role", "student")
     vk_callback_uri = settings.BACKEND_URL + _VK_CALLBACK_PATH
     state = encode_state(redirect=redirect, role=role)
-    app_id = settings.VK_APP_ID
+    device_id = str(uuid.uuid4())
 
-    html = f"""<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Войти через VK ID</title>
-  <style>
-    :root {{
-      --navy: #142038; --muted: #69758a; --blue: #0077FF;
-      --surface: #ffffff; --bg: #f6f8fc;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-      min-height: 100vh; margin: 0;
-      display: grid; place-items: center; overflow: hidden;
-      color: var(--navy);
-      background:
-        radial-gradient(circle at 0% 100%, rgba(0,119,255,0.14) 0 14%, transparent 15%),
-        radial-gradient(circle at 100% 0%, rgba(0,119,255,0.20) 0 12%, transparent 13%),
-        linear-gradient(135deg, #f8fbff 0%, #f4f7fc 48%, #eef4ff 100%);
-      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }}
-    .auth-card {{
-      position: relative; z-index: 1;
-      width: min(480px, calc(100vw - 32px));
-      padding: 42px 48px 38px;
-      border-radius: 30px;
-      border: 1px solid rgba(20,32,56,0.08);
-      background: #ffffff;
-      box-shadow: 0 28px 90px rgba(20,32,56,0.16);
-      text-align: center;
-    }}
-    .logo {{
-      width: 64px; height: 64px; margin: 0 auto 12px;
-      display: grid; place-items: center; border-radius: 50%;
-      background: linear-gradient(145deg, #eef5ff, #ffffff);
-      border: 1px solid rgba(0,119,255,0.2);
-      color: #0057cc; font-size: 30px; font-weight: 900;
-      box-shadow: 0 12px 30px rgba(0,119,255,0.12);
-    }}
-    .brand {{ margin: 0 0 20px; color: #2d4366; font-size: 13px; font-weight: 800; letter-spacing: 0.12em; }}
-    h1 {{ margin: 0 0 8px; color: var(--navy); font-size: clamp(26px, 4vw, 36px); line-height: 1.08; font-weight: 900; letter-spacing: -0.04em; }}
-    .subtitle {{ margin: 0 0 28px; color: var(--muted); font-size: 16px; line-height: 1.45; }}
-    #VkIdSdkOneTap {{ display: grid; place-items: center; min-height: 56px; }}
-    .secure {{
-      margin-top: 20px;
-      display: flex; justify-content: center; gap: 8px; align-items: center;
-      color: #7a8598; font-size: 13px;
-    }}
-    @media (max-width: 600px) {{
-      .auth-card {{ padding: 30px 22px 26px; border-radius: 24px; }}
-    }}
-  </style>
-</head>
-<body>
-  <main class="auth-card">
-    <div class="logo">VK</div>
-    <p class="brand">MENTOR APP</p>
-    <h1>Вход через VK ID</h1>
-    <p class="subtitle">Войдите через свой аккаунт VK</p>
-    <div id="VkIdSdkOneTap"></div>
-    <div class="secure">
-      <span>▧</span>
-      <span>Безопасный вход. Ваши данные надёжно защищены.</span>
-    </div>
-  </main>
-  <script src="https://unpkg.com/@vkid/sdk/dist-cdn/index.js"></script>
-  <script>
-    VKID.Config.init({{
-      app: {app_id},
-      redirectUrl: {json.dumps(vk_callback_uri)},
-      state: {json.dumps(state)},
-      responseMode: VKID.ConfigResponseMode.Redirect,
-      source: VKID.ConfigSource.LOWCODE,
-      scope: '',
-    }});
-    const oneTap = new VKID.OneTap();
-    const container = document.getElementById('VkIdSdkOneTap');
-    if (container) {{
-      oneTap.render({{ container: container, showAlternativeLogin: false }});
-    }}
-  </script>
-</body>
-</html>"""
-    return HTMLResponse(content=html)
+    authorize_url = "https://id.vk.com/oauth2/auth?" + urlencode({
+        "client_id": settings.VK_APP_ID,
+        "redirect_uri": vk_callback_uri,
+        "response_type": "code",
+        "state": state,
+        "scope": "",
+        "device_id": device_id,
+    })
+    return RedirectResponse(url=authorize_url, status_code=302)
 
 
 @app.get(_VK_CALLBACK_PATH, response_class=HTMLResponse)
