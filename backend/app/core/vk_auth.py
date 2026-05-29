@@ -9,8 +9,30 @@ import httpx
 
 from app.core.config import settings
 
+VK_TOKEN_URL = "https://id.vk.com/oauth2/auth"
 VK_USER_INFO_URL = "https://id.vk.com/oauth2/user_info"
 VK_SIGN_TTL = 600
+
+
+async def exchange_pkce_code(
+    code: str,
+    code_verifier: str,
+    device_id: str,
+    redirect_uri: str,
+    app_id: str,
+) -> str | None:
+    """Обменивает authorization code на access_token через PKCE (без SDK)."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(VK_TOKEN_URL, data={
+            "grant_type": "authorization_code",
+            "client_id": app_id,
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "code_verifier": code_verifier,
+            "device_id": device_id,
+        })
+        data = resp.json()
+        return data.get("access_token") or None
 
 
 async def get_vk_user_from_token(access_token: str, app_id: str) -> dict | None:
