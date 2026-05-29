@@ -9,10 +9,11 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
+import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -146,6 +147,36 @@ async def health():
     return {"status": "ok"}
 
 
+_vk_sdk_cache: str | None = None
+_VK_SDK_URLS = [
+    "https://unpkg.com/@vkid/sdk/dist-cdn/index.js",
+    "https://cdn.jsdelivr.net/npm/@vkid/sdk/dist-cdn/index.js",
+    "https://unpkg.com/@vkid/sdk",
+    "https://cdn.jsdelivr.net/npm/@vkid/sdk",
+]
+
+
+@app.get("/vk-sdk.js")
+async def vk_sdk_proxy():
+    """Проксирует @vkid/sdk с CDN чтобы избежать CORB при загрузке из браузера."""
+    global _vk_sdk_cache
+    if _vk_sdk_cache is None:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
+            for url in _VK_SDK_URLS:
+                try:
+                    resp = await client.get(url)
+                    ct = resp.headers.get("content-type", "")
+                    if resp.status_code == 200 and ("javascript" in ct or "text/plain" in ct or len(resp.text) > 1000):
+                        _vk_sdk_cache = resp.text
+                        break
+                except Exception:
+                    continue
+    if _vk_sdk_cache:
+        return Response(content=_vk_sdk_cache, media_type="application/javascript",
+                        headers={"Cache-Control": "public, max-age=3600"})
+    return Response(status_code=503, content="VK SDK unavailable")
+
+
 _ALLOWED_VK_REDIRECT_SCHEMES = (
     "mentor://",
     "exp://",
@@ -159,60 +190,128 @@ _ALLOWED_VK_REDIRECT_SCHEMES = (
 _VK_CALLBACK_URI = "/vk-callback"
 
 
-@app.get("/vk-login")
+@app.get("/vk-login", response_class=HTMLResponse)
 async def vk_login_page(request: Request):
-    """Редирект на VK ID OAuth 2.0 с PKCE и device_id.
-    Параметры: redirect (deep link или URL возврата), role (tutor/student)."""
+    """Страница с VK ID OneTap виджетом. SDK грузится через /vk-sdk.js (прокси)."""
     redirect_param = request.query_params.get("redirect", "mentor://auth-vk")
     role = request.query_params.get("role", "student")
+    app_id = settings.VK_APP_ID
+    vk_callback_url = settings.BACKEND_URL + _VK_CALLBACK_URI
+    j_redirect = json.dumps(redirect_param)
+    j_role = json.dumps(role)
+    j_callback = json.dumps(vk_callback_url)
 
-    device_id = str(uuid.uuid4())
-    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("=")
-    code_challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(code_verifier.encode()).digest()
-    ).decode().rstrip("=")
-
-    vk_callback_uri = settings.BACKEND_URL + _VK_CALLBACK_URI
-    state = encode_state(
-        redirect=redirect_param, role=role,
-        device_id=device_id, code_verifier=code_verifier,
-    )
-
-    authorize_url = "https://id.vk.com/oauth2/authorize?" + urlencode({
-        "client_id": settings.VK_APP_ID,
-        "redirect_uri": vk_callback_uri,
-        "response_type": "code",
-        "state": state,
-        "scope": "",
-        "device_id": device_id,
-        "code_challenge": code_challenge,
-        "code_challenge_method": "S256",
-    })
-    return RedirectResponse(url=authorize_url, status_code=302)
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Вход через VK ID</title>
+  <style>
+    *{{box-sizing:border-box}}
+    body{{min-height:100vh;margin:0;display:grid;place-items:center;
+      background:radial-gradient(circle at 0% 100%,rgba(0,119,255,.12) 0 14%,transparent 15%),
+                radial-gradient(circle at 100% 0%,rgba(0,119,255,.18) 0 12%,transparent 13%),#f6f8fc;
+      font-family:Inter,-apple-system,sans-serif;color:#142038}}
+    .card{{width:min(460px,calc(100vw - 32px));padding:40px 44px 36px;border-radius:30px;
+      background:#fff;border:1px solid rgba(20,32,56,.08);box-shadow:0 28px 90px rgba(20,32,56,.16);text-align:center}}
+    .logo{{width:64px;height:64px;margin:0 auto 12px;display:grid;place-items:center;border-radius:50%;
+      background:#e8f0fe;color:#0057cc;font-size:28px;font-weight:900}}
+    .brand{{margin:0 0 16px;color:#2d4366;font-size:12px;font-weight:800;letter-spacing:.14em}}
+    h1{{margin:0 0 6px;font-size:28px;font-weight:900;letter-spacing:-.03em}}
+    .sub{{margin:0 0 24px;color:#69758a;font-size:15px}}
+    #w{{min-height:56px;display:grid;place-items:center}}
+    .loader{{width:40px;height:40px;border-radius:50%;border:4px solid #e8f0fe;border-top-color:#0077ff;animation:spin .8s linear infinite}}
+    @keyframes spin{{to{{transform:rotate(360deg)}}}}
+    .st{{margin-top:16px;font-size:14px;color:#69758a}}.st.err{{color:#d32f2f}}
+    @media(max-width:520px){{.card{{padding:28px 20px 24px}}}}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="logo">VK</div>
+    <p class="brand">MENTOR APP</p>
+    <h1>Вход через VK ID</h1>
+    <p class="sub">Войдите через свой аккаунт ВКонтакте</p>
+    <div id="w"><div class="loader"></div></div>
+    <div id="st" class="st"></div>
+  </main>
+  <script>
+    var APP_ID={app_id},REDIRECT={j_redirect},ROLE={j_role},VK_CB={j_callback};
+    function setSt(m,e){{var el=document.getElementById('st');el.textContent=m;el.className='st'+(e?' err':'');}}
+    async function onLogin(code,did){{
+      document.getElementById('w').innerHTML='<div class="loader"></div>';
+      setSt('Выполняем вход…');
+      try{{
+        var r=await fetch('/vk-exchange',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+          body:JSON.stringify({{code:code,device_id:did,redirect:REDIRECT,role:ROLE}})}});
+        var d=await r.json();
+        if(d.location){{window.location.replace(d.location);}}
+        else{{setSt(d.error||'Ошибка входа',true);initWidget();}}
+      }}catch(e){{setSt('Ошибка сети',true);}}
+    }}
+    function initWidget(){{
+      if(typeof VKID==='undefined'){{setSt('VK ID SDK не загрузился',true);return;}}
+      try{{
+        VKID.Config.init({{app:APP_ID,redirectUrl:VK_CB,responseMode:VKID.ConfigResponseMode.Callback,source:VKID.ConfigSource.LOWCODE,scope:''}});
+        var w=document.getElementById('w');w.innerHTML='';
+        new VKID.OneTap().render({{container:w,showAlternativeLogin:false}})
+          .on(VKID.WidgetEvents.ERROR,function(){{setSt('Ошибка VK ID',true);}})
+          .on(VKID.OneTapInternalEvents.LOGIN_SUCCESS,function(p){{onLogin(p.code,p.device_id);}});
+      }}catch(e){{setSt('VK ID: '+e.message,true);}}
+    }}
+    var s=document.createElement('script');
+    s.src='/vk-sdk.js';
+    s.onload=initWidget;
+    s.onerror=function(){{setSt('SDK не загрузился (503)',true);}};
+    document.head.appendChild(s);
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 @app.get(_VK_CALLBACK_URI, response_class=HTMLResponse)
 async def vk_callback(request: Request):
-    """VK перенаправляет сюда после авторизации."""
-    code = request.query_params.get("code")
-    state_raw = request.query_params.get("state", "")
+    """SDK-попап редиректит сюда — загружаем SDK для передачи code в родительское окно."""
+    app_id = settings.VK_APP_ID
+    j_callback = json.dumps(settings.BACKEND_URL + _VK_CALLBACK_URI)
+    html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
+<script>
+  var s=document.createElement('script');
+  s.src='/vk-sdk.js';
+  s.onload=function(){{
+    if(typeof VKID!=='undefined'){{
+      VKID.Config.init({{app:{app_id},redirectUrl:{j_callback},
+        responseMode:VKID.ConfigResponseMode.Callback,source:VKID.ConfigSource.LOWCODE,scope:''}});
+    }}
+  }};
+  document.head.appendChild(s);
+</script></body></html>"""
+    return HTMLResponse(content=html)
 
-    state = decode_state(state_raw) if state_raw else None
-    if not state or not code:
-        return HTMLResponse("<html><body>Ошибка авторизации VK.</body></html>", status_code=400)
 
-    redirect_base = state.get("redirect", "mentor://auth-vk")
-    role = state.get("role", "student")
-    device_id = state.get("device_id", "")
-    code_verifier = state.get("code_verifier", "")
+@app.post("/vk-exchange")
+async def vk_exchange(request: Request):
+    """Обменивает code+device_id на JWT (tutor) или подписанные данные (student)."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
 
-    vk_callback_uri = settings.BACKEND_URL + _VK_CALLBACK_URI
+    code = body.get("code")
+    device_id = body.get("device_id", "")
+    redirect_base = body.get("redirect", "")
+    role = body.get("role", "student")
+
+    if not code:
+        return JSONResponse({"error": "Код авторизации не передан"}, status_code=400)
+
     user = await exchange_code_for_vk_user(
-        code=code, device_id=device_id,
-        redirect_uri=vk_callback_uri, code_verifier=code_verifier,
+        code=code, device_id=device_id, redirect_uri="", code_verifier="",
     )
     if not user:
-        return HTMLResponse("<html><body>Не удалось получить данные VK.</body></html>", status_code=400)
+        return JSONResponse({"error": "Не удалось получить данные VK. Попробуйте снова."}, status_code=400)
 
     if role == "tutor":
         async with AsyncSessionLocal() as db:
@@ -238,7 +337,7 @@ async def vk_callback(request: Request):
 
         if not any(redirect_base.startswith(s) for s in _ALLOWED_VK_REDIRECT_SCHEMES):
             redirect_base = "https://mentor-app-kappa-nine.vercel.app/auth/callback"
-        deep_link = redirect_base + "?" + urlencode({"access_token": access_token})
+        location = redirect_base + "?" + urlencode({"access_token": access_token})
     else:
         vk_payload, sign = sign_vk_mobile_data(
             vk_id=user["vk_id"],
@@ -248,23 +347,9 @@ async def vk_callback(request: Request):
         )
         if not any(redirect_base.startswith(s) for s in _ALLOWED_VK_REDIRECT_SCHEMES):
             redirect_base = "mentor://auth-vk"
-        deep_link = redirect_base + "?" + urlencode({**vk_payload, "sign": sign})
+        location = redirect_base + "?" + urlencode({**vk_payload, "sign": sign})
 
-    safe_link = json.dumps(deep_link)
-    html = f"""<!DOCTYPE html>
-<html lang="ru"><head><meta charset="UTF-8"><title>Завершаем вход</title>
-<style>
-  body{{min-height:100vh;margin:0;display:grid;place-items:center;background:#f6f8fc;font-family:Inter,sans-serif;color:#142038}}
-  .card{{width:min(420px,calc(100vw - 32px));padding:36px;border-radius:28px;background:#fff;border:1px solid rgba(20,32,56,.08);box-shadow:0 28px 90px rgba(20,32,56,.16);text-align:center}}
-  .logo{{width:58px;height:58px;margin:0 auto 16px;border-radius:50%;background:#eaf3ff;color:#2f8df4;display:grid;place-items:center;font-size:28px;font-weight:900}}
-  h1{{margin:0 0 10px;font-size:28px}}p{{margin:0;color:#69758a;font-size:16px}}
-  .loader{{width:44px;height:44px;margin:24px auto 0;border-radius:50%;border:4px solid #eaf3ff;border-top-color:#2f8df4;animation:spin .9s linear infinite}}
-  @keyframes spin{{to{{transform:rotate(360deg)}}}}
-</style></head>
-<body><main class="card"><div class="logo">M</div><h1>Завершаем вход</h1>
-<p>Проверяем VK-аккаунт и открываем Mentor App.</p><div class="loader"></div></main>
-<script>window.location.replace({safe_link});</script></body></html>"""
-    return HTMLResponse(content=html)
+    return JSONResponse({"location": location})
 
 
 @app.get("/telegram-login", response_class=HTMLResponse)
