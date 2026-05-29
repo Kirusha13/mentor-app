@@ -159,7 +159,7 @@ export default function LoginScreen() {
       if (url) handleUrl({ url });
     });
     return () => sub.remove();
-  }, [handleTelegramData]);
+  }, [handleTelegramData, handleVKData]);
 
   const openTelegramAuth = async () => {
     if (showTokenInput && !inviteToken.trim()) {
