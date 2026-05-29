@@ -1,6 +1,5 @@
 import json
 import os
-import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -158,21 +157,20 @@ _ALLOWED_VK_REDIRECT_SCHEMES = (
 
 @app.get("/vk-login")
 async def vk_login_page(request: Request):
-    """Редирект на VK ID OAuth 2.0.
+    """Редирект на VK OAuth.
     Параметры: redirect (deep link или URL возврата), role (tutor/student)."""
     redirect = request.query_params.get("redirect", "mentor://auth-vk")
     role = request.query_params.get("role", "student")
     vk_callback_uri = settings.BACKEND_URL + _VK_CALLBACK_PATH
     state = encode_state(redirect=redirect, role=role)
-    device_id = str(uuid.uuid4())
 
-    authorize_url = "https://id.vk.com/oauth2/auth?" + urlencode({
+    authorize_url = "https://oauth.vk.com/authorize?" + urlencode({
         "client_id": settings.VK_APP_ID,
         "redirect_uri": vk_callback_uri,
         "response_type": "code",
         "state": state,
         "scope": "",
-        "device_id": device_id,
+        "v": "5.131",
     })
     return RedirectResponse(url=authorize_url, status_code=302)
 
@@ -181,7 +179,6 @@ async def vk_login_page(request: Request):
 async def vk_callback(request: Request):
     """VK перенаправляет сюда после авторизации."""
     code = request.query_params.get("code")
-    device_id = request.query_params.get("device_id", "")
     state_raw = request.query_params.get("state", "")
 
     state = decode_state(state_raw) if state_raw else None
@@ -192,7 +189,7 @@ async def vk_callback(request: Request):
     role = state.get("role", "student")
 
     vk_callback_uri = settings.BACKEND_URL + _VK_CALLBACK_PATH
-    user = await exchange_code_for_vk_user(code=code, redirect_uri=vk_callback_uri, device_id=device_id)
+    user = await exchange_code_for_vk_user(code=code, redirect_uri=vk_callback_uri)
     if not user:
         return HTMLResponse("<html><body>Не удалось получить данные VK.</body></html>", status_code=400)
 

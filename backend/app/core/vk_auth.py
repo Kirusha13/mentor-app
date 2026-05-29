@@ -8,8 +8,10 @@ import httpx
 
 from app.core.config import settings
 
-VK_TOKEN_URL = "https://id.vk.com/oauth2/auth"
-VK_USER_INFO_URL = "https://id.vk.com/oauth2/user_info"
+VK_AUTHORIZE_URL = "https://oauth.vk.com/authorize"
+VK_TOKEN_URL = "https://oauth.vk.com/access_token"
+VK_USER_INFO_URL = "https://api.vk.com/method/users.get"
+VK_API_VERSION = "5.131"
 VK_SIGN_TTL = 600
 
 
@@ -32,17 +34,15 @@ def decode_state(state: str) -> dict | None:
         return None
 
 
-async def exchange_code_for_vk_user(code: str, redirect_uri: str, device_id: str) -> dict | None:
-    """Обменивает code+device_id на токен и профиль пользователя через VK ID OAuth 2.0.
+async def exchange_code_for_vk_user(code: str, redirect_uri: str) -> dict | None:
+    """Обменивает code на токен и профиль пользователя VK через стандартный OAuth.
     Возвращает {vk_id, first_name, last_name, photo_url} или None при ошибке."""
     async with httpx.AsyncClient(timeout=10) as client:
-        token_resp = await client.post(VK_TOKEN_URL, data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "device_id": device_id,
+        token_resp = await client.get(VK_TOKEN_URL, params={
             "client_id": settings.VK_APP_ID,
             "client_secret": settings.VK_APP_SECRET,
             "redirect_uri": redirect_uri,
+            "code": code,
         })
         token_data = token_resp.json()
 
@@ -50,24 +50,24 @@ async def exchange_code_for_vk_user(code: str, redirect_uri: str, device_id: str
             return None
 
         access_token = token_data["access_token"]
-        user_id_from_token = token_data.get("user_id")
+        vk_id = token_data.get("user_id")
 
-        user_resp = await client.post(VK_USER_INFO_URL, data={
-            "client_id": settings.VK_APP_ID,
+        user_resp = await client.get(VK_USER_INFO_URL, params={
             "access_token": access_token,
+            "fields": "photo_100",
+            "v": VK_API_VERSION,
         })
         user_data = user_resp.json()
 
-        user = user_data.get("user")
-        if not user:
+        if "response" not in user_data or not user_data["response"]:
             return None
 
-        raw_id = user.get("user_id") or user_id_from_token
+        user = user_data["response"][0]
         return {
-            "vk_id": int(raw_id),
+            "vk_id": vk_id or user.get("id"),
             "first_name": user.get("first_name", ""),
             "last_name": user.get("last_name") or None,
-            "photo_url": user.get("avatar") or None,
+            "photo_url": user.get("photo_100") or None,
         }
 
 
