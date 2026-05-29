@@ -340,7 +340,7 @@ export default function LoginScreen() {
         )}
 
         {/* Кнопка Telegram */}
-        <TouchableOpacity style={styles.tgBtn} onPress={openTelegramAuth} disabled={loading}>
+        <TouchableOpacity style={styles.tgBtn} onPress={openTelegramAuth} disabled={loading || vkLoading}>
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
