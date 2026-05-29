@@ -26,7 +26,6 @@ from app.core.vk_auth import (
     decode_state,
     encode_state,
     exchange_code_for_vk_user,
-    generate_pkce_pair,
     sign_vk_mobile_data,
 )
 from app.api.v1.router import api_router
@@ -177,24 +176,23 @@ async def vk_login(request: Request):
     if not any(redirect_param.startswith(s) for s in _ALLOWED_REDIRECT_SCHEMES):
         redirect_param = "https://mentor-app-kappa-nine.vercel.app/auth/callback"
 
-    code_verifier, code_challenge = generate_pkce_pair()
-    state = encode_state(redirect=redirect_param, role=role, code_verifier=code_verifier)
+    state = encode_state(redirect=redirect_param, role=role)
 
     params = urlencode({
-        "response_type": "code",
         "client_id": settings.VK_APP_ID,
         "redirect_uri": settings.BACKEND_URL + "/vk-callback",
-        "code_challenge": code_challenge,
-        "code_challenge_method": "S256",
+        "response_type": "code",
         "state": state,
+        "display": "page",
+        "scope": "vkid.personal_info",
+        "v": "5.199",
     })
-    return RedirectResponse(f"https://id.vk.com/oauth2/authorize?{params}")
+    return RedirectResponse(f"https://oauth.vk.com/authorize?{params}")
 
 
 @app.get("/vk-callback", response_class=HTMLResponse)
 async def vk_callback(request: Request):
     code = request.query_params.get("code")
-    device_id = request.query_params.get("device_id", "")
     raw_state = request.query_params.get("state", "")
 
     state = decode_state(raw_state)
@@ -211,16 +209,13 @@ async def vk_callback(request: Request):
 
     redirect_base = state.get("redirect", "")
     role = state.get("role", "student")
-    code_verifier = state.get("code_verifier", "")
 
     if not any(redirect_base.startswith(s) for s in _ALLOWED_REDIRECT_SCHEMES):
         redirect_base = "https://mentor-app-kappa-nine.vercel.app/auth/callback"
 
     user = await exchange_code_for_vk_user(
         code=code,
-        device_id=device_id,
         redirect_uri=settings.BACKEND_URL + "/vk-callback",
-        code_verifier=code_verifier,
     )
     if not user:
         return _vk_js_redirect(redirect_base + "?error=vk_exchange_failed")
