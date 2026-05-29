@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import time
 
 import httpx
@@ -11,6 +12,14 @@ from app.core.config import settings
 VK_TOKEN_URL = "https://id.vk.com/oauth2/auth"
 VK_USER_INFO_URL = "https://id.vk.com/oauth2/user_info"
 VK_SIGN_TTL = 600
+
+
+def generate_pkce_pair() -> tuple[str, str]:
+    verifier = base64.urlsafe_b64encode(os.urandom(48)).rstrip(b'=').decode()
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode()).digest()
+    ).rstrip(b'=').decode()
+    return verifier, challenge
 
 
 def encode_state(redirect: str, role: str, device_id: str = "", code_verifier: str = "") -> str:
