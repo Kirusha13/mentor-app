@@ -95,7 +95,7 @@ export default function AuthCallbackPage() {
         <div>
           <h1 style={{ fontSize: 28, marginBottom: 8 }}>Завершаем вход</h1>
           <p style={{ color: '#555', lineHeight: 1.5, marginBottom: 0 }}>
-            Проверяем Telegram-аккаунт и открываем кабинет. Обычно это занимает несколько секунд.
+            Проверяем авторизацию и открываем кабинет. Обычно это занимает несколько секунд.
           </p>
         </div>
         <div
