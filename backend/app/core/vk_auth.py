@@ -9,8 +9,8 @@ import httpx
 
 from app.core.config import settings
 
-VK_TOKEN_URL = "https://id.vk.com/oauth2/auth"
-VK_USER_INFO_URL = "https://id.vk.com/oauth2/user_info"
+VK_TOKEN_URL = "https://id.vk.ru/oauth2/auth"
+VK_USER_INFO_URL = "https://id.vk.ru/oauth2/user_info"
 VK_SIGN_TTL = 600
 
 

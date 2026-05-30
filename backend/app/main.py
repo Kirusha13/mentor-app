@@ -242,8 +242,9 @@ async def vk_login(request: Request):
           code_challenge_method: 'S256',
           device_id: deviceId,
           state: deviceId,
+          scope: '',
         }});
-        window.location.replace('https://id.vk.com/oauth2/authorize?' + params);
+        window.location.replace('https://id.vk.com/authorize?' + params);
       }} catch (e) {{
         window.location.replace({safe_err});
       }}
