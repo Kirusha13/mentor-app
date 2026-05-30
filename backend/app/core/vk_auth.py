@@ -20,17 +20,21 @@ async def exchange_pkce_code(
     device_id: str,
     redirect_uri: str,
     app_id: str,
+    app_secret: str = "",
 ) -> str | None:
     """Обменивает authorization code на access_token через PKCE (без SDK)."""
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": app_id,
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "code_verifier": code_verifier,
+        "device_id": device_id,
+    }
+    if app_secret:
+        payload["client_secret"] = app_secret
     async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(VK_TOKEN_URL, data={
-            "grant_type": "authorization_code",
-            "client_id": app_id,
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "code_verifier": code_verifier,
-            "device_id": device_id,
-        })
+        resp = await client.post(VK_TOKEN_URL, data=payload)
         data = resp.json()
         return data.get("access_token") or None
 

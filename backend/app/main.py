@@ -325,6 +325,7 @@ async def vk_process(body: VKProcessRequest):
         device_id=body.device_id,
         redirect_uri=settings.BACKEND_URL + "/vk-callback",
         app_id=str(settings.VK_APP_ID),
+        app_secret=settings.VK_APP_SECRET,
     )
     if not access_token:
         return JSONResponse({"location": redirect_base + "?error=vk_token_failed"})
