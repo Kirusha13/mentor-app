@@ -67,6 +67,7 @@ async def get_vk_user_from_token(access_token: str, app_id: str) -> dict | None:
         resp = await client.post(VK_USER_INFO_URL, data={
             "client_id": app_id,
             "access_token": access_token,
+            "lang": "ru",
         })
         data = resp.json()
         user = data.get("user")
