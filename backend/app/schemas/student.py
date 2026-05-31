@@ -8,7 +8,8 @@ class StudentOut(BaseModel):
     full_name: str
     grade: int | None
     phone_number: str | None
-    telegram_id: int
+    telegram_id: int | None
+    vk_id: int | None
     started_at: datetime
     last_visited_at: datetime | None
     avatar_url: str | None

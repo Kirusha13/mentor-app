@@ -7,7 +7,8 @@ class TutorOut(BaseModel):
     id: int
     full_name: str
     phone_number: str | None
-    telegram_id: int
+    telegram_id: int | None
+    vk_id: int | None
     registered_at: datetime
     last_visited_at: datetime | None
     avatar_url: str | None

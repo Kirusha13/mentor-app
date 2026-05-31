@@ -189,12 +189,14 @@ _VK_CARD_STYLE = """
 async def vk_login(request: Request):
     redirect_param = request.query_params.get("redirect", "")
     role = request.query_params.get("role", "student")
+    mode = request.query_params.get("mode", "login")
 
     if not any(redirect_param.startswith(s) for s in _ALLOWED_REDIRECT_SCHEMES):
         redirect_param = "https://mentor-app-kappa-nine.vercel.app/auth/callback"
 
     safe_redirect = json.dumps(redirect_param)
     safe_role = json.dumps(role)
+    safe_mode = json.dumps(mode)
     safe_app_id = json.dumps(str(settings.VK_APP_ID))
     safe_callback = json.dumps(settings.BACKEND_URL + "/vk-callback")
     safe_err = json.dumps("https://mentor-app-kappa-nine.vercel.app/login?error=vk_init_failed")
@@ -218,6 +220,7 @@ async def vk_login(request: Request):
       try {{
         sessionStorage.setItem('vk_redirect', {safe_redirect});
         sessionStorage.setItem('vk_role', {safe_role});
+        sessionStorage.setItem('vk_mode', {safe_mode});
 
         // PKCE: generate code_verifier + code_challenge
         const array = new Uint8Array(48);
@@ -256,7 +259,8 @@ async def vk_login(request: Request):
 
 @app.get("/vk-callback", response_class=HTMLResponse)
 async def vk_callback(request: Request):
-    safe_err = json.dumps("https://mentor-app-kappa-nine.vercel.app/login?error=vk_callback_failed")
+    safe_err_login = json.dumps("https://mentor-app-kappa-nine.vercel.app/login?error=vk_callback_failed")
+    safe_err_link = json.dumps("https://mentor-app-kappa-nine.vercel.app/profile?error=vk_link_failed")
     return HTMLResponse(f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -280,8 +284,16 @@ async def vk_callback(request: Request):
         const codeVerifier = sessionStorage.getItem('vk_code_verifier') || '';
         const vkRedirect = sessionStorage.getItem('vk_redirect') || '';
         const vkRole = sessionStorage.getItem('vk_role') || 'student';
+        const vkMode = sessionStorage.getItem('vk_mode') || 'login';
 
         if (!code || !codeVerifier) throw new Error('missing params');
+
+        if (vkMode === 'link') {{
+          // Режим привязки: передаём code/verifier на фронт, там сделают аутентифицированный запрос
+          const params = new URLSearchParams({{ code, device_id: deviceId, code_verifier: codeVerifier }});
+          window.location.replace(vkRedirect + '?' + params);
+          return;
+        }}
 
         const resp = await fetch('/vk-process', {{
           method: 'POST',
@@ -298,7 +310,8 @@ async def vk_callback(request: Request):
         const {{ location }} = await resp.json();
         window.location.replace(location);
       }} catch (e) {{
-        window.location.replace({safe_err});
+        const isLink = (sessionStorage.getItem('vk_mode') || 'login') === 'link';
+        window.location.replace(isLink ? {safe_err_link} : {safe_err_login});
       }}
     }})();
   </script>
@@ -380,13 +393,15 @@ async def telegram_login_page(request: Request):
     После авторизации Telegram вызывает /telegram-callback с данными пользователя.
     """
     redirect = request.query_params.get("redirect", "")
-    callback_url = str(request.base_url) + "telegram-callback?" + urlencode({"redirect": redirect})
+    mode = request.query_params.get("mode", "login")
+    page_heading = "Привязать Telegram" if mode == "link" else "Вход через Telegram"
+    callback_url = str(request.base_url) + "telegram-callback?" + urlencode({"redirect": redirect, "mode": mode})
     html = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Войти через Telegram</title>
+  <title>{page_heading}</title>
   <style>
     :root {{
       color-scheme: light;
@@ -678,7 +693,7 @@ async def telegram_login_page(request: Request):
   <main class="auth-card" aria-label="Вход через Telegram">
     <div class="logo">M</div>
     <p class="brand">MENTOR APP</p>
-    <h1>Вход через Telegram</h1>
+    <h1>{page_heading}</h1>
 
     <section class="account-preview" aria-label="Выбранный аккаунт">
       <div class="avatar">T</div>
@@ -738,6 +753,7 @@ async def telegram_callback(request: Request):
     """
     params = dict(request.query_params)
     redirect_base = params.pop("redirect", "mentor://auth")
+    params.pop("mode", None)
 
     if not any(redirect_base.startswith(s) for s in _ALLOWED_REDIRECT_SCHEMES):
         redirect_base = "mentor://auth"

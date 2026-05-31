@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Layout from '../components/Layout';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AuthCallbackPage from '../pages/AuthCallbackPage';
+import LinkVkCallbackPage from '../pages/LinkVkCallbackPage';
+import LinkTelegramCallbackPage from '../pages/LinkTelegramCallbackPage';
 import AssignmentsPage from '../pages/AssignmentsPage';
 import ContactsPage from '../pages/ContactsPage';
 import DashboardPage from '../pages/DashboardPage';
@@ -29,6 +31,8 @@ export default function AppRouter() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        <Route path="/link-vk-callback" element={<LinkVkCallbackPage />} />
+        <Route path="/link-telegram-callback" element={<LinkTelegramCallbackPage />} />
 
         <Route path="/" element={<ProtectedLayout><DashboardPage /></ProtectedLayout>} />
         <Route path="/students" element={<ProtectedLayout><StudentsPage /></ProtectedLayout>} />

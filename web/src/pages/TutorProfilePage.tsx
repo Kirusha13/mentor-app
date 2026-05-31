@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   createSubject,
   deleteSubject,
@@ -15,6 +15,8 @@ import {
   type TutorLevel,
 } from '../api/tutorLevels';
 import { getApiErrorMessage } from '../utils/apiError';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.9)',
@@ -102,6 +104,7 @@ export default function TutorProfilePage() {
 
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [linkMessage, setLinkMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +164,33 @@ export default function TutorProfilePage() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('vk_linked') === '1') {
+      setLinkMessage({ type: 'ok', text: 'VK ID успешно привязан' });
+      window.history.replaceState({}, '', '/profile');
+    } else if (params.get('tg_linked') === '1') {
+      setLinkMessage({ type: 'ok', text: 'Telegram успешно привязан' });
+      window.history.replaceState({}, '', '/profile');
+    } else if (params.get('error') === 'vk_link_failed') {
+      setLinkMessage({ type: 'err', text: 'Не удалось привязать VK ID — попробуй ещё раз' });
+      window.history.replaceState({}, '', '/profile');
+    } else if (params.get('error') === 'tg_link_failed') {
+      setLinkMessage({ type: 'err', text: 'Не удалось привязать Telegram — попробуй ещё раз' });
+      window.history.replaceState({}, '', '/profile');
+    }
+  }, []);
+
+  const handleLinkVk = useCallback(() => {
+    const callbackUrl = `${window.location.origin}/link-vk-callback`;
+    window.location.href = `${API_BASE}/vk-login?redirect=${encodeURIComponent(callbackUrl)}&role=tutor&mode=link`;
+  }, []);
+
+  const handleLinkTelegram = useCallback(() => {
+    const callbackUrl = `${window.location.origin}/link-telegram-callback`;
+    window.location.href = `${API_BASE}/telegram-login?redirect=${encodeURIComponent(callbackUrl)}&mode=link`;
   }, []);
 
   const initials = useMemo(() => getInitials(profile?.full_name ?? 'Репетитор'), [profile?.full_name]);
@@ -546,6 +576,104 @@ export default function TutorProfilePage() {
             />
           </label>
         </div>
+
+        <div style={{
+          padding: '12px 14px',
+          borderRadius: 14,
+          background: 'rgba(23,32,51,0.035)',
+          border: '1px solid rgba(24,33,47,0.07)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}>
+          <div>
+            <div style={{ fontSize: 13, color: '#687486', marginBottom: 3 }}>VK ID</div>
+            {profile.vk_id ? (
+              <div style={{ color: '#1f2a3b', fontWeight: 800, fontSize: 15 }}>
+                Привязан (ID: {profile.vk_id})
+              </div>
+            ) : (
+              <div style={{ color: '#687486', fontSize: 14 }}>Не привязан</div>
+            )}
+          </div>
+          {!profile.vk_id && (
+            <button
+              type="button"
+              onClick={handleLinkVk}
+              style={{
+                background: '#0077ff',
+                color: '#fff',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              ▸ Привязать VK ID
+            </button>
+          )}
+        </div>
+
+        <div style={{
+          padding: '12px 14px',
+          borderRadius: 14,
+          background: 'rgba(23,32,51,0.035)',
+          border: '1px solid rgba(24,33,47,0.07)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}>
+          <div>
+            <div style={{ fontSize: 13, color: '#687486', marginBottom: 3 }}>Telegram</div>
+            {profile.telegram_id ? (
+              <div style={{ color: '#1f2a3b', fontWeight: 800, fontSize: 15 }}>
+                Привязан (ID: {profile.telegram_id})
+              </div>
+            ) : (
+              <div style={{ color: '#687486', fontSize: 14 }}>Не привязан</div>
+            )}
+          </div>
+          {!profile.telegram_id && (
+            <button
+              type="button"
+              onClick={handleLinkTelegram}
+              style={{
+                background: '#2aabee',
+                color: '#fff',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              ▸ Привязать Telegram
+            </button>
+          )}
+        </div>
+
+        {linkMessage && (
+          <div style={{
+            padding: '10px 14px',
+            borderRadius: 12,
+            fontSize: 14,
+            fontWeight: 600,
+            background: linkMessage.type === 'ok' ? 'rgba(76,175,80,0.1)' : 'rgba(239,83,80,0.1)',
+            color: linkMessage.type === 'ok' ? '#2e7d32' : '#c62828',
+            border: `1px solid ${linkMessage.type === 'ok' ? 'rgba(76,175,80,0.3)' : 'rgba(239,83,80,0.3)'}`,
+          }}>
+            {linkMessage.text}
+          </div>
+        )}
       </article>
 
       <article style={{ ...panelStyle, display: 'grid', alignContent: 'start', gap: 12, minHeight: 0, overflow: 'visible', padding: 16 }}>
