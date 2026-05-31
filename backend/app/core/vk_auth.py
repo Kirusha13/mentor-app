@@ -56,6 +56,7 @@ async def get_vk_user_from_token(access_token: str, app_id: str) -> dict | None:
             "first_name": user.get("first_name", ""),
             "last_name": user.get("last_name") or None,
             "photo_url": user.get("avatar") or None,
+            "phone": user.get("phone") or None,
         }
 
 

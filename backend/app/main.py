@@ -236,6 +236,7 @@ async def vk_login(request: Request):
 
         sessionStorage.setItem('vk_code_verifier', verifier);
         sessionStorage.setItem('vk_device_id', deviceId);
+        sessionStorage.setItem('vk_timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow');
 
         const params = new URLSearchParams({{
           response_type: 'code',
@@ -245,7 +246,7 @@ async def vk_login(request: Request):
           code_challenge_method: 'S256',
           device_id: deviceId,
           state: deviceId,
-          scope: '',
+          scope: 'phone',
         }});
         window.location.replace('https://id.vk.com/authorize?' + params);
       }} catch (e) {{
@@ -285,6 +286,7 @@ async def vk_callback(request: Request):
         const vkRedirect = sessionStorage.getItem('vk_redirect') || '';
         const vkRole = sessionStorage.getItem('vk_role') || 'student';
         const vkMode = sessionStorage.getItem('vk_mode') || 'login';
+        const vkTimezone = sessionStorage.getItem('vk_timezone') || 'Europe/Moscow';
 
         if (!code || !codeVerifier) throw new Error('missing params');
 
@@ -304,6 +306,7 @@ async def vk_callback(request: Request):
             code_verifier: codeVerifier,
             role: vkRole,
             redirect: vkRedirect,
+            timezone: vkTimezone,
           }}),
         }});
         if (!resp.ok) throw new Error('process error');
@@ -325,6 +328,7 @@ class VKProcessRequest(BaseModel):
     code_verifier: str
     role: str
     redirect: str
+    timezone: str = "Europe/Moscow"
 
 
 @app.post("/vk-process")
@@ -361,8 +365,10 @@ async def vk_process(body: VKProcessRequest):
                     vk_id=user["vk_id"],
                     full_name=full_name or "Без имени",
                     avatar_url=user.get("photo_url"),
+                    phone_number=user.get("phone"),
                     registered_at=now,
                     last_visited_at=now,
+                    timezone=body.timezone,
                 )
                 db.add(tutor)
             else:
