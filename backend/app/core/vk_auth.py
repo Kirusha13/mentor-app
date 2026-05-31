@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import time
 
@@ -9,22 +10,28 @@ import httpx
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
 VK_TOKEN_URL = "https://id.vk.ru/oauth2/auth"
 VK_USER_INFO_URL = "https://id.vk.ru/oauth2/user_info"
 VK_SIGN_TTL = 600
 
 
-def _decode_id_token_claim(id_token: str, claim: str) -> str | None:
-    """Извлекает claim из JWT id_token без верификации подписи."""
+def _decode_id_token_payload(id_token: str) -> dict:
+    """Декодирует payload JWT id_token без верификации подписи."""
     try:
         parts = id_token.split(".")
         if len(parts) != 3:
-            return None
+            return {}
         padding = "=" * (4 - len(parts[1]) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(parts[1] + padding))
-        return payload.get(claim) or None
+        return json.loads(base64.urlsafe_b64decode(parts[1] + padding))
     except Exception:
-        return None
+        return {}
+
+
+def _decode_id_token_claim(id_token: str, claim: str) -> str | None:
+    payload = _decode_id_token_payload(id_token)
+    return payload.get(claim) or None
 
 
 async def exchange_pkce_code(
@@ -53,10 +60,18 @@ async def exchange_pkce_code(
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(VK_TOKEN_URL, data=payload)
         data = resp.json()
+        logger.info(
+            "VK token exchange — keys: %s",
+            list(data.keys()),
+        )
         access_token = data.get("access_token") or None
         if not access_token:
+            logger.warning("VK token exchange failed: %s", data)
             return None
-        phone = _decode_id_token_claim(data.get("id_token", ""), "phone_number")
+        id_token_raw = data.get("id_token", "")
+        id_token_payload = _decode_id_token_payload(id_token_raw)
+        logger.info("VK id_token payload: %s", id_token_payload)
+        phone = id_token_payload.get("phone_number") or id_token_payload.get("phone") or None
         return {"access_token": access_token, "phone": phone}
 
 
@@ -70,6 +85,7 @@ async def get_vk_user_from_token(access_token: str, app_id: str) -> dict | None:
             "lang": "ru",
         })
         data = resp.json()
+        logger.info("VK user_info raw response: %s", data)
         user = data.get("user")
         if not user:
             return None
