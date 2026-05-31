@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, SmallInteger, String, DateTime
+from sqlalchemy import BigInteger, SmallInteger, String, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -18,7 +18,7 @@ class Student(TimestampMixin, Base):
     vk_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_visited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Europe/Moscow")
 
     tutor_students: Mapped[list["TutorStudent"]] = relationship(back_populates="student")
