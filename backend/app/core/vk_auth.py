@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 VK_TOKEN_URL = "https://id.vk.ru/oauth2/auth"
 VK_USER_INFO_URL = "https://id.vk.ru/oauth2/user_info"
+VK_API_USERS_GET = "https://api.vk.com/method/users.get"
+VK_API_VERSION = "5.199"
 VK_SIGN_TTL = 600
 
 
@@ -77,24 +79,46 @@ async def exchange_pkce_code(
 
 async def get_vk_user_from_token(access_token: str, app_id: str) -> dict | None:
     """Получает профиль пользователя из VK ID по access_token.
-    Возвращает {vk_id, first_name, last_name, photo_url} или None при ошибке."""
+    Возвращает {vk_id, first_name, last_name, photo_url} или None при ошибке.
+
+    id.vk.ru/user_info игнорирует lang=ru и возвращает транслитерированное имя,
+    поэтому имя отдельно запрашиваем через api.vk.com/method/users.get с lang=ru.
+    """
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(VK_USER_INFO_URL, data={
             "client_id": app_id,
             "access_token": access_token,
-            "lang": "ru",
         })
         data = resp.json()
         logger.info("VK user_info raw response: %s", data)
         user = data.get("user")
         if not user:
             return None
+
+        vk_id = int(user.get("user_id"))
+        photo_url = user.get("avatar") or None
+        first_name = user.get("first_name", "")
+        last_name = user.get("last_name") or None
+
+        # user_info транслитерирует имя; запрашиваем русское имя через VK API
+        ru_resp = await client.get(VK_API_USERS_GET, params={
+            "user_ids": str(vk_id),
+            "access_token": access_token,
+            "v": VK_API_VERSION,
+            "lang": "ru",
+        })
+        ru_data = ru_resp.json()
+        logger.info("VK API users.get response: %s", ru_data)
+        ru_users = ru_data.get("response") or []
+        if ru_users:
+            first_name = ru_users[0].get("first_name") or first_name
+            last_name = ru_users[0].get("last_name") or last_name
+
         return {
-            "vk_id": int(user.get("user_id")),
-            "first_name": user.get("first_name", ""),
-            "last_name": user.get("last_name") or None,
-            "photo_url": user.get("avatar") or None,
-            "phone": user.get("phone") or None,
+            "vk_id": vk_id,
+            "first_name": first_name,
+            "last_name": last_name,
+            "photo_url": photo_url,
         }
 
 

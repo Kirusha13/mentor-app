@@ -249,7 +249,7 @@ async def vk_login(request: Request):
           code_challenge_method: 'S256',
           device_id: deviceId,
           state: deviceId,
-          scope: 'phone',
+          scope: '',
         }});
         window.location.replace('https://id.vk.com/authorize?' + params);
       }} catch (e) {{
@@ -356,8 +356,6 @@ async def vk_process(body: VKProcessRequest):
     if not user:
         return JSONResponse({"location": redirect_base + "?error=vk_user_info_failed"})
 
-    phone = token_data.get("phone") or user.get("phone")
-
     if body.role == "tutor":
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Tutor).where(Tutor.vk_id == user["vk_id"]))
@@ -371,7 +369,6 @@ async def vk_process(body: VKProcessRequest):
                     vk_id=user["vk_id"],
                     full_name=full_name or "Без имени",
                     avatar_url=user.get("photo_url"),
-                    phone_number=phone,
                     registered_at=now,
                     last_visited_at=now,
                     timezone=body.timezone,
