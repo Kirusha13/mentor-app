@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_student
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.telegram_auth import verify_telegram_data
+from app.core.vk_auth import verify_vk_mobile_sign
 from app.models.assignment import Assignment
 from app.models.lesson import Lesson
 from app.models.material import Material
@@ -31,6 +33,7 @@ from app.models.tutor_student import TutorStudent, TutorStudentStatus
 from app.schemas.assignment import AssignmentOut, AssignmentUpdate, StudentAssignmentUpdate
 from app.schemas.lesson import AvailableSlot, RescheduleRequest, StudentLessonCreate, StudentLessonNoteUpdate, StudentLessonOut
 from app.schemas.material import MaterialOut
+from app.schemas.auth import TelegramAuthData, VKMobileAuthData
 from app.schemas.student import StudentOut, StudentUpdate
 from app.schemas.theory_topic import TheoryTopicOut
 from app.schemas.tutor_level import TutorLevelOut
@@ -69,6 +72,58 @@ async def get_avatar(student: Student = Depends(get_current_student)):
         raise
     except Exception as e:
         raise HTTPException(status_code=404, detail="Аватар не найден")
+
+
+@router.post("/me/link-vk", response_model=StudentOut, summary="Привязать VK ID к аккаунту ученика")
+async def link_vk_student(
+    body: VKMobileAuthData,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    if not verify_vk_mobile_sign(
+        vk_id=body.vk_id,
+        first_name=body.first_name,
+        expires_at=body.expires_at,
+        sign=body.sign,
+        last_name=body.last_name,
+        photo_url=body.photo_url,
+    ):
+        raise HTTPException(status_code=400, detail="Невалидная подпись VK")
+
+    result = await db.execute(select(Student).where(Student.vk_id == body.vk_id))
+    existing = result.scalar_one_or_none()
+    if existing and existing.id != student.id:
+        raise HTTPException(status_code=409, detail="Этот VK ID уже привязан к другому аккаунту")
+
+    student.vk_id = body.vk_id
+    if not student.avatar_url and body.photo_url:
+        student.avatar_url = body.photo_url
+    await db.commit()
+    await db.refresh(student)
+    return student
+
+
+@router.post("/me/link-telegram", response_model=StudentOut, summary="Привязать Telegram к аккаунту ученика")
+async def link_telegram_student(
+    body: TelegramAuthData,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    tg_dict = body.model_dump(exclude={"client_timezone"})
+    if not verify_telegram_data(tg_dict):
+        raise HTTPException(status_code=400, detail="Невалидные данные Telegram")
+
+    result = await db.execute(select(Student).where(Student.telegram_id == body.id))
+    existing = result.scalar_one_or_none()
+    if existing and existing.id != student.id:
+        raise HTTPException(status_code=409, detail="Этот Telegram уже привязан к другому аккаунту")
+
+    student.telegram_id = body.id
+    if not student.avatar_url and body.photo_url:
+        student.avatar_url = body.photo_url
+    await db.commit()
+    await db.refresh(student)
+    return student
 
 
 @router.patch("/me", response_model=StudentOut, summary="Обновить профиль")

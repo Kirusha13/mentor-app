@@ -493,6 +493,47 @@ export default function TutorProfilePage() {
             <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 14 }}>
               Личный кабинет репетитора
             </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={profile.vk_id ? undefined : handleLinkVk}
+                title={profile.vk_id ? `VK ID: ${profile.vk_id}` : 'Привязать VK ID'}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '5px 12px', borderRadius: 20, fontWeight: 700, fontSize: 13,
+                  background: profile.vk_id ? 'rgba(0,119,255,0.3)' : 'rgba(255,255,255,0.1)',
+                  border: `1px solid ${profile.vk_id ? 'rgba(0,119,255,0.7)' : 'rgba(255,255,255,0.2)'}`,
+                  color: '#fff',
+                  cursor: profile.vk_id ? 'default' : 'pointer',
+                  boxShadow: 'none',
+                }}
+              >
+                VK
+                <span style={{ fontSize: 15, color: profile.vk_id ? '#81c784' : '#ef9a9a' }}>
+                  {profile.vk_id ? '✓' : '✕'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={profile.telegram_id ? undefined : handleLinkTelegram}
+                title={profile.telegram_id ? `Telegram ID: ${profile.telegram_id}` : 'Привязать Telegram'}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '5px 12px', borderRadius: 20, fontWeight: 700, fontSize: 13,
+                  background: profile.telegram_id ? 'rgba(42,171,238,0.3)' : 'rgba(255,255,255,0.1)',
+                  border: `1px solid ${profile.telegram_id ? 'rgba(42,171,238,0.7)' : 'rgba(255,255,255,0.2)'}`,
+                  color: '#fff',
+                  cursor: profile.telegram_id ? 'default' : 'pointer',
+                  boxShadow: 'none',
+                }}
+              >
+                Telegram
+                <span style={{ fontSize: 15, color: profile.telegram_id ? '#81c784' : '#ef9a9a' }}>
+                  {profile.telegram_id ? '✓' : '✕'}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -575,90 +616,6 @@ export default function TutorProfilePage() {
               placeholder="+7..."
             />
           </label>
-        </div>
-
-        <div style={{
-          padding: '12px 14px',
-          borderRadius: 14,
-          background: 'rgba(23,32,51,0.035)',
-          border: '1px solid rgba(24,33,47,0.07)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}>
-          <div>
-            <div style={{ fontSize: 13, color: '#687486', marginBottom: 3 }}>VK ID</div>
-            {profile.vk_id ? (
-              <div style={{ color: '#1f2a3b', fontWeight: 800, fontSize: 15 }}>
-                Привязан (ID: {profile.vk_id})
-              </div>
-            ) : (
-              <div style={{ color: '#687486', fontSize: 14 }}>Не привязан</div>
-            )}
-          </div>
-          {!profile.vk_id && (
-            <button
-              type="button"
-              onClick={handleLinkVk}
-              style={{
-                background: '#0077ff',
-                color: '#fff',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: 10,
-                fontWeight: 700,
-                fontSize: 14,
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              ▸ Привязать VK ID
-            </button>
-          )}
-        </div>
-
-        <div style={{
-          padding: '12px 14px',
-          borderRadius: 14,
-          background: 'rgba(23,32,51,0.035)',
-          border: '1px solid rgba(24,33,47,0.07)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}>
-          <div>
-            <div style={{ fontSize: 13, color: '#687486', marginBottom: 3 }}>Telegram</div>
-            {profile.telegram_id ? (
-              <div style={{ color: '#1f2a3b', fontWeight: 800, fontSize: 15 }}>
-                Привязан (ID: {profile.telegram_id})
-              </div>
-            ) : (
-              <div style={{ color: '#687486', fontSize: 14 }}>Не привязан</div>
-            )}
-          </div>
-          {!profile.telegram_id && (
-            <button
-              type="button"
-              onClick={handleLinkTelegram}
-              style={{
-                background: '#2aabee',
-                color: '#fff',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: 10,
-                fontWeight: 700,
-                fontSize: 14,
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              ▸ Привязать Telegram
-            </button>
-          )}
         </div>
 
         {linkMessage && (
