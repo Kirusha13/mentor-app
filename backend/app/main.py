@@ -1,9 +1,6 @@
 import json
-import logging
 import os
 from contextlib import asynccontextmanager
-
-logging.basicConfig(level=logging.INFO)
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
