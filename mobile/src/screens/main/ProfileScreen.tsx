@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,11 +13,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { getStudentMe, getTutors, StudentProfile, TutorStudent, updateStudentMe, uploadStudentAvatar } from '../../api/student';
+import { getStudentMe, getTutors, linkTelegramStudent, linkVkStudent, StudentProfile, TelegramLinkData, TutorStudent, updateStudentMe, uploadStudentAvatar } from '../../api/student';
 import { API_BASE_URL } from '../../api/client';
 import JoinScreen from './JoinScreen';
+
+const TELEGRAM_LOGIN_URL = API_BASE_URL.replace('/api/v1', '') + '/telegram-login';
+const VK_LOGIN_URL = API_BASE_URL.replace('/api/v1', '') + '/vk-login';
 
 const MONTHS_RU = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -78,6 +83,9 @@ export default function ProfileScreen() {
   const [editGrade, setEditGrade] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const vkLinkHandledRef = useRef(false);
+  const tgLinkHandledRef = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -141,6 +149,99 @@ export default function ProfileScreen() {
       setUploadingAvatar(false);
     }
   };
+
+  const handleVKLink = useCallback(async () => {
+    vkLinkHandledRef.current = false;
+    const redirectUrl = Linking.createURL('link-vk');
+    try {
+      const result = await WebBrowser.openAuthSessionAsync(
+        `${VK_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}&role=student`,
+        redirectUrl,
+      );
+      if (result.type === 'success' && !vkLinkHandledRef.current) {
+        vkLinkHandledRef.current = true;
+        const parsed = Linking.parse(result.url);
+        const p = parsed.queryParams as Record<string, string> | null;
+        if (p?.vk_id && p?.sign && p?.expires_at && p?.first_name) {
+          const updated = await linkVkStudent({
+            vk_id: Number(p.vk_id), first_name: p.first_name,
+            last_name: p.last_name, photo_url: p.photo_url,
+            expires_at: p.expires_at, sign: p.sign,
+          });
+          setProfile(updated);
+          Alert.alert('Готово', 'VK ID успешно привязан');
+        }
+      }
+    } catch {
+      Alert.alert('Ошибка', 'Не удалось привязать VK ID');
+    }
+  }, []);
+
+  const handleTelegramLink = useCallback(async () => {
+    tgLinkHandledRef.current = false;
+    const redirectUrl = Linking.createURL('link-tg');
+    try {
+      const result = await WebBrowser.openAuthSessionAsync(
+        `${TELEGRAM_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}`,
+        redirectUrl,
+      );
+      if (result.type === 'success' && !tgLinkHandledRef.current) {
+        tgLinkHandledRef.current = true;
+        const parsed = Linking.parse(result.url);
+        const p = parsed.queryParams as Record<string, string> | null;
+        if (p?.id && p?.hash && p?.auth_date && p?.first_name) {
+          const data: TelegramLinkData = {
+            id: Number(p.id), hash: p.hash, auth_date: Number(p.auth_date),
+            first_name: p.first_name, last_name: p.last_name,
+            username: p.username, photo_url: p.photo_url,
+          };
+          const updated = await linkTelegramStudent(data);
+          setProfile(updated);
+          Alert.alert('Готово', 'Telegram успешно привязан');
+        }
+      }
+    } catch {
+      Alert.alert('Ошибка', 'Не удалось привязать Telegram');
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleUrl = ({ url }: { url: string }) => {
+      try {
+        const parsed = Linking.parse(url);
+        const path = parsed.path;
+        const p = parsed.queryParams as Record<string, string> | null;
+
+        if ((path === 'link-vk' || path === '--/link-vk') && p?.vk_id && p?.sign && !vkLinkHandledRef.current) {
+          vkLinkHandledRef.current = true;
+          WebBrowser.dismissBrowser();
+          linkVkStudent({
+            vk_id: Number(p.vk_id), first_name: p.first_name ?? '',
+            last_name: p.last_name, photo_url: p.photo_url,
+            expires_at: p.expires_at ?? '', sign: p.sign,
+          })
+            .then(updated => { setProfile(updated); Alert.alert('Готово', 'VK ID успешно привязан'); })
+            .catch(() => Alert.alert('Ошибка', 'Не удалось привязать VK ID'));
+        }
+
+        if ((path === 'link-tg' || path === '--/link-tg') && p?.id && p?.hash && !tgLinkHandledRef.current) {
+          tgLinkHandledRef.current = true;
+          WebBrowser.dismissBrowser();
+          const data: TelegramLinkData = {
+            id: Number(p.id), hash: p.hash, auth_date: Number(p.auth_date ?? 0),
+            first_name: p.first_name ?? '', last_name: p.last_name,
+            username: p.username, photo_url: p.photo_url,
+          };
+          linkTelegramStudent(data)
+            .then(updated => { setProfile(updated); Alert.alert('Готово', 'Telegram успешно привязан'); })
+            .catch(() => Alert.alert('Ошибка', 'Не удалось привязать Telegram'));
+        }
+      } catch {}
+    };
+
+    const sub = Linking.addEventListener('url', handleUrl);
+    return () => sub.remove();
+  }, []);
 
   const handleLogout = () => {
     Alert.alert('Выход', 'Вы уверены, что хотите выйти?', [
@@ -236,6 +337,53 @@ export default function ProfileScreen() {
             </View>
           </>
         )}
+      </View>
+
+      {/* Подключённые аккаунты */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Подключённые аккаунты</Text>
+
+        <View style={styles.accountRow}>
+          <View style={[styles.accountIconWrap, { backgroundColor: '#EFF9FF' }]}>
+            <Ionicons name="paper-plane" size={18} color="#2AABEE" />
+          </View>
+          <View style={styles.accountInfo}>
+            <Text style={styles.accountLabel}>Telegram</Text>
+            <Text style={profile?.telegram_id ? styles.accountConnected : styles.accountMuted}>
+              {profile?.telegram_id ? 'Привязан' : 'Не привязан'}
+            </Text>
+          </View>
+          {profile?.telegram_id
+            ? <Ionicons name="checkmark-circle" size={22} color="#4caf50" />
+            : (
+              <TouchableOpacity style={styles.linkBtn} onPress={handleTelegramLink}>
+                <Text style={styles.linkBtnText}>Привязать</Text>
+              </TouchableOpacity>
+            )
+          }
+        </View>
+
+        <View style={styles.accountDivider} />
+
+        <View style={styles.accountRow}>
+          <View style={[styles.accountIconWrap, { backgroundColor: '#E8F4FF' }]}>
+            <Ionicons name="logo-vk" size={18} color="#0077ff" />
+          </View>
+          <View style={styles.accountInfo}>
+            <Text style={styles.accountLabel}>VK ID</Text>
+            <Text style={profile?.vk_id ? styles.accountConnected : styles.accountMuted}>
+              {profile?.vk_id ? 'Привязан' : 'Не привязан'}
+            </Text>
+          </View>
+          {profile?.vk_id
+            ? <Ionicons name="checkmark-circle" size={22} color="#4caf50" />
+            : (
+              <TouchableOpacity style={[styles.linkBtn, { backgroundColor: '#0077ff' }]} onPress={handleVKLink}>
+                <Text style={styles.linkBtnText}>Привязать</Text>
+              </TouchableOpacity>
+            )
+          }
+        </View>
       </View>
 
       {/* Репетиторы */}
@@ -438,4 +586,21 @@ const styles = StyleSheet.create({
   },
   settingsItemText: { flex: 1, fontSize: 15, fontWeight: '500', color: '#1a1a1a' },
   settingsDivider: { height: 1, backgroundColor: '#f0f0f0', marginLeft: 62 },
+
+  accountRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
+  accountIconWrap: {
+    width: 34, height: 34, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#EFF9FF',
+  },
+  accountInfo: { flex: 1, gap: 2 },
+  accountLabel: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  accountConnected: { fontSize: 12, color: '#4caf50', fontWeight: '500' },
+  accountMuted: { fontSize: 12, color: '#aaa' },
+  accountDivider: { height: 1, backgroundColor: '#f0f0f0', marginVertical: 6 },
+  linkBtn: {
+    backgroundColor: '#2AABEE', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 7,
+  },
+  linkBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
 });
