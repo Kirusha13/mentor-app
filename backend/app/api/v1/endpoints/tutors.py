@@ -41,7 +41,7 @@ async def link_vk(
     tutor: Tutor = Depends(get_current_tutor),
     db: AsyncSession = Depends(get_db),
 ):
-    access_token = await exchange_pkce_code(
+    token_data = await exchange_pkce_code(
         code=body.code,
         code_verifier=body.code_verifier,
         device_id=body.device_id,
@@ -49,10 +49,10 @@ async def link_vk(
         app_id=str(settings.VK_APP_ID),
         app_secret=settings.VK_APP_SECRET,
     )
-    if not access_token:
+    if not token_data:
         raise HTTPException(status_code=400, detail="Не удалось получить токен VK")
 
-    user = await get_vk_user_from_token(access_token, str(settings.VK_APP_ID))
+    user = await get_vk_user_from_token(token_data["access_token"], str(settings.VK_APP_ID))
     if not user:
         raise HTTPException(status_code=400, detail="Не удалось получить данные пользователя VK")
 

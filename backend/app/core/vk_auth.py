@@ -14,6 +14,19 @@ VK_USER_INFO_URL = "https://id.vk.ru/oauth2/user_info"
 VK_SIGN_TTL = 600
 
 
+def _decode_id_token_claim(id_token: str, claim: str) -> str | None:
+    """Извлекает claim из JWT id_token без верификации подписи."""
+    try:
+        parts = id_token.split(".")
+        if len(parts) != 3:
+            return None
+        padding = "=" * (4 - len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(parts[1] + padding))
+        return payload.get(claim) or None
+    except Exception:
+        return None
+
+
 async def exchange_pkce_code(
     code: str,
     code_verifier: str,
@@ -21,8 +34,12 @@ async def exchange_pkce_code(
     redirect_uri: str,
     app_id: str,
     app_secret: str = "",
-) -> str | None:
-    """Обменивает authorization code на access_token через PKCE (без SDK)."""
+) -> dict | None:
+    """Обменивает authorization code на access_token через PKCE.
+
+    Возвращает {"access_token": str, "phone": str | None} или None при ошибке.
+    Номер телефона берётся из id_token (OIDC claim phone_number).
+    """
     payload = {
         "grant_type": "authorization_code",
         "client_id": app_id,
@@ -36,7 +53,11 @@ async def exchange_pkce_code(
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(VK_TOKEN_URL, data=payload)
         data = resp.json()
-        return data.get("access_token") or None
+        access_token = data.get("access_token") or None
+        if not access_token:
+            return None
+        phone = _decode_id_token_claim(data.get("id_token", ""), "phone_number")
+        return {"access_token": access_token, "phone": phone}
 
 
 async def get_vk_user_from_token(access_token: str, app_id: str) -> dict | None:

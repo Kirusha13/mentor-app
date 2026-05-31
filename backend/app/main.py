@@ -337,7 +337,7 @@ async def vk_process(body: VKProcessRequest):
     if not any(redirect_base.startswith(s) for s in _ALLOWED_REDIRECT_SCHEMES):
         redirect_base = "https://mentor-app-kappa-nine.vercel.app/auth/callback"
 
-    access_token = await exchange_pkce_code(
+    token_data = await exchange_pkce_code(
         code=body.code,
         code_verifier=body.code_verifier,
         device_id=body.device_id,
@@ -345,12 +345,15 @@ async def vk_process(body: VKProcessRequest):
         app_id=str(settings.VK_APP_ID),
         app_secret=settings.VK_APP_SECRET,
     )
-    if not access_token:
+    if not token_data:
         return JSONResponse({"location": redirect_base + "?error=vk_token_failed"})
 
+    access_token = token_data["access_token"]
     user = await get_vk_user_from_token(access_token, str(settings.VK_APP_ID))
     if not user:
         return JSONResponse({"location": redirect_base + "?error=vk_user_info_failed"})
+
+    phone = token_data.get("phone") or user.get("phone")
 
     if body.role == "tutor":
         async with AsyncSessionLocal() as db:
@@ -365,7 +368,7 @@ async def vk_process(body: VKProcessRequest):
                     vk_id=user["vk_id"],
                     full_name=full_name or "Без имени",
                     avatar_url=user.get("photo_url"),
-                    phone_number=user.get("phone"),
+                    phone_number=phone,
                     registered_at=now,
                     last_visited_at=now,
                     timezone=body.timezone,
