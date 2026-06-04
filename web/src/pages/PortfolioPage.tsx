@@ -271,29 +271,27 @@ function buildCalendarCells(month: string, lessons: Lesson[]): CalendarCell[] {
 }
 
 function buildProgressRows(
-  month: string,
   lessons: Lesson[],
   assignments: Assignment[],
   topicPercent: number
 ): ProgressPoint[] {
-  const { start, end } = monthRange(month);
-  const lastDay = end.getDate();
-  const checkpoints = [7, 14, 21, lastDay].filter((day, index, days) => day <= lastDay && days.indexOf(day) === index);
-
-  return checkpoints.map((day) => {
-    const checkpoint = new Date(start.getFullYear(), start.getMonth(), day, 23, 59, 59, 999);
-    const pointLessons = lessons.filter((lesson) => {
-      const value = parsePortfolioDate(lessonDate(lesson));
-      return Boolean(value && value <= checkpoint);
+  const conductedLessons = lessons
+    .filter((l) => l.conduct_status === 'conducted')
+    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+  if (conductedLessons.length === 0) return [];
+  return conductedLessons.map((lesson, index) => {
+    const lessonTime = new Date(lesson.starts_at);
+    const pointLessons = lessons.filter((l) => {
+      const d = parsePortfolioDate(lessonDate(l));
+      return Boolean(d && d <= lessonTime);
     });
-    const pointAssignments = assignments.filter((assignment) => {
-      const value = parsePortfolioDate(assignment.deadline);
-      return Boolean(value && value <= checkpoint);
+    const pointAssignments = assignments.filter((a) => {
+      const d = parsePortfolioDate(a.deadline);
+      return Boolean(d && d <= lessonTime);
     });
     const stats = buildStats(pointLessons, pointAssignments, topicPercent);
-
     return {
-      label: formatShortDate(checkpoint),
+      label: `Зан. ${index + 1}`,
       averageGradePercent: scoreToPercent(stats.averageLessonGrade) ?? 0,
       homeworkPercent: stats.homeworkPercent,
       overallProgress: stats.overallProgress,
@@ -350,13 +348,13 @@ function RadarChart({
   variant = 'default',
 }: {
   values: Array<{ label: string; value: number }>;
-  variant?: 'default' | 'report';
+  variant?: 'default' | 'report' | 'landscape';
 }) {
-  const isReport = variant === 'report';
-  const size = isReport ? 330 : 430;
+  const isReport = variant === 'report' || variant === 'landscape';
+  const size = variant === 'landscape' ? 290 : (isReport ? 330 : 430);
   const center = size / 2;
-  const radius = isReport ? 92 : 126;
-  const labelDistance = isReport ? 136 : 184;
+  const radius = variant === 'landscape' ? 78 : (isReport ? 92 : 126);
+  const labelDistance = variant === 'landscape' ? 118 : (isReport ? 136 : 184);
   const labelPadding = isReport ? 16 : 22;
   const points = values.map((item, index) => {
     const angle = (Math.PI * 2 * index) / values.length - Math.PI / 2;
@@ -438,11 +436,11 @@ function ProgressLineChart({
   variant = 'default',
 }: {
   rows: ProgressPoint[];
-  variant?: 'default' | 'report';
+  variant?: 'default' | 'report' | 'landscape';
 }) {
-  const isReport = variant === 'report';
-  const width = isReport ? 430 : 680;
-  const height = isReport ? 216 : 280;
+  const isReport = variant === 'report' || variant === 'landscape';
+  const width = variant === 'landscape' ? 570 : (variant === 'report' ? 430 : 680);
+  const height = variant === 'landscape' ? 230 : (variant === 'report' ? 216 : 280);
   const padding = isReport
     ? { top: 14, right: 18, bottom: 34, left: 40 }
     : { top: 18, right: 22, bottom: 42, left: 48 };
@@ -460,7 +458,7 @@ function ProgressLineChart({
   };
 
   return (
-    <div className={isReport ? 'portfolio-chart portfolio-chart-report' : 'portfolio-chart'}>
+    <div className={variant === 'landscape' ? 'portfolio-chart portfolio-chart-report portfolio-chart-landscape' : isReport ? 'portfolio-chart portfolio-chart-report' : 'portfolio-chart'}>
       <div className="portfolio-chart-legend">
         {series.map((item) => (
           <span key={item.key}>
@@ -580,6 +578,7 @@ export default function PortfolioPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => formatMonthInput(new Date()));
   const [reportComment, setReportComment] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
+  const [reportOrientation, setReportOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [pdfSaving, setPdfSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const reportRef = useRef<HTMLDivElement | null>(null);
@@ -775,7 +774,7 @@ export default function PortfolioPage() {
       value: clampPercent(currentStats.homeworkPercent * 0.6 + (scoreToPercent(currentStats.averageAssignmentGrade) ?? 0) * 0.4),
     },
   ];
-  const progressRows = buildProgressRows(selectedMonth, monthLessons, monthAssignments, topicAverage);
+  const progressRows = buildProgressRows(monthLessons, monthAssignments, topicAverage);
   const calendarCells = buildCalendarCells(selectedMonth, monthLessons);
   const topicActivityMax = Math.max(1, ...topicProgressRows.map((row) => row.activityCount));
   const periodLabel = formatPeriodRange(selectedMonth);
@@ -857,7 +856,8 @@ export default function PortfolioPage() {
         windowHeight: reportRef.current.scrollHeight,
       });
       const imageData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfOrientation = reportOrientation === 'landscape' ? 'l' : 'p';
+      const pdf = new jsPDF(pdfOrientation, 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 10;
@@ -1541,7 +1541,7 @@ export default function PortfolioPage() {
           }
 
           .portfolio-report-shell {
-            width: min(980px, calc(100vw - 24px));
+            width: min(1160px, calc(100vw - 24px));
             max-height: calc(100vh - 24px);
             overflow: auto;
             display: grid;
@@ -1971,6 +1971,79 @@ export default function PortfolioPage() {
             -webkit-line-clamp: 3;
           }
 
+          .report-landscape {
+            width: 267mm;
+            min-height: auto;
+            box-sizing: border-box;
+            display: grid;
+            grid-template-columns: 1fr 1.4fr;
+            grid-template-areas:
+              "ls-header ls-header"
+              "ls-student ls-student"
+              "ls-kpi ls-kpi"
+              "ls-left ls-right"
+              "ls-insights ls-insights"
+              "ls-comment ls-comment";
+            gap: 3.1mm;
+            color: ${COLORS.text};
+            background: ${COLORS.surface};
+            border: 1px solid ${COLORS.border};
+            border-radius: 20px;
+            padding: 7mm;
+            font-size: 9.4px;
+            line-height: 1.35;
+            overflow: visible;
+          }
+
+          .report-landscape .report-header { grid-area: ls-header; }
+          .report-landscape .ls-student-row { grid-area: ls-student; }
+          .report-landscape .ls-kpi-row { grid-area: ls-kpi; }
+          .report-landscape .ls-left { grid-area: ls-left; display: grid; gap: 3.1mm; align-content: start; }
+          .report-landscape .ls-right { grid-area: ls-right; display: grid; gap: 3.1mm; align-content: start; }
+          .report-landscape .ls-insights-row { grid-area: ls-insights; }
+          .report-landscape .ls-comment-row { grid-area: ls-comment; }
+
+          .report-landscape .report-kpi-grid {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+          }
+
+          .portfolio-chart-landscape .portfolio-chart-legend {
+            gap: 11px;
+            font-size: 8.8px;
+          }
+
+          .report-landscape .report-analytics-grid {
+            grid-template-columns: 1fr 1.8fr;
+          }
+
+          .report-landscape .report-radar-wrap {
+            min-height: 190px;
+          }
+
+          .portfolio-orientation-toggle {
+            display: flex;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid ${COLORS.border};
+          }
+
+          .portfolio-orientation-toggle button {
+            min-height: 36px;
+            padding: 0 14px;
+            border-radius: 0;
+            border: none;
+            background: transparent;
+            color: ${COLORS.secondary};
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+          }
+
+          .portfolio-orientation-toggle button.active {
+            background: ${COLORS.primary};
+            color: #fff;
+          }
+
           @page {
             size: A4 portrait;
             margin: 10mm;
@@ -2271,7 +2344,11 @@ export default function PortfolioPage() {
               <div style={{ color: COLORS.secondary, fontSize: 13, fontWeight: 850 }}>
                 PDF A4 · {selectedStudent.full_name} · {selectedSubjectLabel}
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div className="portfolio-orientation-toggle">
+                  <button type="button" className={reportOrientation === 'portrait' ? 'active' : ''} onClick={() => setReportOrientation('portrait')}>Портрет</button>
+                  <button type="button" className={reportOrientation === 'landscape' ? 'active' : ''} onClick={() => setReportOrientation('landscape')}>Альбом</button>
+                </div>
                 <button type="button" title="Скачать PDF" onClick={handleSaveReportPdf} disabled={pdfSaving} className="modal-primary" style={{ minWidth: 130 }}>
                   {pdfSaving ? 'Сохраняем...' : 'Скачать PDF'}
                 </button>
@@ -2281,7 +2358,7 @@ export default function PortfolioPage() {
               </div>
             </div>
 
-            <div ref={reportRef} className="report-a4">
+            <div ref={reportRef} className={reportOrientation === 'landscape' ? 'report-landscape' : 'report-a4'}>
               <header className="report-header">
                 <div>
                   <div className="report-logo">
@@ -2340,13 +2417,13 @@ export default function PortfolioPage() {
                 <article className="report-card report-section">
                   <h3 className="report-section-title">Роза компетенций</h3>
                   <div className="report-radar-wrap">
-                    <RadarChart values={competencyRows} variant="report" />
+                    <RadarChart values={competencyRows} variant={reportOrientation === 'landscape' ? 'landscape' : 'report'} />
                   </div>
                 </article>
 
                 <article className="report-card report-section">
                   <h3 className="report-section-title">Динамика прогресса</h3>
-                  <ProgressLineChart rows={progressRows} variant="report" />
+                  <ProgressLineChart rows={progressRows} variant={reportOrientation === 'landscape' ? 'landscape' : 'report'} />
                 </article>
               </section>
 
