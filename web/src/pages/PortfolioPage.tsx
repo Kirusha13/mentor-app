@@ -117,11 +117,6 @@ function formatPeriodRange(month: string) {
   return `${startLabel} — ${endLabel}`;
 }
 
-function formatShortDate(date: Date) {
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' })
-    .format(date)
-    .replace('.', '');
-}
 
 function getInitials(name: string) {
   return name
