@@ -50,7 +50,7 @@ type TopicProgress = {
 type ProgressPoint = {
   label: string;
   averageGradePercent: number;
-  homeworkPercent: number;
+  homeworkPercent: number | null;
   overallProgress: number;
 };
 
@@ -141,7 +141,11 @@ function topicBarColor(value: number) {
 
 function parsePortfolioDate(date: string | null | undefined) {
   if (!date) return null;
-  const value = date.includes('T') ? new Date(date) : new Date(`${date}T00:00:00`);
+  let normalized = date;
+  if (!date.includes('T')) {
+    normalized = date.includes(' ') ? date.replace(' ', 'T') : `${date}T00:00:00`;
+  }
+  const value = new Date(normalized);
   return Number.isNaN(value.getTime()) ? null : value;
 }
 
@@ -274,8 +278,11 @@ function buildProgressRows(
     .filter((l) => l.conduct_status === 'conducted')
     .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
   if (conductedLessons.length === 0) return [];
-  return conductedLessons.map((lesson, index) => {
+  return conductedLessons.map((lesson) => {
     const lessonTime = new Date(lesson.starts_at);
+    const dateLabel = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' })
+      .format(lessonTime)
+      .replace('.', '');
     const pointLessons = lessons.filter((l) => {
       const d = parsePortfolioDate(lessonDate(l));
       return Boolean(d && d <= lessonTime);
@@ -286,9 +293,9 @@ function buildProgressRows(
     });
     const stats = buildStats(pointLessons, pointAssignments, topicPercent);
     return {
-      label: `Зан. ${index + 1}`,
+      label: dateLabel,
       averageGradePercent: scoreToPercent(stats.averageLessonGrade) ?? 0,
-      homeworkPercent: stats.homeworkPercent,
+      homeworkPercent: pointAssignments.length > 0 ? stats.homeworkPercent : null,
       overallProgress: stats.overallProgress,
     };
   });
@@ -351,15 +358,22 @@ function RadarChart({
   const radius = variant === 'landscape' ? 78 : (isReport ? 92 : 126);
   const labelDistance = variant === 'landscape' ? 118 : (isReport ? 136 : 184);
   const labelPadding = isReport ? 16 : 22;
+  const approxCharWidth = isReport ? 5.8 : 7.2;
   const points = values.map((item, index) => {
     const angle = (Math.PI * 2 * index) / values.length - Math.PI / 2;
     const distance = radius * (clampPercent(item.value) / 100);
     const rawLabelX = center + Math.cos(angle) * labelDistance;
     const rawLabelY = center + Math.sin(angle) * labelDistance;
-    const labelX = Math.max(labelPadding, Math.min(size - labelPadding, rawLabelX));
-    const labelY = Math.max(labelPadding + 8, Math.min(size - labelPadding - 8, rawLabelY));
     const textAnchor: 'start' | 'middle' | 'end' =
       rawLabelX < center - 16 ? 'end' : rawLabelX > center + 16 ? 'start' : 'middle';
+    const maxTextWidth = Math.max(item.label.length, 4) * approxCharWidth;
+    const labelX =
+      textAnchor === 'end'
+        ? Math.max(center - radius, rawLabelX)
+        : textAnchor === 'start'
+        ? Math.min(size - maxTextWidth - labelPadding, rawLabelX)
+        : Math.max(labelPadding, Math.min(size - labelPadding, rawLabelX));
+    const labelY = Math.max(labelPadding + 8, Math.min(size - labelPadding - 8, rawLabelY));
 
     return {
       ...item,
@@ -447,8 +461,10 @@ function ProgressLineChart({
     { key: 'overallProgress', label: 'Общий прогресс', color: '#7C3AED' },
   ] as const;
   const pointFor = (row: ProgressPoint, index: number, key: (typeof series)[number]['key']) => {
+    const value = row[key];
+    if (value === null) return null;
     const x = padding.left + (rows.length <= 1 ? plotWidth / 2 : (plotWidth * index) / (rows.length - 1));
-    const y = padding.top + plotHeight - (clampPercent(row[key]) / 100) * plotHeight;
+    const y = padding.top + plotHeight - (clampPercent(value) / 100) * plotHeight;
     return { x, y };
   };
 
@@ -475,20 +491,23 @@ function ProgressLineChart({
           );
         })}
         {series.map((item) => {
-          const points = rows.map((row, index) => pointFor(row, index, item.key));
+          const allPoints = rows.map((row, index) => pointFor(row, index, item.key));
+          const validPoints = allPoints.filter((p): p is NonNullable<typeof p> => p !== null);
           return (
             <g key={item.key}>
               <polyline
-                points={points.map((point) => `${point.x},${point.y}`).join(' ')}
+                points={validPoints.map((p) => `${p.x},${p.y}`).join(' ')}
                 fill="none"
                 stroke={item.color}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={isReport ? 2.4 : 3}
               />
-              {points.map((point, index) => (
-                <circle key={`${item.key}-${rows[index]?.label ?? index}`} cx={point.x} cy={point.y} r={isReport ? 3.2 : 4.2} fill={item.color} />
-              ))}
+              {allPoints.map((point, index) =>
+                point ? (
+                  <circle key={`${item.key}-${rows[index]?.label ?? index}`} cx={point.x} cy={point.y} r={isReport ? 3.2 : 4.2} fill={item.color} />
+                ) : null
+              )}
             </g>
           );
         })}
@@ -765,11 +784,11 @@ export default function PortfolioPage() {
       value: clampPercent(onTimeHomeworkPercent * 0.7 + currentStats.homeworkPercent * 0.3),
     },
     {
-      label: 'Домашние задания',
+      label: 'Качество ДЗ',
       value: clampPercent(currentStats.homeworkPercent * 0.6 + (scoreToPercent(currentStats.averageAssignmentGrade) ?? 0) * 0.4),
     },
   ];
-  const progressRows = buildProgressRows(monthLessons, monthAssignments, topicAverage);
+  const progressRows = buildProgressRows(monthLessons, studentAssignments, topicAverage);
   const calendarCells = buildCalendarCells(selectedMonth, monthLessons);
   const topicActivityMax = Math.max(1, ...topicProgressRows.map((row) => row.activityCount));
   const periodLabel = formatPeriodRange(selectedMonth);
@@ -897,12 +916,12 @@ export default function PortfolioPage() {
       icon: '★',
     },
     {
-      label: 'Выполнение ДЗ',
-      value: formatPercent(currentStats.homeworkPercent),
-      delta: formatDelta(currentStats.homeworkPercent, previousStats.homeworkPercent, '%'),
-      color: COLORS.purple,
-      background: '#F9F0FF',
-      icon: '✓',
+      label: 'Проведено занятий',
+      value: String(currentStats.conductedLessons.length),
+      delta: formatCountDelta(currentStats.conductedLessons.length, previousStats.conductedLessons.length),
+      color: COLORS.primary,
+      background: '#EFF9FF',
+      icon: '□',
     },
     {
       label: 'Посещаемость',
@@ -913,12 +932,12 @@ export default function PortfolioPage() {
       icon: '◷',
     },
     {
-      label: 'Проведено занятий',
-      value: String(currentStats.conductedLessons.length),
-      delta: formatCountDelta(currentStats.conductedLessons.length, previousStats.conductedLessons.length),
-      color: COLORS.primary,
-      background: '#EFF9FF',
-      icon: '□',
+      label: 'Выполнение ДЗ',
+      value: formatPercent(currentStats.homeworkPercent),
+      delta: formatDelta(currentStats.homeworkPercent, previousStats.homeworkPercent, '%'),
+      color: COLORS.purple,
+      background: '#F9F0FF',
+      icon: '✓',
     },
     {
       label: 'Средний балл ДЗ',
