@@ -5,9 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_tutor
 from app.core.database import get_db
 from app.models.assignment import Assignment, CompletionStatus
+from app.models.student import Student
+from app.models.subject import Subject
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
 from app.schemas.assignment import AssignmentCreate, AssignmentOut, AssignmentUpdate
+from app.services.telegram_service import send_to_user
 
 router = APIRouter()
 
@@ -57,13 +60,25 @@ async def create_assignment(
             TutorStudent.tutor_id == tutor.id,
         )
     )
-    if ts_result.scalar_one_or_none() is None:
+    ts = ts_result.scalar_one_or_none()
+    if ts is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связка репетитор-ученик не найдена")
 
     assignment = Assignment(**data.model_dump())
     db.add(assignment)
     await db.commit()
     await db.refresh(assignment)
+
+    student_result = await db.execute(select(Student).where(Student.id == ts.student_id))
+    student = student_result.scalar_one_or_none()
+    if student and student.telegram_id:
+        title = assignment.title or (assignment.description[:50] if assignment.description else "")
+        deadline_str = assignment.deadline.strftime("%d.%m.%Y") if assignment.deadline else "не указан"
+        await send_to_user(
+            student.telegram_id,
+            f"Репетитор {tutor.full_name} назначил вам новое задание: «{title}».\nДедлайн: {deadline_str}",
+        )
+
     return assignment
 
 
