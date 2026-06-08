@@ -94,7 +94,7 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
   const availableDates = selectedTS
     ? [...new Set(
         windows
-          .filter(w => w.tutor_id === selectedTS!.tutor_id)
+          .filter(w => w.tutor_id === selectedTS!.tutor_id && w.lesson_date >= todayStr)
           .map(w => w.lesson_date)
       )].sort()
     : [];
