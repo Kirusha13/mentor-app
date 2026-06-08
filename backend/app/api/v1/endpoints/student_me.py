@@ -1,7 +1,7 @@
 ﻿"""
 Эндпоинты для ученика: только свои данные.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import os
