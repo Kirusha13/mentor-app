@@ -247,6 +247,7 @@ async def my_lessons(
         select(
             Lesson,
             Tutor.full_name.label("tutor_name"),
+            Tutor.timezone.label("tutor_timezone"),
             Subject.name.label("subject_name"),
             Tutor.phone_number.label("tutor_phone"),
             Tutor.payment_bank_name.label("tutor_payment_bank_name"),
@@ -268,11 +269,29 @@ async def my_lessons(
         if row.Lesson.id in seen:
             continue
         seen.add(row.Lesson.id)
-        d = StudentLessonOut.model_validate(row.Lesson).model_dump()
-        d["tutor_name"] = row.tutor_name
-        d["subject_name"] = row.subject_name
-        d["tutor_phone"] = row.tutor_phone
-        d["tutor_payment_bank_name"] = row.tutor_payment_bank_name
+        tz = ZoneInfo(row.tutor_timezone) if row.tutor_timezone else ZoneInfo("Europe/Moscow")
+        local_start = row.Lesson.starts_at.astimezone(tz)
+        local_end = row.Lesson.ends_at.astimezone(tz)
+        d = StudentLessonOut(
+            id=row.Lesson.id,
+            lesson_date=local_start.date(),
+            start_time=local_start.time().replace(tzinfo=None),
+            end_time=local_end.time().replace(tzinfo=None),
+            conduct_status=row.Lesson.conduct_status,
+            payment_status=row.Lesson.payment_status,
+            cost=row.Lesson.cost,
+            grade=row.Lesson.grade,
+            grade_comment=row.Lesson.grade_comment,
+            student_note=row.Lesson.student_note,
+            tutor_student_id=row.Lesson.tutor_student_id,
+            topic_id=row.Lesson.topic_id,
+            original_lesson_id=row.Lesson.original_lesson_id,
+            created_at=row.Lesson.created_at,
+            tutor_name=row.tutor_name,
+            subject_name=row.subject_name,
+            tutor_phone=row.tutor_phone,
+            tutor_payment_bank_name=row.tutor_payment_bank_name,
+        ).model_dump()
         if row.Lesson.topic_id:
             topic = await db.get(TheoryTopic, row.Lesson.topic_id)
             d["topic_title"] = topic.title if topic else None

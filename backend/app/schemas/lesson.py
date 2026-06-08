@@ -30,10 +30,11 @@ class LessonOut(BaseModel):
 
 
 class StudentLessonOut(BaseModel):
-    """Занятие для ученика — включает grade_comment и student_note, не включает tutor_note."""
+    """Занятие для ученика."""
     id: int
-    starts_at: datetime
-    ends_at: datetime
+    lesson_date: date
+    start_time: time
+    end_time: time
     conduct_status: ConductStatus
     payment_status: PaymentStatus
     cost: Decimal | None
@@ -49,8 +50,6 @@ class StudentLessonOut(BaseModel):
     topic_title: str | None = None
     tutor_phone: str | None = None
     tutor_payment_bank_name: str | None = None
-
-    model_config = {"from_attributes": True}
 
 
 class AvailableSlot(BaseModel):
