@@ -259,11 +259,9 @@ export default function TutorProfilePage() {
       setSaving(true);
       const updated = await updateTutorProfile({
         full_name: fullName.trim(),
-        phone_number: phoneNumber.trim() || null,
       });
       setProfile(updated);
       setFullName(updated.full_name);
-      setPhoneNumber(updated.phone_number ?? '');
       setEditing(false);
     } catch (error) {
       console.error('Ошибка сохранения профиля репетитора:', error);
@@ -627,16 +625,6 @@ export default function TutorProfilePage() {
           <label style={{ display: 'grid', gap: 5 }}>
             <span style={mutedTextStyle}>Полное имя</span>
             <input value={fullName} onChange={(event) => setFullName(event.target.value)} disabled={!editing} />
-          </label>
-
-          <label style={{ display: 'grid', gap: 5 }}>
-            <span style={mutedTextStyle}>Телефон</span>
-            <input
-              value={phoneNumber}
-              onChange={(event) => setPhoneNumber(event.target.value)}
-              disabled={!editing}
-              placeholder="+7..."
-            />
           </label>
         </div>
 
