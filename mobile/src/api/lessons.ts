@@ -17,6 +17,8 @@ export interface Lesson {
   tutor_name: string | null;
   subject_name: string | null;
   topic_title: string | null;
+  tutor_phone: string | null;
+  tutor_payment_bank_name: string | null;
 }
 
 export interface AvailableSlot {
