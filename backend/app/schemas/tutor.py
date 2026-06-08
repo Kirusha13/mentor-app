@@ -13,6 +13,7 @@ class TutorOut(BaseModel):
     last_visited_at: datetime | None
     avatar_url: str | None
     timezone: str
+    payment_bank_name: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -22,3 +23,4 @@ class TutorUpdate(BaseModel):
     phone_number: str | None = None
     avatar_url: str | None = None
     timezone: str | None = None
+    payment_bank_name: str | None = None

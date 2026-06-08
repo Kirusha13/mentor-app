@@ -9,12 +9,14 @@ export interface TutorProfile {
   registered_at: string;
   last_visited_at: string | null;
   avatar_url: string | null;
+  payment_bank_name: string | null;
 }
 
 export interface UpdateTutorProfilePayload {
   full_name?: string;
   phone_number?: string | null;
   avatar_url?: string | null;
+  payment_bank_name?: string | null;
 }
 
 export const getTutorProfile = async (): Promise<TutorProfile> => {

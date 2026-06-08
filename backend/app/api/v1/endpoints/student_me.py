@@ -243,7 +243,13 @@ async def my_lessons(
     db: AsyncSession = Depends(get_db),
 ):
     q = (
-        select(Lesson, Tutor.full_name.label("tutor_name"), Subject.name.label("subject_name"))
+        select(
+            Lesson,
+            Tutor.full_name.label("tutor_name"),
+            Subject.name.label("subject_name"),
+            Tutor.phone_number.label("tutor_phone"),
+            Tutor.payment_bank_name.label("tutor_payment_bank_name"),
+        )
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .join(Tutor, Tutor.id == TutorStudent.tutor_id)
         .join(Subject, Subject.id == TutorStudent.subject_id)
@@ -264,6 +270,8 @@ async def my_lessons(
         d = StudentLessonOut.model_validate(row.Lesson).model_dump()
         d["tutor_name"] = row.tutor_name
         d["subject_name"] = row.subject_name
+        d["tutor_phone"] = row.tutor_phone
+        d["tutor_payment_bank_name"] = row.tutor_payment_bank_name
         if row.Lesson.topic_id:
             topic = await db.get(TheoryTopic, row.Lesson.topic_id)
             d["topic_title"] = topic.title if topic else None
@@ -706,7 +714,13 @@ async def report_payment(
 
     d = StudentLessonOut.model_validate(lesson).model_dump()
     ts_result = await db.execute(
-        select(TutorStudent, Tutor.full_name.label("tutor_name"), Subject.name.label("subject_name"))
+        select(
+            TutorStudent,
+            Tutor.full_name.label("tutor_name"),
+            Subject.name.label("subject_name"),
+            Tutor.phone_number.label("tutor_phone"),
+            Tutor.payment_bank_name.label("tutor_payment_bank_name"),
+        )
         .join(Tutor, Tutor.id == TutorStudent.tutor_id)
         .join(Subject, Subject.id == TutorStudent.subject_id)
         .where(TutorStudent.id == lesson.tutor_student_id)
@@ -715,6 +729,8 @@ async def report_payment(
     if row:
         d["tutor_name"] = row.tutor_name
         d["subject_name"] = row.subject_name
+        d["tutor_phone"] = row.tutor_phone
+        d["tutor_payment_bank_name"] = row.tutor_payment_bank_name
     if lesson.topic_id:
         topic = await db.get(TheoryTopic, lesson.topic_id)
         d["topic_title"] = topic.title if topic else None

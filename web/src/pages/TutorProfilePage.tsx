@@ -104,6 +104,8 @@ export default function TutorProfilePage() {
 
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [paymentBankName, setPaymentBankName] = useState('');
+  const [savingPayment, setSavingPayment] = useState(false);
   const [linkMessage, setLinkMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
@@ -117,6 +119,7 @@ export default function TutorProfilePage() {
         setProfile(data);
         setFullName(data.full_name);
         setPhoneNumber(data.phone_number ?? '');
+        setPaymentBankName(data.payment_bank_name ?? '');
       } catch (error) {
         if (!cancelled) {
           console.error('Ошибка загрузки профиля репетитора:', error);
@@ -224,6 +227,25 @@ export default function TutorProfilePage() {
     setFullName(profile.full_name);
     setPhoneNumber(profile.phone_number ?? '');
     setEditing(false);
+  };
+
+  const handlePaymentSave = async () => {
+    if (!profile) return;
+    try {
+      setSavingPayment(true);
+      const updated = await updateTutorProfile({
+        phone_number: phoneNumber.trim() || null,
+        payment_bank_name: paymentBankName.trim() || null,
+      });
+      setProfile(updated);
+      setPhoneNumber(updated.phone_number ?? '');
+      setPaymentBankName(updated.payment_bank_name ?? '');
+    } catch (error) {
+      console.error('Ошибка сохранения реквизитов:', error);
+      alert(getApiErrorMessage(error, 'Не удалось сохранить реквизиты'));
+    } finally {
+      setSavingPayment(false);
+    }
   };
 
   const handleProfileSave = async () => {
@@ -631,6 +653,36 @@ export default function TutorProfilePage() {
             {linkMessage.text}
           </div>
         )}
+
+        <div style={{ borderTop: '1px solid rgba(24,33,47,0.08)', paddingTop: 14 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1f2a3b', marginBottom: 4 }}>
+            Реквизиты для оплаты
+          </div>
+          <div style={{ ...mutedTextStyle, fontSize: 13, marginBottom: 12 }}>
+            Ученики увидят эти данные при оплате занятия.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <label style={{ display: 'grid', gap: 5 }}>
+              <span style={mutedTextStyle}>Телефон (СБП)</span>
+              <input
+                value={phoneNumber}
+                onChange={(event) => setPhoneNumber(event.target.value)}
+                placeholder="+7..."
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 5 }}>
+              <span style={mutedTextStyle}>Банк</span>
+              <input
+                value={paymentBankName}
+                onChange={(event) => setPaymentBankName(event.target.value)}
+                placeholder="Тинькофф, Сбер..."
+              />
+            </label>
+          </div>
+          <button type="button" onClick={handlePaymentSave} disabled={savingPayment}>
+            {savingPayment ? 'Сохраняем...' : 'Сохранить реквизиты'}
+          </button>
+        </div>
       </article>
 
       <article style={{ ...panelStyle, display: 'grid', alignContent: 'start', gap: 12, minHeight: 0, overflow: 'visible', padding: 16 }}>

@@ -47,6 +47,8 @@ class StudentLessonOut(BaseModel):
     tutor_name: str | None = None
     subject_name: str | None = None
     topic_title: str | None = None
+    tutor_phone: str | None = None
+    tutor_payment_bank_name: str | None = None
 
     model_config = {"from_attributes": True}
 
