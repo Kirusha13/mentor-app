@@ -12,6 +12,7 @@ from app.models.subject import Subject
 from app.models.tutor import Tutor
 from app.models.tutor_level import StudentLevel
 from app.models.tutor_student import TutorStudent
+from app.models.tutor_student import TutorStudentStatus
 from app.schemas.tutor_student import TutorStudentCreate, TutorStudentOut, TutorStudentUpdate
 from app.services.subscription_service import SubscriptionStateError, validate_subscription_state
 from app.services.student_service import get_student_by_id
@@ -153,6 +154,46 @@ async def delete_tutor_student(
             status_code=status.HTTP_409_CONFLICT,
             detail="Нельзя удалить связь, у которой уже есть история домашних заданий",
         )
+
+    await db.delete(ts)
+    await db.commit()
+
+
+@router.post("/{ts_id}/approve", response_model=TutorStudentOut, summary="Одобрить запрос на подключение")
+async def approve_tutor_student(
+    ts_id: int,
+    tutor: Tutor = Depends(get_current_tutor),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(TutorStudent).where(TutorStudent.id == ts_id, TutorStudent.tutor_id == tutor.id)
+    )
+    ts = result.scalar_one_or_none()
+    if ts is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Не найдено")
+    if ts.status != TutorStudentStatus.pending:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Запрос уже обработан")
+
+    ts.status = TutorStudentStatus.active
+    await db.commit()
+    await db.refresh(ts)
+    return ts
+
+
+@router.delete("/{ts_id}/reject", status_code=status.HTTP_204_NO_CONTENT, summary="Отклонить запрос на подключение")
+async def reject_tutor_student(
+    ts_id: int,
+    tutor: Tutor = Depends(get_current_tutor),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(TutorStudent).where(TutorStudent.id == ts_id, TutorStudent.tutor_id == tutor.id)
+    )
+    ts = result.scalar_one_or_none()
+    if ts is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Не найдено")
+    if ts.status != TutorStudentStatus.pending:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Запрос уже обработан")
 
     await db.delete(ts)
     await db.commit()

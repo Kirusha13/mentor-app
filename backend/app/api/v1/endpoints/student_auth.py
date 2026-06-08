@@ -14,7 +14,9 @@ async def register(data: StudentRegisterData, db: AsyncSession = Depends(get_db)
         token = await student_register(db, data)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверная подпись Telegram")
-    except LookupError:
+    except LookupError as e:
+        if "expired" in str(e):
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail="Токен приглашения устарел, попросите репетитора обновить его")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Токен приглашения не найден")
     return Token(access_token=token)
 
@@ -26,6 +28,8 @@ async def vk_register(data: VKStudentRegisterData, db: AsyncSession = Depends(ge
     except ValueError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверная подпись VK")
     except LookupError as e:
+        if "expired" in str(e):
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail="Токен приглашения устарел, попросите репетитора обновить его")
         detail = "Токен приглашения не найден" if "invitation" in str(e) else "Ошибка регистрации"
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     return Token(access_token=token)

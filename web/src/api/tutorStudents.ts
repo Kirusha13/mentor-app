@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 
-export type TutorStudentStatus = 'active' | 'paused' | 'completed';
+export type TutorStudentStatus = 'active' | 'paused' | 'completed' | 'pending';
 
 export interface TutorStudent {
   id: number;
@@ -55,4 +55,13 @@ export const updateTutorStudent = async (
 
 export const deleteTutorStudent = async (id: number): Promise<void> => {
   await apiClient.delete(`/tutor-students/${id}`);
+};
+
+export const approveTutorStudent = async (id: number): Promise<TutorStudent> => {
+  const response = await apiClient.post(`/tutor-students/${id}/approve`);
+  return response.data;
+};
+
+export const rejectTutorStudent = async (id: number): Promise<void> => {
+  await apiClient.delete(`/tutor-students/${id}/reject`);
 };

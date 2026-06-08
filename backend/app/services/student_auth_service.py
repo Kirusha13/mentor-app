@@ -1,4 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+TOKEN_TTL_DAYS = 7
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +10,7 @@ from app.core.telegram_auth import verify_telegram_data
 from app.core.vk_auth import verify_vk_mobile_sign
 from app.models.student import Student
 from app.models.subject import Subject
-from app.models.tutor_student import TutorStudent
+from app.models.tutor_student import TutorStudent, TutorStudentStatus
 from app.schemas.auth import StudentLoginData, StudentRegisterData, VKMobileAuthData, VKStudentRegisterData
 from app.services.student_service import get_student_by_telegram_id
 
@@ -26,6 +28,10 @@ async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
         subject = subject_result.scalar_one_or_none()
         if subject is None:
             raise LookupError("invalid_invitation_token")
+        if subject.invitation_token_created_at is not None:
+            age = datetime.now(timezone.utc) - subject.invitation_token_created_at
+            if age > timedelta(days=TOKEN_TTL_DAYS):
+                raise LookupError("expired_invitation_token")
 
     existing_student = await get_student_by_telegram_id(db, data.id)
     if existing_student:
@@ -67,6 +73,7 @@ async def student_register(db: AsyncSession, data: StudentRegisterData) -> str:
                     hourly_rate=subject.default_rate or 0,
                     rate_set_at=datetime.now(timezone.utc),
                     started_at=datetime.now(timezone.utc).date(),
+                    status=TutorStudentStatus.pending,
                 )
             )
 
@@ -117,6 +124,10 @@ async def student_register_vk(db: AsyncSession, data: VKStudentRegisterData) -> 
         subject = subject_result.scalar_one_or_none()
         if subject is None:
             raise LookupError("invalid_invitation_token")
+        if subject.invitation_token_created_at is not None:
+            age = datetime.now(timezone.utc) - subject.invitation_token_created_at
+            if age > timedelta(days=TOKEN_TTL_DAYS):
+                raise LookupError("expired_invitation_token")
 
     result = await db.execute(select(Student).where(Student.vk_id == data.vk_id))
     existing = result.scalar_one_or_none()
@@ -157,6 +168,7 @@ async def student_register_vk(db: AsyncSession, data: VKStudentRegisterData) -> 
                 hourly_rate=subject.default_rate or 0,
                 rate_set_at=datetime.now(timezone.utc),
                 started_at=datetime.now(timezone.utc).date(),
+                status=TutorStudentStatus.pending,
             ))
 
     await db.commit()

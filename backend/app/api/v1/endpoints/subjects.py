@@ -1,4 +1,5 @@
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -38,6 +39,7 @@ async def create_subject(
         name=data.name,
         tutor_id=tutor.id,
         invitation_token=generate_invitation_token(),
+        invitation_token_created_at=datetime.now(timezone.utc),
         default_rate=data.default_rate,
         color=data.color,
     )
@@ -105,3 +107,23 @@ async def delete_subject(
 
     await db.delete(subject)
     await db.commit()
+
+
+@router.post("/{subject_id}/refresh-token", response_model=SubjectOut, summary="Обновить токен приглашения")
+async def refresh_invitation_token(
+    subject_id: int,
+    tutor: Tutor = Depends(get_current_tutor),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Subject).where(Subject.id == subject_id, Subject.tutor_id == tutor.id)
+    )
+    subject = result.scalar_one_or_none()
+    if subject is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Предмет не найден")
+
+    subject.invitation_token = generate_invitation_token()
+    subject.invitation_token_created_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(subject)
+    return subject

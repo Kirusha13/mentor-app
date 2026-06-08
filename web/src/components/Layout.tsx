@@ -2,6 +2,7 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getLessons } from '../api/lessons';
 import { getTutorProfile } from '../api/tutor';
+import { getTutorStudents } from '../api/tutorStudents';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
@@ -15,6 +16,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/', label: 'Главная', icon: 'home', exact: true },
       { to: '/schedule', label: 'Расписание', icon: 'calendar' },
+      { to: '/requests', label: 'Запросы', icon: 'bell' },
     ],
   },
   {
@@ -115,6 +117,15 @@ function NavIcon({ name }: { name: NavIconName }) {
     );
   }
 
+  if (name === 'bell') {
+    return (
+      <svg {...common}>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    );
+  }
+
   return (
     <svg {...common}>
       <path d="M8 4v16" />
@@ -151,7 +162,9 @@ export default function Layout({ children }: LayoutProps) {
   const isMobile = useMediaQuery('(max-width: 820px)');
   const [tutorLabel, setTutorLabel] = useState('Репетитор');
   const [tutorSubtitle, setTutorSubtitle] = useState('Личный кабинет');
-  const [requestCount, setRequestCount] = useState(0);
+  const [lessonRequestCount, setLessonRequestCount] = useState(0);
+  const [pendingStudentCount, setPendingStudentCount] = useState(0);
+  const requestCount = lessonRequestCount + pendingStudentCount;
   const initials = useMemo(() => getInitials(tutorLabel), [tutorLabel]);
   const isProfileActive = location.pathname.startsWith('/profile');
 
@@ -183,18 +196,20 @@ export default function Layout({ children }: LayoutProps) {
 
     const loadRequestCount = async () => {
       try {
-        const lessons = await getLessons();
+        const [lessons, tutorStudents] = await Promise.all([getLessons(), getTutorStudents()]);
         if (!cancelled) {
-          const count = lessons.filter(
+          const lessonCount = lessons.filter(
             (l) =>
               l.conduct_status === 'booking_pending' ||
               l.conduct_status === 'reschedule_pending' ||
               l.payment_status === 'payment_pending'
           ).length;
-          setRequestCount(count);
+          const studentCount = tutorStudents.filter((ts) => ts.status === 'pending').length;
+          setLessonRequestCount(lessonCount);
+          setPendingStudentCount(studentCount);
         }
       } catch {
-        // не критично — бейдж просто не покажется
+        // не критично — бейджи просто не покажутся
       }
     };
 
@@ -367,7 +382,7 @@ export default function Layout({ children }: LayoutProps) {
                       <NavIcon name={item.icon} />
                     </span>
                     <span>{item.label}</span>
-                    {item.to === '/schedule' && requestCount > 0 && (
+                    {item.to === '/requests' && requestCount > 0 && (
                       <span
                         style={{
                           marginLeft: 'auto',
@@ -386,6 +401,27 @@ export default function Layout({ children }: LayoutProps) {
                         }}
                       >
                         {requestCount}
+                      </span>
+                    )}
+                    {item.to === '/students' && pendingStudentCount > 0 && (
+                      <span
+                        style={{
+                          marginLeft: 'auto',
+                          background: '#d97706',
+                          color: '#fff',
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 800,
+                          minWidth: 18,
+                          height: 18,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '0 5px',
+                          lineHeight: 1,
+                        }}
+                      >
+                        {pendingStudentCount}
                       </span>
                     )}
                   </NavLink>

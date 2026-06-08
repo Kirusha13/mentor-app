@@ -1,4 +1,6 @@
-from sqlalchemy import BigInteger, String, ForeignKey, Float
+from datetime import datetime
+
+from sqlalchemy import BigInteger, DateTime, String, ForeignKey, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -12,6 +14,7 @@ class Subject(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     tutor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tutors.id", ondelete="CASCADE"), nullable=False)
     invitation_token: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
+    invitation_token_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     default_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
     color: Mapped[str | None] = mapped_column(String(20), nullable=True)
 

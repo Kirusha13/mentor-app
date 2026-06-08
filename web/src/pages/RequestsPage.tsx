@@ -10,7 +10,12 @@ import {
 } from '../api/lessons';
 import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
-import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
+import {
+  approveTutorStudent,
+  rejectTutorStudent,
+  getTutorStudents,
+  type TutorStudent,
+} from '../api/tutorStudents';
 import { getApiErrorMessage } from '../utils/apiError';
 import { lessonDateRu, lessonStartTime, lessonEndTime } from '../utils/lessonTime';
 
@@ -40,6 +45,7 @@ export default function RequestsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const [processingConnectionId, setProcessingConnectionId] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -65,6 +71,11 @@ export default function RequestsPage() {
 
     load();
   }, []);
+
+  const pendingConnections = useMemo(
+    () => tutorStudents.filter((ts) => ts.status === 'pending'),
+    [tutorStudents]
+  );
 
   const requests = useMemo(
     () =>
@@ -112,8 +123,83 @@ export default function RequestsPage() {
     }
   };
 
+  const handleConnection = async (ts: TutorStudent, action: 'approve' | 'reject') => {
+    try {
+      setProcessingConnectionId(ts.id);
+      if (action === 'approve') {
+        const updated = await approveTutorStudent(ts.id);
+        setTutorStudents((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      } else {
+        await rejectTutorStudent(ts.id);
+        setTutorStudents((prev) => prev.filter((item) => item.id !== ts.id));
+      }
+    } catch (error) {
+      console.error('Ошибка обработки запроса:', error);
+      alert(getApiErrorMessage(error, 'Не удалось обработать запрос'));
+    } finally {
+      setProcessingConnectionId(null);
+    }
+  };
+
   return (
-    <div>
+    <div style={{ display: 'grid', gap: 18 }}>
+      {pendingConnections.length > 0 && (
+        <section style={panelStyle}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#1f2a3b', marginBottom: 14 }}>
+            Запросы на подключение
+          </div>
+          <div style={{ display: 'grid', gap: 12 }}>
+            {pendingConnections.map((ts) => {
+              const student = students.find((s) => s.id === ts.student_id);
+              const subject = subjects.find((s) => s.id === ts.subject_id);
+              return (
+                <div
+                  key={ts.id}
+                  style={{
+                    padding: 18,
+                    borderRadius: 18,
+                    background: 'rgba(217,119,6,0.06)',
+                    border: '1px solid rgba(217,119,6,0.18)',
+                    display: 'grid',
+                    gap: 14,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ display: 'inline-flex', padding: '6px 10px', borderRadius: 999, background: 'rgba(217,119,6,0.12)', color: '#d97706', fontSize: 12, fontWeight: 700, marginBottom: 10 }}>
+                        Новый ученик
+                      </div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: '#1f2a3b', marginBottom: 4 }}>
+                        {student?.full_name ?? `Ученик #${ts.student_id}`}
+                      </div>
+                      <div style={{ color: '#5d6778', fontSize: 14 }}>
+                        Предмет: {subject?.name ?? '—'} • Ставка: {ts.hourly_rate} ₽/ч
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => handleConnection(ts, 'approve')}
+                      disabled={processingConnectionId === ts.id}
+                      className="modal-success"
+                    >
+                      Принять
+                    </button>
+                    <button
+                      onClick={() => handleConnection(ts, 'reject')}
+                      disabled={processingConnectionId === ts.id}
+                      className="modal-danger"
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <section style={panelStyle}>
         {loading ? (
           <p style={{ color: '#687486', marginBottom: 0 }}>Загрузка запросов...</p>
@@ -202,3 +288,4 @@ export default function RequestsPage() {
     </div>
   );
 }
+

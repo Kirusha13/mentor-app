@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -6,6 +8,7 @@ class SubjectOut(BaseModel):
     name: str
     tutor_id: int
     invitation_token: str | None = None
+    invitation_token_created_at: datetime | None = None
     default_rate: float | None = None
     color: str | None = None
 

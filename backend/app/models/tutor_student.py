@@ -14,6 +14,7 @@ class TutorStudentStatus(str, enum.Enum):
     active = "active"
     paused = "paused"
     completed = "completed"
+    pending = "pending"
 
 
 class TutorStudent(TimestampMixin, Base):
