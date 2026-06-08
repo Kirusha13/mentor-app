@@ -6,9 +6,11 @@ import { createStudent, getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTutorLevels, type TutorLevel } from '../api/tutorLevels';
 import {
+  approveTutorStudent,
   createTutorStudent,
   deleteTutorStudent,
   getTutorStudents,
+  rejectTutorStudent,
   updateTutorStudent,
   type TutorStudent,
   type TutorStudentStatus,
@@ -91,6 +93,7 @@ export default function StudentsPage() {
   const [detailStatus, setDetailStatus] = useState<TutorStudentStatus>('active');
   const [detailLevelIds, setDetailLevelIds] = useState<number[]>([]);
   const [savingTutorStudent, setSavingTutorStudent] = useState(false);
+  const [processingConnectionId, setProcessingConnectionId] = useState<number | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -149,10 +152,14 @@ export default function StudentsPage() {
     });
   }, [classFilter, search, studentCards, subjectFilter]);
 
+  const pendingCards = useMemo(
+    () => studentCards.filter(({ tutorStudent }) => tutorStudent.status === 'pending'),
+    [studentCards]
+  );
   const activeCards = useMemo(() => filteredCards.filter(({ tutorStudent }) => tutorStudent.status === 'active'), [filteredCards]);
-  const inactiveCards = useMemo(() => filteredCards.filter(({ tutorStudent }) => tutorStudent.status !== 'active'), [filteredCards]);
+  const inactiveCards = useMemo(() => filteredCards.filter(({ tutorStudent }) => tutorStudent.status !== 'active' && tutorStudent.status !== 'pending'), [filteredCards]);
   const totalInactiveCards = useMemo(
-    () => studentCards.filter(({ tutorStudent }) => tutorStudent.status !== 'active'),
+    () => studentCards.filter(({ tutorStudent }) => tutorStudent.status !== 'active' && tutorStudent.status !== 'pending'),
     [studentCards]
   );
   const selectedCard = useMemo(() => studentCards.find((card) => card.tutorStudent.id === selectedTutorStudentId) ?? null, [selectedTutorStudentId, studentCards]);
@@ -176,6 +183,24 @@ export default function StudentsPage() {
 
   const activeGroups = useMemo(() => groupCards(activeCards), [activeCards]);
   const inactiveGroups = useMemo(() => groupCards(inactiveCards), [inactiveCards]);
+
+  const handleConnection = async (ts: TutorStudent, action: 'approve' | 'reject') => {
+    try {
+      setProcessingConnectionId(ts.id);
+      if (action === 'approve') {
+        const updated = await approveTutorStudent(ts.id);
+        setTutorStudents((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      } else {
+        await rejectTutorStudent(ts.id);
+        setTutorStudents((prev) => prev.filter((item) => item.id !== ts.id));
+      }
+    } catch (error) {
+      console.error('Ошибка обработки запроса:', error);
+      alert(getApiErrorMessage(error, 'Не удалось обработать запрос'));
+    } finally {
+      setProcessingConnectionId(null);
+    }
+  };
 
   useEffect(() => {
     if (!selectedCard) { setDetailRate(''); setDetailStatus('active'); setDetailLevelIds([]); return; }
@@ -364,6 +389,38 @@ export default function StudentsPage() {
       </section>
 
       <section className="mentor-panel" style={{ padding: 18, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin' }}>
+        {!loading && pendingCards.length > 0 && (
+          <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(24,33,47,0.08)' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#1f2a3b', marginBottom: 10 }}>
+              Запросы на подключение
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {pendingCards.map(({ tutorStudent: ts, student, subject }) => (
+                <div
+                  key={ts.id}
+                  style={{ padding: '14px 16px', borderRadius: 16, background: 'rgba(217,119,6,0.05)', border: '1px solid rgba(217,119,6,0.18)', display: 'grid', gap: 10 }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontWeight: 800, color: '#1f2a3b', fontSize: 16 }}>{student.full_name}</div>
+                      <div style={{ color: '#5d6778', fontSize: 13, marginTop: 2 }}>
+                        {subject?.name ?? '—'} • {ts.hourly_rate} ₽/ч
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button onClick={() => handleConnection(ts, 'approve')} disabled={processingConnectionId === ts.id} className="modal-success">
+                        Принять
+                      </button>
+                      <button onClick={() => handleConnection(ts, 'reject')} disabled={processingConnectionId === ts.id} className="modal-danger">
+                        Отклонить
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {loading ? <p style={{ ...mutedTextStyle, marginBottom: 0 }}>{t.loading}</p> : filteredCards.length === 0 ? <p style={{ ...mutedTextStyle, marginBottom: 0 }}>{t.notFound}</p> : <div style={{ display: 'grid', gap: 16 }}>{activeGroups.length > 0 ? renderGrid(activeGroups) : <div style={{ padding: 16, borderRadius: 16, background: 'rgba(23,32,51,0.03)', color: '#687486' }}>{t.noActive}</div>}{totalInactiveCards.length > 0 && <div style={{ display: 'grid', gap: 12, paddingTop: 4, borderTop: '1px solid rgba(24,33,47,0.08)' }}><button type="button" onClick={() => setShowInactiveStudents((prev) => !prev)} style={{ justifySelf: 'start', background: 'transparent', color: '#324055', border: '1px solid rgba(24,33,47,0.12)', boxShadow: 'none', padding: '8px 12px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f87171' }} />{showInactiveStudents ? `${t.hideInactive} (${inactiveGroups.length})` : `${t.showInactive} (${inactiveGroups.length})`}</button>{showInactiveStudents && (inactiveGroups.length > 0 ? renderGrid(inactiveGroups) : <div style={{ padding: 14, borderRadius: 14, background: 'rgba(23,32,51,0.03)', color: '#687486', fontSize: 14 }}>По текущим фильтрам неактивные ученики не найдены.</div>)}</div>}</div>}
       </section>
 

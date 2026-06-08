@@ -16,7 +16,6 @@ const NAV_GROUPS = [
     items: [
       { to: '/', label: 'Главная', icon: 'home', exact: true },
       { to: '/schedule', label: 'Расписание', icon: 'calendar' },
-      { to: '/requests', label: 'Запросы', icon: 'bell' },
     ],
   },
   {
@@ -382,7 +381,7 @@ export default function Layout({ children }: LayoutProps) {
                       <NavIcon name={item.icon} />
                     </span>
                     <span>{item.label}</span>
-                    {item.to === '/requests' && requestCount > 0 && (
+                    {item.to === '/schedule' && lessonRequestCount > 0 && (
                       <span
                         style={{
                           marginLeft: 'auto',
@@ -400,7 +399,7 @@ export default function Layout({ children }: LayoutProps) {
                           lineHeight: 1,
                         }}
                       >
-                        {requestCount}
+                        {lessonRequestCount}
                       </span>
                     )}
                     {item.to === '/students' && pendingStudentCount > 0 && (
