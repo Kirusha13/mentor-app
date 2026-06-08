@@ -319,8 +319,9 @@ async def book_lesson(
     if ts.status != TutorStudentStatus.active:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Записаться можно только по активной связи")
 
-    if data.starts_at <= datetime.now(timezone.utc):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Нельзя записаться на время в прошлом")
+    # TEMP: disabled for demo screenshot
+    # if data.starts_at <= datetime.now(timezone.utc):
+    #     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Нельзя записаться на время в прошлом")
 
     window_result = await db.execute(
         select(Lesson).where(
