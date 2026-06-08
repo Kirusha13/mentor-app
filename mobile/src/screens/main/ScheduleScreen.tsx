@@ -286,6 +286,36 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
           </TouchableOpacity>
         )}
 
+        {canReportPayment && localLesson.payment_status === 'unpaid' && (
+          <View style={modal.requisitesBlock}>
+            <Text style={modal.requisitesTitle}>Куда переводить</Text>
+            {localLesson.tutor_phone ? (
+              <View style={modal.requisitesRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={modal.requisitesLabel}>Телефон / СБП</Text>
+                  <Text style={modal.requisitesValue}>{localLesson.tutor_phone}</Text>
+                  {localLesson.tutor_payment_bank_name ? (
+                    <Text style={modal.requisitesBank}>{localLesson.tutor_payment_bank_name}</Text>
+                  ) : null}
+                </View>
+                <TouchableOpacity
+                  style={modal.copyBtn}
+                  onPress={() => {
+                    import('expo-clipboard').then(({ setStringAsync }) => {
+                      setStringAsync(localLesson.tutor_phone!);
+                    });
+                    Alert.alert('Скопировано', 'Номер телефона скопирован');
+                  }}
+                >
+                  <Text style={modal.copyBtnText}>Копировать</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={modal.requisitesEmpty}>Уточните реквизиты у репетитора напрямую</Text>
+            )}
+          </View>
+        )}
+
         {canReportPayment && (
           <TouchableOpacity
             style={[modal.paymentBtn, localLesson.payment_status === 'payment_pending' && modal.paymentBtnDisabled]}
@@ -685,4 +715,26 @@ const modal = StyleSheet.create({
     alignItems: 'center',
   },
   saveNoteBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  requisitesBlock: {
+    marginTop: 8,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    padding: 14,
+    gap: 8,
+  },
+  requisitesTitle: { fontSize: 12, fontWeight: '700', color: '#0369A1', textTransform: 'uppercase', letterSpacing: 0.5 },
+  requisitesRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  requisitesLabel: { fontSize: 12, color: '#64748B', marginBottom: 2 },
+  requisitesValue: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  requisitesBank: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  requisitesEmpty: { fontSize: 13, color: '#64748B', fontStyle: 'italic' },
+  copyBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#2AABEE',
+  },
+  copyBtnText: { fontSize: 13, fontWeight: '600', color: '#fff' },
 });

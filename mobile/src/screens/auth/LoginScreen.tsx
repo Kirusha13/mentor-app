@@ -45,16 +45,17 @@ export default function LoginScreen() {
   const tgHandledRef = useRef(false);
   const inviteTokenRef = useRef(inviteToken);
   useEffect(() => { inviteTokenRef.current = inviteToken; }, [inviteToken]);
+  const registerModeRef = useRef(showTokenInput);
+  useEffect(() => { registerModeRef.current = showTokenInput; }, [showTokenInput]);
 
   const [vkData, setVkData] = useState<VKMobileAuthData | null>(null);
   const [vkLoading, setVkLoading] = useState(false);
   const vkHandledRef = useRef(false);
 
   const handleTelegramData = useCallback(async (data: TelegramAuthData) => {
-    const token = inviteTokenRef.current;
     setLoading(true);
     try {
-      if (token) {
+      if (registerModeRef.current) {
         setTgData(data);
         setFullName([data.first_name, data.last_name].filter(Boolean).join(' '));
         setStep('form');
@@ -70,10 +71,9 @@ export default function LoginScreen() {
   }, [signIn]);
 
   const handleVKData = useCallback(async (data: VKMobileAuthData) => {
-    const token = inviteTokenRef.current;
     setVkLoading(true);
     try {
-      if (token) {
+      if (registerModeRef.current) {
         setVkData(data);
         setFullName([data.first_name, data.last_name].filter(Boolean).join(' '));
         setStep('form');
@@ -162,10 +162,6 @@ export default function LoginScreen() {
   }, [handleTelegramData, handleVKData]);
 
   const openTelegramAuth = async () => {
-    if (showTokenInput && !inviteToken.trim()) {
-      Alert.alert('Нужен код приглашения', 'Введите код от репетитора, чтобы создать аккаунт');
-      return;
-    }
     tgHandledRef.current = false;
     setLoading(true);
     try {
@@ -193,10 +189,6 @@ export default function LoginScreen() {
   };
 
   const openVKAuth = async () => {
-    if (showTokenInput && !inviteToken.trim()) {
-      Alert.alert('Нужен код приглашения', 'Введите код от репетитора, чтобы создать аккаунт');
-      return;
-    }
     vkHandledRef.current = false;
     setVkLoading(true);
     try {
@@ -322,22 +314,6 @@ export default function LoginScreen() {
             <Text style={styles.tokenText}>Ссылка приглашения активирована</Text>
           </View>
         ) : null}
-
-        {/* Поле токена (только в режиме регистрации) */}
-        {showTokenInput && !inviteToken && (
-          <View style={styles.tokenSection}>
-            <Text style={styles.fieldLabel}>Код приглашения от репетитора</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Введите код"
-              placeholderTextColor="#bbb"
-              value={inviteToken}
-              onChangeText={setInviteToken}
-              autoCapitalize="none"
-              autoFocus
-            />
-          </View>
-        )}
 
         {/* Кнопка Telegram */}
         <TouchableOpacity style={styles.tgBtn} onPress={openTelegramAuth} disabled={loading || vkLoading}>

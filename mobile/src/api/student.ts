@@ -1,4 +1,5 @@
 import client from './client';
+import { VKMobileAuthData } from './auth';
 
 export interface TutorLevel {
   id: number;
@@ -11,10 +12,21 @@ export interface StudentProfile {
   full_name: string;
   grade: number | null;
   phone_number: string | null;
-  telegram_id: number;
+  telegram_id: number | null;
+  vk_id: number | null;
   started_at: string;
   last_visited_at: string | null;
   avatar_url: string | null;
+}
+
+export interface TelegramLinkData {
+  id: number;
+  hash: string;
+  auth_date: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  photo_url?: string;
 }
 
 export interface TutorStudent {
@@ -49,6 +61,16 @@ export async function getLevels(): Promise<TutorLevel[]> {
 
 export async function updateStudentMe(data: { full_name?: string; phone_number?: string | null; grade?: number | null }): Promise<StudentProfile> {
   const res = await client.patch('/student/me', data);
+  return res.data;
+}
+
+export async function linkVkStudent(data: VKMobileAuthData): Promise<StudentProfile> {
+  const res = await client.post('/student/me/link-vk', data);
+  return res.data;
+}
+
+export async function linkTelegramStudent(data: TelegramLinkData): Promise<StudentProfile> {
+  const res = await client.post('/student/me/link-telegram', data);
   return res.data;
 }
 
