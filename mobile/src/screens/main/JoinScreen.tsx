@@ -20,23 +20,14 @@ interface Props {
 
 export default function JoinScreen({ onSuccess, onClose }: Props) {
   const [token, setToken] = useState('');
-  const [grade, setGrade] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleJoin = async () => {
     const t = token.trim();
     if (!t) return;
-    const parsedGrade = grade.trim() ? parseInt(grade.trim(), 10) : undefined;
-    if (grade.trim() && (isNaN(parsedGrade!) || parsedGrade! < 1 || parsedGrade! > 11)) {
-      Alert.alert('Ошибка', 'Класс должен быть числом от 1 до 11');
-      return;
-    }
     setLoading(true);
     try {
-      const res = await client.post('/student/join', {
-        token: t,
-        ...(parsedGrade !== undefined && { grade: parsedGrade }),
-      });
+      const res = await client.post('/student/join', { token: t });
       Alert.alert(
         'Успешно!',
         `Вы подключились к репетитору ${res.data.tutor_name ?? ''} по предмету «${res.data.subject_name ?? ''}»`,
@@ -75,18 +66,8 @@ export default function JoinScreen({ onSuccess, onClose }: Props) {
           onChangeText={setToken}
           autoCapitalize="none"
           autoCorrect={false}
-          returnKeyType="next"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Класс обучения (необязательно)"
-          placeholderTextColor="#bbb"
-          value={grade}
-          onChangeText={setGrade}
-          keyboardType="number-pad"
           returnKeyType="done"
           onSubmitEditing={handleJoin}
-          maxLength={2}
         />
         <TouchableOpacity
           style={[styles.btn, (!token.trim() || loading) && styles.btnDisabled]}
