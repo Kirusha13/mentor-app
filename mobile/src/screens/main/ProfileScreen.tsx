@@ -399,6 +399,7 @@ export default function ProfileScreen() {
         ) : (
           <>{[...new Map(tutors.map(t => [t.tutor_id, t])).values()].map((tutor, ti) => {
             const subjects = tutors.filter(t => t.tutor_id === tutor.tutor_id);
+            const isPending = subjects.every(s => s.status === 'pending');
             return (
               <View key={tutor.tutor_id} style={ti > 0 ? styles.tutorGroupBorder : undefined}>
                 <View style={styles.tutorGroupHeader}>
@@ -406,6 +407,11 @@ export default function ProfileScreen() {
                     <Text style={styles.tutorAvatarText}>{tutor.tutor_name?.[0]?.toUpperCase() ?? '?'}</Text>
                   </View>
                   <Text style={styles.tutorName}>{tutor.tutor_name ?? '—'}</Text>
+                  {isPending && (
+                    <View style={styles.pendingBadge}>
+                      <Text style={styles.pendingBadgeText}>Ожидает подтверждения</Text>
+                    </View>
+                  )}
                 </View>
                 {subjects.map((ts) => {
                   const totalH = ts.subscription_hours != null ? parseFloat(String(ts.subscription_hours)) : null;
