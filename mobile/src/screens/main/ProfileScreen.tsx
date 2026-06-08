@@ -76,6 +76,7 @@ export default function ProfileScreen() {
   const [tutors, setTutors] = useState<TutorStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [joinVisible, setJoinVisible] = useState(false);
+  const autoJoinShownRef = useRef(false);
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -95,6 +96,10 @@ export default function ProfileScreen() {
         setEditPhone(p.phone_number ?? '');
         setEditGrade(p.grade != null ? String(p.grade) : '');
         setTutors(ts);
+        if (ts.length === 0 && !autoJoinShownRef.current) {
+          autoJoinShownRef.current = true;
+          setJoinVisible(true);
+        }
       }).finally(() => setLoading(false));
     }, []),
   );
@@ -392,16 +397,20 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>Мои репетиторы</Text>
           {[...new Map(tutors.map(t => [t.tutor_id, t])).values()].map((tutor, ti) => {
             const subjects = tutors.filter(t => t.tutor_id === tutor.tutor_id);
+            const isPending = subjects.every(s => s.status === 'pending');
             return (
               <View key={tutor.tutor_id} style={ti > 0 ? styles.tutorGroupBorder : undefined}>
-                {/* Имя репетитора */}
                 <View style={styles.tutorGroupHeader}>
                   <View style={styles.tutorAvatarSmall}>
                     <Text style={styles.tutorAvatarText}>{tutor.tutor_name?.[0]?.toUpperCase() ?? '?'}</Text>
                   </View>
                   <Text style={styles.tutorName}>{tutor.tutor_name ?? '—'}</Text>
+                  {isPending && (
+                    <View style={styles.pendingBadge}>
+                      <Text style={styles.pendingBadgeText}>Ожидает подтверждения</Text>
+                    </View>
+                  )}
                 </View>
-                {/* Предметы */}
                 {subjects.map((ts) => {
                   const totalH = ts.subscription_hours != null ? parseFloat(String(ts.subscription_hours)) : null;
                   const usedH = parseFloat(String(ts.used_hours ?? 0));
@@ -410,14 +419,22 @@ export default function ProfileScreen() {
                     <View key={ts.id} style={styles.subjectRow}>
                       <Text style={styles.subjectName}>{ts.subject_name ?? '—'}</Text>
                       <View style={styles.subjectRight}>
-                        {remaining != null && remaining > 0 && (
-                          <View style={styles.subscriptionBadge}>
-                            <Text style={styles.subscriptionBadgeText}>
-                              {remaining} из {totalH} ч.
-                            </Text>
+                        {ts.status === 'pending' ? (
+                          <View style={styles.pendingSubjectBadge}>
+                            <Text style={styles.pendingSubjectBadgeText}>На рассмотрении</Text>
                           </View>
+                        ) : (
+                          <>
+                            {remaining != null && remaining > 0 && (
+                              <View style={styles.subscriptionBadge}>
+                                <Text style={styles.subscriptionBadgeText}>
+                                  {remaining} из {totalH} ч.
+                                </Text>
+                              </View>
+                            )}
+                            <Text style={styles.hourlyRate}>{ts.hourly_rate} ₽/ч</Text>
+                          </>
                         )}
-                        <Text style={styles.hourlyRate}>{ts.hourly_rate} ₽/ч</Text>
                       </View>
                     </View>
                   );
@@ -560,6 +577,10 @@ const styles = StyleSheet.create({
   hourlyRate: { fontSize: 13, fontWeight: '600', color: '#555' },
   subscriptionBadge: { backgroundColor: '#EFF9FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   subscriptionBadgeText: { fontSize: 11, fontWeight: '600', color: '#2AABEE' },
+  pendingBadge: { backgroundColor: '#FFF3E0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 4 },
+  pendingBadgeText: { fontSize: 11, fontWeight: '600', color: '#E65100' },
+  pendingSubjectBadge: { backgroundColor: '#FFF3E0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  pendingSubjectBadgeText: { fontSize: 11, fontWeight: '600', color: '#E65100' },
 
   settingsCard: {
     backgroundColor: '#fff',
