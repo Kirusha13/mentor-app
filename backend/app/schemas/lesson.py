@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 from pydantic import BaseModel, model_validator
@@ -55,21 +55,23 @@ class StudentLessonOut(BaseModel):
 
 class AvailableSlot(BaseModel):
     """Свободный временной промежуток в окне репетитора."""
-    starts_at: datetime
-    ends_at: datetime
+    lesson_date: date
+    start_time: time
+    end_time: time
     tutor_id: int
     tutor_name: str | None = None
 
 
 class RescheduleRequest(BaseModel):
     """Запрос на перенос занятия."""
-    starts_at: datetime
-    ends_at: datetime
+    lesson_date: date
+    start_time: time
+    end_time: time
 
     @model_validator(mode="after")
     def check_time(self):
-        if self.ends_at <= self.starts_at:
-            raise ValueError("ends_at должно быть позже starts_at")
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time должно быть позже start_time")
         return self
 
 
@@ -108,13 +110,14 @@ class StudentLessonNoteUpdate(BaseModel):
 class StudentLessonCreate(BaseModel):
     """Самостоятельная запись ученика на занятие."""
     tutor_student_id: int
-    starts_at: datetime
-    ends_at: datetime
+    lesson_date: date
+    start_time: time
+    end_time: time
 
     @model_validator(mode="after")
     def check_time(self):
-        if self.ends_at <= self.starts_at:
-            raise ValueError("ends_at должно быть позже starts_at")
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time должно быть позже start_time")
         return self
 
 
