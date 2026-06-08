@@ -24,7 +24,7 @@ async def list_subjects(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Subject).where(Subject.tutor_id == tutor.id)
+        select(Subject).where(Subject.tutor_id == tutor.id).order_by(Subject.name)
     )
     return list(result.scalars().all())
 
