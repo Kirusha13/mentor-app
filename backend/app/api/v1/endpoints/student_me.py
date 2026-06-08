@@ -224,6 +224,7 @@ async def join_by_token(
         hourly_rate=subject.default_rate or 0,
         rate_set_at=datetime.utcnow(),
         started_at=date.today(),
+        status=TutorStudentStatus.pending,
     )
     db.add(ts)
     await db.commit()
