@@ -340,62 +340,64 @@ export default function ProfileScreen() {
                 <Text style={styles.editBtnText}>Изменить</Text>
               </TouchableOpacity>
             </View>
+
+            <View style={styles.accountDivider} />
+
+            <View style={styles.accountRow}>
+              <View style={[styles.accountIconWrap, { backgroundColor: '#EFF9FF' }]}>
+                <Ionicons name="paper-plane" size={18} color="#2AABEE" />
+              </View>
+              <View style={styles.accountInfo}>
+                <Text style={styles.accountLabel}>Telegram</Text>
+                <Text style={profile?.telegram_id ? styles.accountConnected : styles.accountMuted}>
+                  {profile?.telegram_id ? 'Привязан' : 'Не привязан'}
+                </Text>
+              </View>
+              {profile?.telegram_id
+                ? <Ionicons name="checkmark-circle" size={22} color="#4caf50" />
+                : (
+                  <TouchableOpacity style={styles.linkBtn} onPress={handleTelegramLink}>
+                    <Text style={styles.linkBtnText}>Привязать</Text>
+                  </TouchableOpacity>
+                )
+              }
+            </View>
+
+            <View style={styles.accountDivider} />
+
+            <View style={styles.accountRow}>
+              <View style={[styles.accountIconWrap, { backgroundColor: '#E8F4FF' }]}>
+                <Ionicons name="logo-vk" size={18} color="#0077ff" />
+              </View>
+              <View style={styles.accountInfo}>
+                <Text style={styles.accountLabel}>VK ID</Text>
+                <Text style={profile?.vk_id ? styles.accountConnected : styles.accountMuted}>
+                  {profile?.vk_id ? 'Привязан' : 'Не привязан'}
+                </Text>
+              </View>
+              {profile?.vk_id
+                ? <Ionicons name="checkmark-circle" size={22} color="#4caf50" />
+                : (
+                  <TouchableOpacity style={[styles.linkBtn, { backgroundColor: '#0077ff' }]} onPress={handleVKLink}>
+                    <Text style={styles.linkBtnText}>Привязать</Text>
+                  </TouchableOpacity>
+                )
+              }
+            </View>
           </>
         )}
       </View>
 
-      {/* Подключённые аккаунты */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Подключённые аккаунты</Text>
-
-        <View style={styles.accountRow}>
-          <View style={[styles.accountIconWrap, { backgroundColor: '#EFF9FF' }]}>
-            <Ionicons name="paper-plane" size={18} color="#2AABEE" />
-          </View>
-          <View style={styles.accountInfo}>
-            <Text style={styles.accountLabel}>Telegram</Text>
-            <Text style={profile?.telegram_id ? styles.accountConnected : styles.accountMuted}>
-              {profile?.telegram_id ? 'Привязан' : 'Не привязан'}
-            </Text>
-          </View>
-          {profile?.telegram_id
-            ? <Ionicons name="checkmark-circle" size={22} color="#4caf50" />
-            : (
-              <TouchableOpacity style={styles.linkBtn} onPress={handleTelegramLink}>
-                <Text style={styles.linkBtnText}>Привязать</Text>
-              </TouchableOpacity>
-            )
-          }
-        </View>
-
-        <View style={styles.accountDivider} />
-
-        <View style={styles.accountRow}>
-          <View style={[styles.accountIconWrap, { backgroundColor: '#E8F4FF' }]}>
-            <Ionicons name="logo-vk" size={18} color="#0077ff" />
-          </View>
-          <View style={styles.accountInfo}>
-            <Text style={styles.accountLabel}>VK ID</Text>
-            <Text style={profile?.vk_id ? styles.accountConnected : styles.accountMuted}>
-              {profile?.vk_id ? 'Привязан' : 'Не привязан'}
-            </Text>
-          </View>
-          {profile?.vk_id
-            ? <Ionicons name="checkmark-circle" size={22} color="#4caf50" />
-            : (
-              <TouchableOpacity style={[styles.linkBtn, { backgroundColor: '#0077ff' }]} onPress={handleVKLink}>
-                <Text style={styles.linkBtnText}>Привязать</Text>
-              </TouchableOpacity>
-            )
-          }
-        </View>
-      </View>
-
       {/* Репетиторы */}
-      {tutors.length > 0 && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Мои репетиторы</Text>
-          {[...new Map(tutors.map(t => [t.tutor_id, t])).values()].map((tutor, ti) => {
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Мои репетиторы</Text>
+        {tutors.length === 0 ? (
+          <TouchableOpacity style={styles.emptyTutorsBtn} onPress={() => setJoinVisible(true)}>
+            <Ionicons name="key-outline" size={16} color="#2AABEE" />
+            <Text style={styles.emptyTutorsBtnText}>Ввести код приглашения</Text>
+          </TouchableOpacity>
+        ) : (
+          <>{[...new Map(tutors.map(t => [t.tutor_id, t])).values()].map((tutor, ti) => {
             const subjects = tutors.filter(t => t.tutor_id === tutor.tutor_id);
             const isPending = subjects.every(s => s.status === 'pending');
             return (
@@ -441,9 +443,9 @@ export default function ProfileScreen() {
                 })}
               </View>
             );
-          })}
-        </View>
-      )}
+          })}</>
+        )}
+      </View>
 
       {/* Действия */}
       <View style={styles.settingsCard}>
@@ -466,7 +468,13 @@ export default function ProfileScreen() {
       </View>
 
       <Modal visible={joinVisible} animationType="slide" presentationStyle="pageSheet">
-        <JoinScreen onSuccess={() => setJoinVisible(false)} onClose={() => setJoinVisible(false)} />
+        <JoinScreen
+          onSuccess={() => {
+            setJoinVisible(false);
+            getTutors().then(setTutors);
+          }}
+          onClose={() => setJoinVisible(false)}
+        />
       </Modal>
     </ScrollView>
   );
@@ -577,6 +585,8 @@ const styles = StyleSheet.create({
   hourlyRate: { fontSize: 13, fontWeight: '600', color: '#555' },
   subscriptionBadge: { backgroundColor: '#EFF9FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   subscriptionBadgeText: { fontSize: 11, fontWeight: '600', color: '#2AABEE' },
+  emptyTutorsBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
+  emptyTutorsBtnText: { fontSize: 14, color: '#2AABEE', fontWeight: '600' },
   pendingBadge: { backgroundColor: '#FFF3E0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 4 },
   pendingBadgeText: { fontSize: 11, fontWeight: '600', color: '#E65100' },
   pendingSubjectBadge: { backgroundColor: '#FFF3E0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
