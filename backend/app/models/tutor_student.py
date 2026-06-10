@@ -2,12 +2,13 @@ import enum
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Numeric
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Numeric, cast, extract, func, select
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
+from app.models.lesson import ConductStatus, Lesson
 
 
 class TutorStudentStatus(str, enum.Enum):
@@ -30,7 +31,6 @@ class TutorStudent(TimestampMixin, Base):
     rate_set_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     started_at: Mapped[date] = mapped_column(Date, nullable=False)
     subscription_hours: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
-    used_hours: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=0)
     tutor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tutors.id", ondelete="RESTRICT"), nullable=False)
     student_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("students.id", ondelete="RESTRICT"), nullable=False)
     subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="RESTRICT"), nullable=False)
@@ -49,3 +49,26 @@ class TutorStudent(TimestampMixin, Base):
     @property
     def level_ids(self) -> list[int]:
         return [sl.level_id for sl in self.student_levels]
+
+
+# Израсходованные часы абонемента — производная величина, а не хранимое поле:
+# сумма длительностей проведённых занятий этой связки. Так нет рассинхрона
+# счётчика и не нужна ручная логика отката при отмене/переносе.
+TutorStudent.used_hours = column_property(
+    select(
+        cast(
+            func.coalesce(
+                func.sum(extract("epoch", Lesson.ends_at - Lesson.starts_at) / 3600),
+                0,
+            ),
+            Numeric(10, 2),
+        )
+    )
+    .where(
+        Lesson.tutor_student_id == TutorStudent.id,
+        Lesson.conduct_status == ConductStatus.conducted,
+    )
+    .correlate_except(Lesson)
+    .scalar_subquery(),
+    deferred=False,
+)

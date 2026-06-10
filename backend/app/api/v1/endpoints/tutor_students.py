@@ -100,10 +100,9 @@ async def update_tutor_student(
         if data.subscription_hours is not None
         else ts.subscription_hours
     )
-    next_used_hours = data.used_hours if data.used_hours is not None else ts.used_hours
 
     try:
-        validate_subscription_state(next_subscription_hours, next_used_hours)
+        validate_subscription_state(next_subscription_hours, None)
     except SubscriptionStateError as error:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error.to_detail()) from error
 
@@ -114,8 +113,6 @@ async def update_tutor_student(
         ts.rate_set_at = datetime.now(timezone.utc)
     if data.subscription_hours is not None:
         ts.subscription_hours = data.subscription_hours
-    if data.used_hours is not None:
-        ts.used_hours = data.used_hours
     if data.level_ids is not None:
         await db.execute(delete(StudentLevel).where(StudentLevel.tutor_student_id == ts.id))
         for level_id in data.level_ids:

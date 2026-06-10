@@ -741,6 +741,13 @@ async def report_payment(
     if lesson.payment_status != "unpaid":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Занятие уже оплачено или ожидает подтверждения")
 
+    covered_ts = await db.get(TutorStudent, lesson.tutor_student_id)
+    if covered_ts and covered_ts.subscription_hours is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Занятие покрыто абонементом — отдельная оплата не требуется",
+        )
+
     lesson.payment_status = "payment_pending"
     await db.commit()
     await db.refresh(lesson)

@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.lesson import ConductStatus, Lesson, PaymentStatus
+from app.models.lesson import ConductStatus, Lesson
 from app.models.tutor_student import TutorStudent
 
 
@@ -55,19 +55,6 @@ def validate_subscription_state(
             used_hours=used_hours,
         )
 
-    if (
-        subscription_hours is not None
-        and used_hours is not None
-        and used_hours > subscription_hours
-    ):
-        raise SubscriptionStateError(
-            code="INVALID_SUBSCRIPTION_STATE",
-            message="Использованные часы не могут превышать размер абонемента.",
-            subscription_hours=subscription_hours,
-            used_hours=used_hours,
-            remaining_hours=max(subscription_hours - used_hours, Decimal(0)),
-        )
-
 
 async def get_tutor_student_for_lesson(
     db: AsyncSession,
@@ -79,47 +66,16 @@ async def get_tutor_student_for_lesson(
     return await db.get(TutorStudent, lesson.tutor_student_id)
 
 
-def _lesson_duration_hours(lesson: Lesson) -> Decimal:
-    seconds = (lesson.ends_at - lesson.starts_at).total_seconds()
-    return Decimal(seconds) / Decimal(3600)
-
-
 def apply_conduct_status_transition(
     lesson: Lesson,
     tutor_student: TutorStudent | None,
     new_status: ConductStatus,
 ) -> None:
-    old_status = lesson.conduct_status
-    if old_status == new_status or tutor_student is None or not has_subscription(tutor_student):
-        lesson.conduct_status = new_status
-        return
+    """Сменить статус проведения занятия.
 
-    total = tutor_student.subscription_hours or Decimal(0)
-    used = tutor_student.used_hours or Decimal(0)
-    duration = _lesson_duration_hours(lesson)
-
-    if old_status != ConductStatus.conducted and new_status == ConductStatus.conducted:
-        if used >= total:
-            raise SubscriptionStateError(
-                code="SUBSCRIPTION_EXHAUSTED",
-                message="У ученика закончились часы по абонементу.",
-                subscription_hours=total,
-                used_hours=used,
-                remaining_hours=Decimal(0),
-            )
-        tutor_student.used_hours = used + duration
-        lesson.payment_status = PaymentStatus.paid
-
-    if old_status == ConductStatus.conducted and new_status != ConductStatus.conducted:
-        if used <= 0:
-            raise SubscriptionStateError(
-                code="SUBSCRIPTION_ROLLBACK_INVALID",
-                message="Нельзя откатить абонемент ниже нуля.",
-                subscription_hours=total,
-                used_hours=used,
-                remaining_hours=remaining_hours(tutor_student),
-            )
-        tutor_student.used_hours = used - duration
-        lesson.payment_status = PaymentStatus.unpaid
-
+    Абонемент развязан с оплатой: израсходованные часы — это производная
+    величина (TutorStudent.used_hours = сумма проведённых занятий), поэтому
+    здесь не нужно вручную списывать/возвращать часы и менять payment_status.
+    Параметр tutor_student сохранён ради совместимости с местами вызова.
+    """
     lesson.conduct_status = new_status

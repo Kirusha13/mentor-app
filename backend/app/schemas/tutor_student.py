@@ -55,5 +55,4 @@ class TutorStudentUpdate(BaseModel):
     status: TutorStudentStatus | None = None
     hourly_rate: Decimal | None = None
     subscription_hours: Decimal | None = None
-    used_hours: Decimal | None = None
     level_ids: list[int] | None = None
