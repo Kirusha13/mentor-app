@@ -1,9 +1,12 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from app.models.tutor_student import TutorStudentStatus
+
+# Порог остатка часов (включительно), при котором показываем предупреждение.
+SUBSCRIPTION_LOW_THRESHOLD = Decimal(1)
 
 
 class TutorStudentOut(BaseModel):
@@ -22,6 +25,22 @@ class TutorStudentOut(BaseModel):
     subject_name: str | None = None
 
     model_config = {"from_attributes": True}
+
+    @computed_field
+    @property
+    def remaining_hours(self) -> Decimal | None:
+        """Остаток часов по абонементу, либо None если абонемент не задан."""
+        if self.subscription_hours is None:
+            return None
+        used = self.used_hours or Decimal(0)
+        return max(self.subscription_hours - used, Decimal(0))
+
+    @computed_field
+    @property
+    def subscription_low(self) -> bool:
+        """True, если абонемент задан и остаток на исходе (<= порога)."""
+        remaining = self.remaining_hours
+        return remaining is not None and remaining <= SUBSCRIPTION_LOW_THRESHOLD
 
 
 class TutorStudentCreate(BaseModel):
