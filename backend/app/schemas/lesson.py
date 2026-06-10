@@ -1,9 +1,12 @@
 from datetime import date, datetime, time
 from decimal import Decimal
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, computed_field, model_validator
 
 from app.models.lesson import ConductStatus, PaymentStatus
+
+# Порог остатка часов (включительно), при котором показываем предупреждение.
+SUBSCRIPTION_LOW_THRESHOLD = Decimal(1)
 
 
 class LessonOut(BaseModel):
@@ -50,6 +53,31 @@ class StudentLessonOut(BaseModel):
     topic_title: str | None = None
     tutor_phone: str | None = None
     tutor_payment_bank_name: str | None = None
+    # Абонемент связки (если задан): занятие покрыто абонементом, наличный flow не нужен.
+    subscription_hours: Decimal | None = None
+    used_hours: Decimal | None = None
+
+    @computed_field
+    @property
+    def subscription_covered(self) -> bool:
+        """True, если связка на абонементе — оплата за это занятие не требуется."""
+        return self.subscription_hours is not None
+
+    @computed_field
+    @property
+    def remaining_hours(self) -> Decimal | None:
+        """Остаток часов по абонементу, либо None если абонемент не задан."""
+        if self.subscription_hours is None:
+            return None
+        used = self.used_hours or Decimal(0)
+        return max(self.subscription_hours - used, Decimal(0))
+
+    @computed_field
+    @property
+    def subscription_low(self) -> bool:
+        """True, если абонемент задан и остаток на исходе (<= порога)."""
+        remaining = self.remaining_hours
+        return remaining is not None and remaining <= SUBSCRIPTION_LOW_THRESHOLD
 
 
 class AvailableSlot(BaseModel):

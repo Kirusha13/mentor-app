@@ -2,6 +2,7 @@
 Эндпоинты для ученика: только свои данные.
 """
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import logging
@@ -50,6 +51,87 @@ def _format_lesson_for_user(dt: datetime, user_tz: str | None) -> str:
     tz = ZoneInfo(user_tz) if user_tz else ZoneInfo("Europe/Moscow")
     local = dt.astimezone(tz)
     return local.strftime("%d.%m.%Y в %H:%M")
+
+
+def _student_lesson_dict(
+    lesson: Lesson,
+    tutor_tz: str | None,
+    *,
+    tutor_name: str | None = None,
+    subject_name: str | None = None,
+    tutor_phone: str | None = None,
+    tutor_payment_bank_name: str | None = None,
+    subscription_hours: Decimal | None = None,
+    used_hours: Decimal | None = None,
+    topic_title: str | None = None,
+) -> dict:
+    """Собрать StudentLessonOut из ORM-занятия.
+
+    StudentLessonOut отдаёт локальные дату/время (lesson_date/start_time/end_time),
+    которых нет в модели Lesson, поэтому сериализовать ORM напрямую нельзя —
+    конвертируем starts_at/ends_at в часовой пояс репетитора здесь.
+    """
+    tz = ZoneInfo(tutor_tz) if tutor_tz else ZoneInfo("Europe/Moscow")
+    local_start = lesson.starts_at.astimezone(tz)
+    local_end = lesson.ends_at.astimezone(tz)
+    return StudentLessonOut(
+        id=lesson.id,
+        lesson_date=local_start.date(),
+        start_time=local_start.time().replace(tzinfo=None),
+        end_time=local_end.time().replace(tzinfo=None),
+        conduct_status=lesson.conduct_status,
+        payment_status=lesson.payment_status,
+        cost=lesson.cost,
+        grade=lesson.grade,
+        grade_comment=lesson.grade_comment,
+        student_note=lesson.student_note,
+        tutor_student_id=lesson.tutor_student_id,
+        topic_id=lesson.topic_id,
+        original_lesson_id=lesson.original_lesson_id,
+        created_at=lesson.created_at,
+        tutor_name=tutor_name,
+        subject_name=subject_name,
+        tutor_phone=tutor_phone,
+        tutor_payment_bank_name=tutor_payment_bank_name,
+        subscription_hours=subscription_hours,
+        used_hours=used_hours,
+        topic_title=topic_title,
+    ).model_dump()
+
+
+async def _serialize_student_lesson(db: AsyncSession, lesson: Lesson) -> dict:
+    """Полностью сериализовать занятие ученика: контекст связки + абонемент + тема."""
+    row = (
+        await db.execute(
+            select(
+                TutorStudent,
+                Tutor.full_name.label("tutor_name"),
+                Tutor.timezone.label("tutor_timezone"),
+                Subject.name.label("subject_name"),
+                Tutor.phone_number.label("tutor_phone"),
+                Tutor.payment_bank_name.label("tutor_payment_bank_name"),
+            )
+            .join(Tutor, Tutor.id == TutorStudent.tutor_id)
+            .join(Subject, Subject.id == TutorStudent.subject_id)
+            .where(TutorStudent.id == lesson.tutor_student_id)
+        )
+    ).first()
+    ts = row.TutorStudent if row else None
+    topic_title = None
+    if lesson.topic_id:
+        topic = await db.get(TheoryTopic, lesson.topic_id)
+        topic_title = topic.title if topic else None
+    return _student_lesson_dict(
+        lesson,
+        row.tutor_timezone if row else None,
+        tutor_name=row.tutor_name if row else None,
+        subject_name=row.subject_name if row else None,
+        tutor_phone=row.tutor_phone if row else None,
+        tutor_payment_bank_name=row.tutor_payment_bank_name if row else None,
+        subscription_hours=ts.subscription_hours if ts else None,
+        used_hours=ts.used_hours if ts else None,
+        topic_title=topic_title,
+    )
 
 
 @router.get("/me", response_model=StudentOut, summary="Профиль ученика")
@@ -254,6 +336,8 @@ async def my_lessons(
             Subject.name.label("subject_name"),
             Tutor.phone_number.label("tutor_phone"),
             Tutor.payment_bank_name.label("tutor_payment_bank_name"),
+            TutorStudent.subscription_hours.label("subscription_hours"),
+            TutorStudent.used_hours.label("used_hours"),
         )
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .join(Tutor, Tutor.id == TutorStudent.tutor_id)
@@ -272,29 +356,16 @@ async def my_lessons(
         if row.Lesson.id in seen:
             continue
         seen.add(row.Lesson.id)
-        tz = ZoneInfo(row.tutor_timezone) if row.tutor_timezone else ZoneInfo("Europe/Moscow")
-        local_start = row.Lesson.starts_at.astimezone(tz)
-        local_end = row.Lesson.ends_at.astimezone(tz)
-        d = StudentLessonOut(
-            id=row.Lesson.id,
-            lesson_date=local_start.date(),
-            start_time=local_start.time().replace(tzinfo=None),
-            end_time=local_end.time().replace(tzinfo=None),
-            conduct_status=row.Lesson.conduct_status,
-            payment_status=row.Lesson.payment_status,
-            cost=row.Lesson.cost,
-            grade=row.Lesson.grade,
-            grade_comment=row.Lesson.grade_comment,
-            student_note=row.Lesson.student_note,
-            tutor_student_id=row.Lesson.tutor_student_id,
-            topic_id=row.Lesson.topic_id,
-            original_lesson_id=row.Lesson.original_lesson_id,
-            created_at=row.Lesson.created_at,
+        d = _student_lesson_dict(
+            row.Lesson,
+            row.tutor_timezone,
             tutor_name=row.tutor_name,
             subject_name=row.subject_name,
             tutor_phone=row.tutor_phone,
             tutor_payment_bank_name=row.tutor_payment_bank_name,
-        ).model_dump()
+            subscription_hours=row.subscription_hours,
+            used_hours=row.used_hours,
+        )
         if row.Lesson.topic_id:
             topic = await db.get(TheoryTopic, row.Lesson.topic_id)
             d["topic_title"] = topic.title if topic else None
@@ -320,7 +391,7 @@ async def update_lesson_note(
     lesson.student_note = data.student_note
     await db.commit()
     await db.refresh(lesson)
-    return lesson
+    return await _serialize_student_lesson(db, lesson)
 
 
 @router.post("/lessons", response_model=StudentLessonOut, status_code=status.HTTP_201_CREATED, summary="Записаться на занятие")
@@ -396,13 +467,7 @@ async def book_lesson(
         f"Ученик {student.full_name} запрашивает запись на {_format_lesson_for_user(lesson.starts_at, tutor.timezone if tutor else None)}",
     )
 
-    d = StudentLessonOut.model_validate(lesson).model_dump()
-    d["tutor_name"] = (await db.execute(select(Tutor.full_name).where(Tutor.id == ts.tutor_id))).scalar_one_or_none()
-    d["subject_name"] = (await db.execute(select(Subject.name).where(Subject.id == ts.subject_id))).scalar_one_or_none()
-    if lesson.topic_id:
-        topic = await db.get(TheoryTopic, lesson.topic_id)
-        d["topic_title"] = topic.title if topic else None
-    return d
+    return await _serialize_student_lesson(db, lesson)
 
 @router.get("/assignments", response_model=list[AssignmentOut], summary="Мои задания")
 async def my_assignments(
@@ -699,7 +764,7 @@ async def request_reschedule(
         tutor.telegram_id if tutor else None,
         f"Ученик {student.full_name} запрашивает перенос занятия {_format_lesson_for_user(lesson.starts_at, tutor_tz)} на {_format_lesson_for_user(new_lesson.starts_at, tutor_tz)}",
     )
-    return new_lesson
+    return await _serialize_student_lesson(db, new_lesson)
 
 
 @router.get("/materials", response_model=list[MaterialOut], summary="Материалы")
@@ -758,26 +823,4 @@ async def report_payment(
         f"Ученик {student.full_name} сообщил об оплате занятия {_format_lesson_for_user(lesson.starts_at, tutor.timezone if tutor else None)}",
     )
 
-    d = StudentLessonOut.model_validate(lesson).model_dump()
-    ts_result = await db.execute(
-        select(
-            TutorStudent,
-            Tutor.full_name.label("tutor_name"),
-            Subject.name.label("subject_name"),
-            Tutor.phone_number.label("tutor_phone"),
-            Tutor.payment_bank_name.label("tutor_payment_bank_name"),
-        )
-        .join(Tutor, Tutor.id == TutorStudent.tutor_id)
-        .join(Subject, Subject.id == TutorStudent.subject_id)
-        .where(TutorStudent.id == lesson.tutor_student_id)
-    )
-    row = ts_result.first()
-    if row:
-        d["tutor_name"] = row.tutor_name
-        d["subject_name"] = row.subject_name
-        d["tutor_phone"] = row.tutor_phone
-        d["tutor_payment_bank_name"] = row.tutor_payment_bank_name
-    if lesson.topic_id:
-        topic = await db.get(TheoryTopic, lesson.topic_id)
-        d["topic_title"] = topic.title if topic else None
-    return d
+    return await _serialize_student_lesson(db, lesson)
