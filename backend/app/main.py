@@ -12,11 +12,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
+from app.core.rate_limit import limiter
 from app.core.security import create_access_token
 from app.core.vk_auth import (
     exchange_pkce_code,
@@ -139,6 +143,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.APP_TITLE, debug=settings.DEBUG, lifespan=lifespan)
+
+# Rate limiting: лимитер в state, обработчик 429 и middleware на все маршруты.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
