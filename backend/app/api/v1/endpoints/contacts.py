@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_tutor
+from app.core.config import settings
+from app.core.contact_link import encode_contact_token
 from app.core.database import get_db
 from app.models.contact import Contact
 from app.models.student_contact import StudentContact
@@ -44,6 +46,34 @@ async def create_contact(
     await db.commit()
     await db.refresh(contact)
     return contact
+
+
+@router.get("/{contact_id}/telegram-link", summary="Deep-link для привязки Telegram контактного лица")
+async def get_contact_telegram_link(
+    contact_id: int,
+    tutor: Tutor = Depends(get_current_tutor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ссылка t.me/<bot>?start=<token>: родитель открывает её, бот привязывает
+    его Telegram к контакту. Доступно, только если контакт привязан к ученику
+    этого репетитора."""
+    owns = await db.execute(
+        select(StudentContact.id)
+        .join(TutorStudent, TutorStudent.student_id == StudentContact.student_id)
+        .where(StudentContact.contact_id == contact_id, TutorStudent.tutor_id == tutor.id)
+    )
+    if owns.first() is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к этому контакту")
+
+    contact = await db.get(Contact, contact_id)
+    if contact is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Контакт не найден")
+
+    token = encode_contact_token(contact_id)
+    return {
+        "link": f"https://t.me/{settings.TELEGRAM_BOT_USERNAME}?start={token}",
+        "linked": contact.telegram_id is not None,
+    }
 
 
 @router.patch("/{contact_id}", response_model=ContactOut, summary="Обновить контактное лицо")

@@ -28,7 +28,8 @@ from app.models.tutor import Tutor
 from app.models.lesson import ConductStatus, Lesson
 from app.models.student import Student
 from app.services.subscription_service import apply_conduct_status_transition
-from app.services.telegram_service import send_to_user
+from app.services.telegram_bot import start_bot, stop_bot
+from app.services.telegram_service import notify_student_contacts, send_to_user
 
 
 APP_TIMEZONE = ZoneInfo("Europe/Moscow")
@@ -49,8 +50,11 @@ async def auto_conduct_lessons():
                 Lesson.tutor_student_id.is_not(None),
             )
         )
+        just_conducted = []
         for lesson in result.scalars().all():
             apply_conduct_status_transition(lesson, lesson.tutor_student, ConductStatus.conducted)
+            if lesson.tutor_student is not None:
+                just_conducted.append((lesson.tutor_student.student_id, lesson.starts_at))
 
         pending_reschedule = await db.execute(
             select(Lesson).where(
@@ -71,6 +75,18 @@ async def auto_conduct_lessons():
             lesson.conduct_status = ConductStatus.booking_rejected
 
         await db.commit()
+
+        # Уведомляем контактных лиц о проведённых занятиях (после фиксации статусов)
+        for student_id, starts_at in just_conducted:
+            student = await db.get(Student, student_id)
+            student_tz = ZoneInfo(student.timezone) if student and student.timezone else APP_TIMEZONE
+            local_time = starts_at.astimezone(student_tz)
+            student_name = student.full_name if student else "ученика"
+            await notify_student_contacts(
+                db,
+                student_id,
+                f"Занятие {student_name} {local_time.strftime('%d.%m.%Y в %H:%M')} проведено.",
+            )
 
 
 async def send_reminders():
@@ -116,7 +132,9 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(auto_conduct_lessons, "cron", hour=0, minute=5)
     scheduler.add_job(send_reminders, "cron", hour=18, minute=0)
     scheduler.start()
+    await start_bot()
     yield
+    await stop_bot()
     scheduler.shutdown()
 
 

@@ -17,7 +17,7 @@ from app.services.subscription_service import (
     apply_conduct_status_transition,
     get_tutor_student_for_lesson,
 )
-from app.services.telegram_service import send_to_user
+from app.services.telegram_service import notify_student_contacts, send_to_user
 
 router = APIRouter()
 
@@ -276,6 +276,23 @@ async def update_lesson(
 
     await db.commit()
     await db.refresh(lesson)
+
+    notify_conducted = "conduct_status" in payload and lesson.conduct_status == ConductStatus.conducted
+    notify_grade = "grade" in payload and lesson.grade is not None
+    if notify_conducted or notify_grade:
+        student = await _get_student_for_lesson(db, lesson)
+        if student is not None:
+            when = _format_lesson_for_user(lesson.starts_at, student.timezone)
+            if notify_conducted:
+                await notify_student_contacts(
+                    db, student.id, f"Занятие {student.full_name} {when} проведено."
+                )
+            if notify_grade:
+                await notify_student_contacts(
+                    db,
+                    student.id,
+                    f"За занятие {student.full_name} {when} выставлена оценка: {lesson.grade}.",
+                )
     return lesson
 
 
@@ -386,10 +403,15 @@ async def approve_reschedule(
     await db.commit()
     await db.refresh(new_lesson)
     student = await _get_student_for_lesson(db, new_lesson)
+    when = _format_lesson_for_user(new_lesson.starts_at, student.timezone if student else None)
     await send_to_user(
         student.telegram_id if student else None,
-        f"Перенос подтверждён — новое занятие {_format_lesson_for_user(new_lesson.starts_at, student.timezone if student else None)}",
+        f"Перенос подтверждён — новое занятие {when}",
     )
+    if student is not None:
+        await notify_student_contacts(
+            db, student.id, f"Занятие {student.full_name} перенесено на {when}."
+        )
     return new_lesson
 
 
@@ -432,10 +454,15 @@ async def cancel_lesson(
 
     await db.commit()
     student = await _get_student_for_lesson(db, lesson)
+    when = _format_lesson_for_user(lesson.starts_at, student.timezone if student else None)
     await send_to_user(
         student.telegram_id if student else None,
-        f"Занятие {_format_lesson_for_user(lesson.starts_at, student.timezone if student else None)} отменено репетитором",
+        f"Занятие {when} отменено репетитором",
     )
+    if student is not None:
+        await notify_student_contacts(
+            db, student.id, f"Занятие {student.full_name} {when} отменено репетитором."
+        )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -455,12 +482,23 @@ async def confirm_payment(
     await db.refresh(lesson)
     student = await _get_student_for_lesson(db, lesson)
     student_tz = student.timezone if student else None
+    when = _format_lesson_for_user(lesson.starts_at, student_tz)
     await send_to_user(
         student.telegram_id if student else None,
         (
-            f"Оплата за занятие {_format_lesson_for_user(lesson.starts_at, student_tz)} подтверждена"
+            f"Оплата за занятие {when} подтверждена"
             if data.confirm
-            else f"Репетитор не подтвердил оплату за занятие {_format_lesson_for_user(lesson.starts_at, student_tz)}"
+            else f"Репетитор не подтвердил оплату за занятие {when}"
         ),
     )
+    if student is not None:
+        await notify_student_contacts(
+            db,
+            student.id,
+            (
+                f"Оплата за занятие {student.full_name} {when} подтверждена."
+                if data.confirm
+                else f"Оплата за занятие {student.full_name} {when} не подтверждена."
+            ),
+        )
     return lesson
