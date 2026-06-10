@@ -13,7 +13,6 @@ from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
 from app.schemas.lesson import ConfirmPaymentRequest, LessonCreate, LessonOut, LessonReschedule, LessonUpdate
 from app.services.subscription_service import (
-    SubscriptionStateError,
     apply_conduct_status_transition,
     get_tutor_student_for_lesson,
 )
@@ -263,14 +262,11 @@ async def update_lesson(
     if "conduct_status" in payload:
         tutor_student = await get_tutor_student_for_lesson(db, lesson)
 
-    try:
-        for field, value in payload.items():
-            if field == "conduct_status":
-                apply_conduct_status_transition(lesson, tutor_student, value)
-                continue
-            setattr(lesson, field, value)
-    except SubscriptionStateError as error:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.to_detail()) from error
+    for field, value in payload.items():
+        if field == "conduct_status":
+            apply_conduct_status_transition(lesson, tutor_student, value)
+            continue
+        setattr(lesson, field, value)
 
     if "starts_at" in payload or "ends_at" in payload:
         lesson.reminder_sent = False
@@ -426,10 +422,7 @@ async def cancel_lesson(
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     tutor_student = await get_tutor_student_for_lesson(db, lesson)
-    try:
-        apply_conduct_status_transition(lesson, tutor_student, ConductStatus.cancelled)
-    except SubscriptionStateError as error:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.to_detail()) from error
+    apply_conduct_status_transition(lesson, tutor_student, ConductStatus.cancelled)
 
     await db.commit()
     student = await _get_student_for_lesson(db, lesson)
