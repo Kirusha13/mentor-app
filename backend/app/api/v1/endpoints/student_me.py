@@ -4,6 +4,7 @@
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import logging
 import os
 import uuid
 
@@ -41,6 +42,8 @@ from app.schemas.tutor_student import TutorStudentOut
 from app.services.telegram_service import send_to_user
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 def _format_lesson_for_user(dt: datetime, user_tz: str | None) -> str:
@@ -343,9 +346,11 @@ async def book_lesson(
     starts_at = datetime.combine(data.lesson_date, data.start_time, tzinfo=tz).astimezone(timezone.utc)
     ends_at = datetime.combine(data.lesson_date, data.end_time, tzinfo=tz).astimezone(timezone.utc)
 
-    # TEMP: disabled for demo screenshot
-    # if starts_at <= datetime.now(timezone.utc):
-    #     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Нельзя записаться на время в прошлом")
+    if starts_at <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Нельзя записаться на время в прошлом",
+        )
 
     window_result = await db.execute(
         select(Lesson).where(
@@ -561,11 +566,14 @@ async def get_available_windows(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
-    import traceback
     try:
-     return await _get_available_windows(student, db)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=traceback.format_exc())
+        return await _get_available_windows(student, db)
+    except Exception:
+        logger.exception("Не удалось получить доступные окна для ученика %s", student.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось получить доступные окна",
+        )
 
 
 async def _get_available_windows(student, db):
