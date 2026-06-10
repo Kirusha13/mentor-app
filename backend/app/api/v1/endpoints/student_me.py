@@ -40,6 +40,7 @@ from app.schemas.student import StudentOut, StudentUpdate
 from app.schemas.theory_topic import TheoryTopicOut
 from app.schemas.tutor_level import TutorLevelOut
 from app.schemas.tutor_student import TutorStudentOut
+from app.services.scheduling import lock_tutor_schedule
 from app.services.telegram_service import send_to_user
 
 router = APIRouter()
@@ -423,6 +424,8 @@ async def book_lesson(
             detail="Нельзя записаться на время в прошлом",
         )
 
+    await lock_tutor_schedule(db, ts.tutor_id)
+
     window_result = await db.execute(
         select(Lesson).where(
             Lesson.tutor_id == ts.tutor_id,
@@ -729,6 +732,10 @@ async def request_reschedule(
     if lesson.conduct_status != "scheduled":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Можно переносить только запланированные занятия")
 
+    ts = await db.get(TutorStudent, lesson.tutor_student_id)
+    if ts is not None:
+        await lock_tutor_schedule(db, ts.tutor_id)
+
     # Проверяем что нет активного запроса на перенос
     existing = await db.execute(
         select(Lesson).where(
@@ -739,7 +746,6 @@ async def request_reschedule(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Запрос на перенос уже существует")
 
-    ts = await db.get(TutorStudent, lesson.tutor_student_id)
     tutor = await db.get(Tutor, ts.tutor_id) if ts else None
     tutor_tz = tutor.timezone if tutor else None
     tz = ZoneInfo(tutor_tz) if tutor_tz else ZoneInfo("Europe/Moscow")

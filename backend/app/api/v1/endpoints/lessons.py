@@ -12,6 +12,7 @@ from app.models.student import Student
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
 from app.schemas.lesson import ConfirmPaymentRequest, LessonCreate, LessonOut, LessonReschedule, LessonUpdate
+from app.services.scheduling import lock_tutor_schedule
 from app.services.subscription_service import (
     apply_conduct_status_transition,
     get_tutor_student_for_lesson,
@@ -188,6 +189,8 @@ async def create_lesson(
 ):
     _ensure_not_past(data.starts_at)
 
+    await lock_tutor_schedule(db, tutor.id)
+
     if data.is_window or data.tutor_student_id is None:
         await _ensure_window_has_no_overlap(db, tutor.id, data.starts_at, data.ends_at)
 
@@ -285,6 +288,8 @@ async def reschedule_lesson(
 ):
     original = await _get_lesson_for_tutor(db, lesson_id, tutor.id)
 
+    await lock_tutor_schedule(db, tutor.id)
+
     await _ensure_lesson_has_no_overlap(db, tutor.id, data.new_starts_at, data.new_ends_at)
 
     original.conduct_status = ConductStatus.rescheduled
@@ -315,6 +320,7 @@ async def approve_booking(
 
     relation = await get_tutor_student_for_lesson(db, lesson)
     tutor_id = relation.tutor_id if relation is not None else tutor.id
+    await lock_tutor_schedule(db, tutor_id)
     conflict = await db.execute(
         select(Lesson)
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
