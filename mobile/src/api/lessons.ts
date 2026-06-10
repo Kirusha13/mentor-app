@@ -19,6 +19,10 @@ export interface Lesson {
   topic_title: string | null;
   tutor_phone: string | null;
   tutor_payment_bank_name: string | null;
+  // Абонемент: занятие покрыто абонементом связки — наличная оплата не нужна.
+  subscription_covered: boolean;
+  remaining_hours: number | null;
+  subscription_low: boolean;
 }
 
 export interface AvailableSlot {
