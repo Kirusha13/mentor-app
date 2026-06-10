@@ -118,6 +118,10 @@ function pluralLesson(n: number): string {
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'занятия';
   return 'занятий';
 }
+function formatHours(h: number): string {
+  const n = Number(h);
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
 
 // ─── Модальное окно ────────────────────────────────────────────────────────────
 
@@ -202,6 +206,7 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
 
   const canReschedule = localLesson.conduct_status === 'scheduled';
   const canReportPayment =
+    !localLesson.subscription_covered &&
     localLesson.payment_status !== 'paid' &&
     !['cancelled', 'rescheduled', 'booking_rejected', 'reschedule_rejected'].includes(localLesson.conduct_status);
 
@@ -244,14 +249,24 @@ function LessonModal({ lesson, onClose, onRefresh }: { lesson: Lesson; onClose: 
           <Row label="Стоимость" value={`${localLesson.cost} ₽`} bold />
           <Row
             label="Оплата"
-            value={PAYMENT_LABEL[localLesson.payment_status]}
+            value={localLesson.subscription_covered ? 'Оплачено абонементом' : PAYMENT_LABEL[localLesson.payment_status]}
             valueColor={
-              localLesson.payment_status === 'paid' ? '#4CAF50'
+              localLesson.subscription_covered ? '#2AABEE'
+              : localLesson.payment_status === 'paid' ? '#4CAF50'
               : localLesson.payment_status === 'payment_pending' ? '#FF9800'
               : '#F44336'
             }
-            last
+            last={!(localLesson.subscription_covered && localLesson.remaining_hours != null)}
           />
+          {localLesson.subscription_covered && localLesson.remaining_hours != null && (
+            <Row
+              label="Остаток абонемента"
+              value={`${formatHours(localLesson.remaining_hours)} ч`}
+              valueColor={localLesson.subscription_low ? '#E65100' : '#1a1a1a'}
+              bold
+              last
+            />
+          )}
         </View>
 
         {localLesson.grade != null && (
@@ -398,7 +413,7 @@ export default function ScheduleScreen() {
 
   const loadUnpaid = useCallback(async () => {
     const all = await getLessons();
-    const unpaid = all.filter(l => l.conduct_status === 'conducted' && l.payment_status === 'unpaid');
+    const unpaid = all.filter(l => l.conduct_status === 'conducted' && l.payment_status === 'unpaid' && !l.subscription_covered);
     if (unpaid.length === 0) {
       setUnpaidInfo(null);
     } else {
@@ -486,13 +501,17 @@ export default function ScheduleScreen() {
                 {lesson.subject_name ? <Text style={styles.cardSubject}>{lesson.subject_name}</Text> : null}
                 <View style={styles.cardBottom}>
                   <Text style={styles.cardCost}>{lesson.cost} ₽</Text>
-                  <View style={[styles.paymentIconWrap, { borderColor: PAYMENT_DOT_COLOR[lesson.payment_status] }]}>
-                    <Ionicons
-                      name={getPaymentIcon(lesson.payment_status, lesson.conduct_status) as any}
-                      size={14}
-                      color={PAYMENT_DOT_COLOR[lesson.payment_status]}
-                    />
-                  </View>
+                  {(() => {
+                    const dotColor = lesson.subscription_covered ? '#2AABEE' : PAYMENT_DOT_COLOR[lesson.payment_status];
+                    const icon = lesson.subscription_covered
+                      ? 'card-outline'
+                      : getPaymentIcon(lesson.payment_status, lesson.conduct_status);
+                    return (
+                      <View style={[styles.paymentIconWrap, { borderColor: dotColor }]}>
+                        <Ionicons name={icon as any} size={14} color={dotColor} />
+                      </View>
+                    );
+                  })()}
                 </View>
               </TouchableOpacity>
             );
