@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
+    # Срок жизни токена-приглашения предмета (дни). Ученик может вступить по
+    # ссылке только пока она не протухла; репетитор обновляет через refresh-token.
+    INVITATION_TOKEN_TTL_DAYS: int = 30
+
     # Telegram bot
     TELEGRAM_BOT_TOKEN: str
     TELEGRAM_BOT_USERNAME: str  # без @, например: MentorAuthBot

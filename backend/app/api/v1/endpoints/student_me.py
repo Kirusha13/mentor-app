@@ -290,6 +290,15 @@ async def join_by_token(
     subject = row.Subject
     tutor_name = row.tutor_name
 
+    # Токен-приглашение протухает: вступить можно только по свежей ссылке.
+    if subject.invitation_token_created_at is not None:
+        age = datetime.now(timezone.utc) - subject.invitation_token_created_at
+        if age > timedelta(days=settings.INVITATION_TOKEN_TTL_DAYS):
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="Срок действия ссылки-приглашения истёк. Попросите репетитора прислать новую.",
+            )
+
     # Проверяем что ученик ещё не привязан к этому предмету
     existing = await db.execute(
         select(TutorStudent).where(
