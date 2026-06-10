@@ -2,6 +2,7 @@
 import {
   addStudentContact,
   createContact,
+  getContactTelegramLink,
   getStudentContacts,
   removeStudentContact,
   updateContact,
@@ -69,6 +70,8 @@ export default function ContactsPage() {
   const [editingContactId, setEditingContactId] = useState<number | null>(null);
   const [editingDraft, setEditingDraft] = useState<ContactDraft>(emptyDraft);
   const [savingContactId, setSavingContactId] = useState<number | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   const loadData = async () => {
     try {
@@ -170,6 +173,25 @@ export default function ContactsPage() {
     setDetailsOpen(false);
     setEditingContactId(null);
     setEditingDraft(emptyDraft());
+    setInviteLink(null);
+  };
+
+  const handleGetInviteLink = async (contactId: number) => {
+    try {
+      setInviteLoading(true);
+      const { link } = await getContactTelegramLink(contactId);
+      setInviteLink(link);
+      try {
+        await navigator.clipboard?.writeText(link);
+      } catch {
+        // Буфер обмена может быть недоступен — ссылка всё равно показана ниже.
+      }
+    } catch (error) {
+      console.error('Не удалось получить ссылку-приглашение:', error);
+      alert('Не удалось получить ссылку-приглашение');
+    } finally {
+      setInviteLoading(false);
+    }
   };
 
   const handleCreateContact = async () => {
@@ -364,6 +386,7 @@ export default function ContactsPage() {
                 onClick={() => {
                   setSelectedRecordId(record.studentContact.id);
                   setDetailsOpen(true);
+                  setInviteLink(null);
                 }}
                 style={{
                   display: 'grid',
@@ -622,6 +645,47 @@ export default function ContactsPage() {
                       🗑
                     </button>
                   </div>
+
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}>
+                    <button
+                      type="button"
+                      onClick={() => handleGetInviteLink(selectedRecord.studentContact.contact.id)}
+                      disabled={inviteLoading}
+                      className="modal-secondary"
+                    >
+                      {inviteLoading
+                        ? 'Готовим ссылку...'
+                        : selectedRecord.studentContact.contact.telegram_id
+                          ? 'Обновить ссылку для Telegram'
+                          : 'Пригласить в Telegram'}
+                    </button>
+                    {selectedRecord.studentContact.contact.telegram_id ? (
+                      <span style={{ color: '#4CAF50', fontSize: 13, fontWeight: 700 }}>Telegram привязан</span>
+                    ) : null}
+                  </div>
+
+                  {inviteLink ? (
+                    <div style={{ display: 'grid', gap: 6, padding: 10, borderRadius: 12, background: 'rgba(42,171,238,0.08)' }}>
+                      <div style={{ fontSize: 13, color: '#435066' }}>
+                        Ссылка скопирована. Отправьте её родителю — после перехода в бота он начнёт получать уведомления о занятиях, оценках и оплате.
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          readOnly
+                          value={inviteLink}
+                          onFocus={(event) => event.target.select()}
+                          style={{ flex: 1, minWidth: 0 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { void navigator.clipboard?.writeText(inviteLink); }}
+                          className="modal-secondary"
+                        >
+                          Копировать
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </section>

@@ -67,3 +67,15 @@ export const removeStudentContact = async (
 ): Promise<void> => {
   await apiClient.delete(`/contacts/student/${studentId}/${studentContactId}`);
 };
+
+export interface ContactTelegramLink {
+  link: string;
+  linked: boolean;
+}
+
+export const getContactTelegramLink = async (
+  contactId: number
+): Promise<ContactTelegramLink> => {
+  const response = await apiClient.get(`/contacts/${contactId}/telegram-link`);
+  return response.data;
+};
