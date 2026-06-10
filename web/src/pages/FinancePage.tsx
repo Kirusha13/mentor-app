@@ -334,6 +334,14 @@ export default function FinancePage() {
     [tutorStudents]
   );
 
+  // Занятие покрыто абонементом, если у его связки задан subscription_hours.
+  // Такие занятия не проходят наличный flow — их нельзя «отметить оплаченным».
+  const isSubscriptionCovered = (lesson: Lesson) => {
+    const relation = lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id) : null;
+    const hours = relation?.subscription_hours;
+    return hours != null && Number(hours) > 0;
+  };
+
   const currentFinancialLessons = filteredLessons.filter(isRealFinancialLesson);
   const forecastFinancialLessons = forecastLessons.filter(isRealFinancialLesson);
   const chartFinancialLessons = chartLessons.filter(isRealFinancialLesson);
@@ -343,7 +351,9 @@ export default function FinancePage() {
   const paymentPendingLessons = currentConducted.filter(
     (lesson) => lesson.payment_status === 'payment_pending'
   );
-  const unpaidLessons = currentConducted.filter((lesson) => lesson.payment_status === 'unpaid');
+  const unpaidLessons = currentConducted.filter(
+    (lesson) => lesson.payment_status === 'unpaid' && !isSubscriptionCovered(lesson)
+  );
   const debt = unpaidLessons.reduce(
     (sum, lesson) => sum + calculateLessonCostByRate(lesson, lesson.tutor_student_id ? relationMap.get(lesson.tutor_student_id)?.hourly_rate : null),
     0
