@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -26,11 +27,16 @@ from app.api.v1.router import api_router
 from app.models.tutor import Tutor
 from app.models.lesson import ConductStatus, Lesson
 from app.models.student import Student
-from app.services.subscription_service import apply_conduct_status_transition
+from app.services.subscription_service import (
+    SubscriptionStateError,
+    apply_conduct_status_transition,
+)
 from app.services.telegram_service import send_to_user
 
 
 APP_TIMEZONE = ZoneInfo("Europe/Moscow")
+
+logger = logging.getLogger(__name__)
 
 
 async def auto_conduct_lessons():
@@ -47,7 +53,12 @@ async def auto_conduct_lessons():
             )
         )
         for lesson in result.scalars().all():
-            apply_conduct_status_transition(lesson, lesson.tutor_student, ConductStatus.conducted)
+            try:
+                apply_conduct_status_transition(lesson, lesson.tutor_student, ConductStatus.conducted)
+            except SubscriptionStateError as error:
+                logger.warning(
+                    "Пропуск авто-проведения занятия %s: %s", lesson.id, error.message
+                )
 
         pending_reschedule = await db.execute(
             select(Lesson).where(
