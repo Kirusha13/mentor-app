@@ -53,24 +53,20 @@ class StudentLessonOut(BaseModel):
     topic_title: str | None = None
     tutor_phone: str | None = None
     tutor_payment_bank_name: str | None = None
-    # Абонемент связки (если задан): занятие покрыто абонементом, наличный flow не нужен.
-    subscription_hours: Decimal | None = None
+    # Покрыто ли ЭТО занятие абонементом — per-lesson флаг из lessons.subscription_covered.
+    subscription_covered: bool = False
+    # Баланс абонемента связки (для отображения остатка ученику).
+    purchased_hours: Decimal | None = None
     used_hours: Decimal | None = None
 
     @computed_field
     @property
-    def subscription_covered(self) -> bool:
-        """True, если связка на абонементе — оплата за это занятие не требуется."""
-        return self.subscription_hours is not None
-
-    @computed_field
-    @property
     def remaining_hours(self) -> Decimal | None:
-        """Остаток часов по абонементу, либо None если абонемент не задан."""
-        if self.subscription_hours is None:
+        """Остаток часов по абонементу, либо None если пакетов нет."""
+        if not self.purchased_hours:
             return None
         used = self.used_hours or Decimal(0)
-        return max(self.subscription_hours - used, Decimal(0))
+        return max(self.purchased_hours - used, Decimal(0))
 
     @computed_field
     @property

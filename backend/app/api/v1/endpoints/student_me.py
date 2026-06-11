@@ -62,7 +62,7 @@ def _student_lesson_dict(
     subject_name: str | None = None,
     tutor_phone: str | None = None,
     tutor_payment_bank_name: str | None = None,
-    subscription_hours: Decimal | None = None,
+    purchased_hours: Decimal | None = None,
     used_hours: Decimal | None = None,
     topic_title: str | None = None,
 ) -> dict:
@@ -94,7 +94,8 @@ def _student_lesson_dict(
         subject_name=subject_name,
         tutor_phone=tutor_phone,
         tutor_payment_bank_name=tutor_payment_bank_name,
-        subscription_hours=subscription_hours,
+        subscription_covered=lesson.subscription_covered,
+        purchased_hours=purchased_hours,
         used_hours=used_hours,
         topic_title=topic_title,
     ).model_dump()
@@ -129,7 +130,7 @@ async def _serialize_student_lesson(db: AsyncSession, lesson: Lesson) -> dict:
         subject_name=row.subject_name if row else None,
         tutor_phone=row.tutor_phone if row else None,
         tutor_payment_bank_name=row.tutor_payment_bank_name if row else None,
-        subscription_hours=ts.subscription_hours if ts else None,
+        purchased_hours=ts.purchased_hours if ts else None,
         used_hours=ts.used_hours if ts else None,
         topic_title=topic_title,
     )
@@ -346,7 +347,7 @@ async def my_lessons(
             Subject.name.label("subject_name"),
             Tutor.phone_number.label("tutor_phone"),
             Tutor.payment_bank_name.label("tutor_payment_bank_name"),
-            TutorStudent.subscription_hours.label("subscription_hours"),
+            TutorStudent.purchased_hours.label("purchased_hours"),
             TutorStudent.used_hours.label("used_hours"),
         )
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
@@ -373,7 +374,7 @@ async def my_lessons(
             subject_name=row.subject_name,
             tutor_phone=row.tutor_phone,
             tutor_payment_bank_name=row.tutor_payment_bank_name,
-            subscription_hours=row.subscription_hours,
+            purchased_hours=row.purchased_hours,
             used_hours=row.used_hours,
         )
         if row.Lesson.topic_id:
@@ -857,8 +858,7 @@ async def report_payment(
     if lesson.payment_status != "unpaid":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Занятие уже оплачено или ожидает подтверждения")
 
-    covered_ts = await db.get(TutorStudent, lesson.tutor_student_id)
-    if covered_ts and covered_ts.subscription_hours is not None:
+    if lesson.subscription_covered:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Занятие покрыто абонементом — отдельная оплата не требуется",
