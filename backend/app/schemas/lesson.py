@@ -28,6 +28,7 @@ class LessonOut(BaseModel):
     tutor_name: str | None = None
     subject_name: str | None = None
     topic_title: str | None = None
+    subscription_covered: bool = False
 
     model_config = {"from_attributes": True}
 
