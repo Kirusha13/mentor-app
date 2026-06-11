@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,3 +80,46 @@ def apply_conduct_status_transition(
     Параметр tutor_student сохранён ради совместимости с местами вызова.
     """
     lesson.conduct_status = new_status
+
+
+@dataclass(frozen=True)
+class CoverageLesson:
+    id: int
+    starts_at: datetime
+    ends_at: datetime
+
+    @property
+    def hours(self) -> Decimal:
+        seconds = (self.ends_at - self.starts_at).total_seconds()
+        return Decimal(seconds) / Decimal(3600)
+
+
+@dataclass(frozen=True)
+class CoveragePackage:
+    hours: Decimal
+    start_date: date
+
+
+def compute_coverage(
+    lessons: list[CoverageLesson],
+    packages: list[CoveragePackage],
+) -> set[int]:
+    """Вернуть id занятий, покрытых абонементом.
+
+    Занятия обрабатываются по возрастанию starts_at. Для каждого:
+    доступно = Σ hours пакетов с start_date <= дата занятия − уже израсходованное
+    покрытыми занятиями. Если доступно >= длительности → покрыто.
+    «Всё-или-ничего»: занятие либо целиком покрыто, либо поурочное.
+    """
+    covered: set[int] = set()
+    consumed = Decimal(0)
+    pkgs = sorted(packages, key=lambda p: p.start_date)
+    for lesson in sorted(lessons, key=lambda l: l.starts_at):
+        available = sum(
+            (p.hours for p in pkgs if p.start_date <= lesson.starts_at.date()),
+            Decimal(0),
+        ) - consumed
+        if available >= lesson.hours:
+            covered.add(lesson.id)
+            consumed += lesson.hours
+    return covered
