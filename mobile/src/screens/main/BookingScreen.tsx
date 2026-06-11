@@ -144,9 +144,12 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
 
   const handleBook = () => {
     if (!selectedTS || !selectedDate || !selectedSlot) return;
+    const popularNote = (selectedSlot.pending_count ?? 0) > 0
+      ? '\n\n⚠️ Это популярное время — на него уже есть другие заявки. Репетитор может подтвердить только одну, поэтому вашу заявку могут отклонить.'
+      : '';
     Alert.alert(
       'Отправить запрос?',
-      `${formatDateFull(selectedDate)}, ${selectedSlot.start_time} – ${selectedSlot.end_time}\n${selectedTS.subject_name} · ${slotCost} ₽\n\nЗапрос будет отправлен репетитору. После одобрения занятие появится в расписании.`,
+      `${formatDateFull(selectedDate)}, ${selectedSlot.start_time} – ${selectedSlot.end_time}\n${selectedTS.subject_name} · ${slotCost} ₽\n\nЗапрос будет отправлен репетитору. После одобрения занятие появится в расписании.${popularNote}`,
       [
         { text: 'Отмена', style: 'cancel' },
         {
@@ -332,6 +335,12 @@ export default function BookingScreen({ onClose, onSuccess }: Props) {
                       <Text style={[s.slotDuration, isSelected && s.slotDurationSelected]}>
                         {formatDuration(duration)}
                       </Text>
+                      {(slot.pending_count ?? 0) > 0 && (
+                        <View style={s.popularBadge}>
+                          <Ionicons name="flame-outline" size={11} color="#d97706" />
+                          <Text style={s.popularBadgeText}>Популярное · могут отклонить</Text>
+                        </View>
+                      )}
                     </View>
                     <View style={s.slotCardRight}>
                       <Text style={[s.slotCost, isSelected && s.slotCostSelected]}>{cost} ₽</Text>
@@ -513,6 +522,18 @@ const s = StyleSheet.create({
   slotDurationSelected: { color: '#2AABEE' },
   slotCost: { fontSize: 16, fontWeight: '600', color: '#333' },
   slotCostSelected: { color: '#2AABEE' },
+  popularBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(217,119,6,0.1)',
+    alignSelf: 'flex-start',
+  },
+  popularBadgeText: { fontSize: 11, fontWeight: '700', color: '#d97706' },
 
   emptySlots: { alignItems: 'center', paddingVertical: 24, gap: 6 },
   emptySlotsIconWrap: {

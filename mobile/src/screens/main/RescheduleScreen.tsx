@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { AvailableSlot, getAvailableWindows, requestReschedule } from '../../api/lessons';
 import { getTutors } from '../../api/student';
-import { lessonDate, lessonStartTime, lessonEndTime, buildLocalIso } from '../../utils/lessonTime';
 
 // ─── Вспомогательные функции ─────────────────────────────────────────────────
 
@@ -83,7 +82,7 @@ export default function RescheduleScreen({ lessonId, tutorStudentId, onClose, on
     (async () => {
       try {
         const [slots, tutorStudents] = await Promise.all([getAvailableWindows(), getTutors()]);
-        const futureSlots = slots.filter(s => lessonDate(s) >= todayStr);
+        const futureSlots = slots.filter(s => s.lesson_date >= todayStr);
 
         if (tutorStudentId !== null) {
           const ts = tutorStudents.find(t => t.id === tutorStudentId);
@@ -103,17 +102,17 @@ export default function RescheduleScreen({ lessonId, tutorStudentId, onClose, on
   type StartOption = { time: string; slotEnd: string };
 
   function getSlotsForDate(date: string): AvailableSlot[] {
-    return windows.filter(w => lessonDate(w) === date);
+    return windows.filter(w => w.lesson_date === date);
   }
 
   function getStartOptionsForSlots(slots: AvailableSlot[]): StartOption[] {
     return slots.flatMap(slot => {
-      const slotEnd = lessonEndTime(slot);
-      return getStartOptions(lessonStartTime(slot), slotEnd).map(t => ({ time: t, slotEnd }));
+      const slotEnd = slot.end_time;
+      return getStartOptions(slot.start_time, slotEnd).map(t => ({ time: t, slotEnd }));
     });
   }
 
-  const availableDates = [...new Set(windows.map(w => lessonDate(w)))].sort().filter(date => {
+  const availableDates = [...new Set(windows.map(w => w.lesson_date))].sort().filter(date => {
     return getStartOptionsForSlots(getSlotsForDate(date)).length > 0;
   });
 
@@ -157,8 +156,9 @@ export default function RescheduleScreen({ lessonId, tutorStudentId, onClose, on
             setSubmitting(true);
             try {
               await requestReschedule(lessonId, {
-                starts_at: buildLocalIso(selectedDate, selectedStart),
-                ends_at: buildLocalIso(selectedDate, endTime),
+                lesson_date: selectedDate,
+                start_time: selectedStart,
+                end_time: endTime,
               });
               Alert.alert('Запрос отправлен', 'Репетитор рассмотрит ваш запрос на перенос.', [
                 { text: 'OK', onPress: onSuccess },
@@ -232,7 +232,7 @@ export default function RescheduleScreen({ lessonId, tutorStudentId, onClose, on
               {dateSlots.map((slot, i) => (
                 <View key={i} style={s.windowBadge}>
                   <Text style={s.windowBadgeText}>
-                    🕐 {lessonStartTime(slot)} – {lessonEndTime(slot)}
+                    🕐 {fmt(slot.start_time)} – {fmt(slot.end_time)}
                   </Text>
                 </View>
               ))}

@@ -21,10 +21,13 @@ export interface Lesson {
 }
 
 export interface AvailableSlot {
-  starts_at: string;
-  ends_at: string;
+  lesson_date: string;
+  start_time: string;
+  end_time: string;
   tutor_id: number;
   tutor_name: string | null;
+  // Сколько заявок уже претендуют на это время. >0 — слот популярен, заявку могут отклонить.
+  pending_count?: number;
 }
 
 export async function getLessons(params?: {
@@ -42,8 +45,9 @@ export async function getAvailableWindows(): Promise<AvailableSlot[]> {
 
 export async function bookLesson(data: {
   tutor_student_id: number;
-  starts_at: string;
-  ends_at: string;
+  lesson_date: string;
+  start_time: string;
+  end_time: string;
 }): Promise<Lesson> {
   const res = await client.post('/student/lessons', data);
   return res.data;
@@ -51,7 +55,7 @@ export async function bookLesson(data: {
 
 export async function requestReschedule(
   lessonId: number,
-  data: { starts_at: string; ends_at: string }
+  data: { lesson_date: string; start_time: string; end_time: string }
 ): Promise<Lesson> {
   const res = await client.post(`/student/reschedule/${lessonId}`, data);
   return res.data;
