@@ -14,7 +14,6 @@ from app.models.tutor_level import StudentLevel
 from app.models.tutor_student import TutorStudent
 from app.models.tutor_student import TutorStudentStatus
 from app.schemas.tutor_student import TutorStudentCreate, TutorStudentOut, TutorStudentUpdate
-from app.services.subscription_service import SubscriptionStateError, validate_subscription_state
 from app.services.student_service import get_student_by_id
 
 router = APIRouter()
@@ -36,11 +35,6 @@ async def create_tutor_student(
     tutor: Tutor = Depends(get_current_tutor),
     db: AsyncSession = Depends(get_db),
 ):
-    try:
-        validate_subscription_state(data.subscription_hours, 0)
-    except SubscriptionStateError as error:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error.to_detail()) from error
-
     student = await get_student_by_id(db, data.student_id)
     if student is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ученик не найден")
@@ -58,7 +52,6 @@ async def create_tutor_student(
         hourly_rate=data.hourly_rate,
         rate_set_at=datetime.now(timezone.utc),
         started_at=data.started_at,
-        subscription_hours=data.subscription_hours,
     )
     db.add(ts)
     await db.commit()
@@ -95,24 +88,11 @@ async def update_tutor_student(
     if ts is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Не найдено")
 
-    next_subscription_hours = (
-        data.subscription_hours
-        if data.subscription_hours is not None
-        else ts.subscription_hours
-    )
-
-    try:
-        validate_subscription_state(next_subscription_hours, None)
-    except SubscriptionStateError as error:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error.to_detail()) from error
-
     if data.status is not None:
         ts.status = data.status
     if data.hourly_rate is not None:
         ts.hourly_rate = data.hourly_rate
         ts.rate_set_at = datetime.now(timezone.utc)
-    if data.subscription_hours is not None:
-        ts.subscription_hours = data.subscription_hours
     if data.level_ids is not None:
         await db.execute(delete(StudentLevel).where(StudentLevel.tutor_student_id == ts.id))
         for level_id in data.level_ids:

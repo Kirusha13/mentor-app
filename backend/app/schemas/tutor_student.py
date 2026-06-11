@@ -15,7 +15,7 @@ class TutorStudentOut(BaseModel):
     hourly_rate: Decimal
     rate_set_at: datetime
     started_at: date
-    subscription_hours: Decimal | None
+    purchased_hours: Decimal | None = None
     used_hours: Decimal | None
     tutor_id: int
     student_id: int
@@ -29,11 +29,11 @@ class TutorStudentOut(BaseModel):
     @computed_field
     @property
     def remaining_hours(self) -> Decimal | None:
-        """Остаток часов по абонементу, либо None если абонемент не задан."""
-        if self.subscription_hours is None:
+        """Остаток часов по абонементу, либо None если пакетов нет."""
+        if not self.purchased_hours:
             return None
         used = self.used_hours or Decimal(0)
-        return max(self.subscription_hours - used, Decimal(0))
+        return max(self.purchased_hours - used, Decimal(0))
 
     @computed_field
     @property
@@ -48,11 +48,9 @@ class TutorStudentCreate(BaseModel):
     subject_id: int
     hourly_rate: Decimal
     started_at: date
-    subscription_hours: Decimal | None = None
 
 
 class TutorStudentUpdate(BaseModel):
     status: TutorStudentStatus | None = None
     hourly_rate: Decimal | None = None
-    subscription_hours: Decimal | None = None
     level_ids: list[int] | None = None
