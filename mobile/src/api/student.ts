@@ -37,8 +37,10 @@ export interface TutorStudent {
   status: 'active' | 'paused' | 'completed' | 'pending';
   hourly_rate: number;
   started_at: string;
-  subscription_hours: number | null;
+  purchased_hours: number | null;
   used_hours: number | null;
+  remaining_hours: number | null;
+  subscription_low: boolean;
   tutor_name: string | null;
   subject_name: string | null;
   level_ids: number[];
