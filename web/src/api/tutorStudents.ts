@@ -7,8 +7,10 @@ export interface TutorStudent {
   status: TutorStudentStatus;
   hourly_rate: number;
   started_at: string;
-  subscription_hours?: number | null;
   used_hours?: number | null;
+  purchased_hours?: number | null;
+  remaining_hours?: number | null;
+  subscription_low?: boolean;
   tutor_id: number;
   student_id: number;
   subject_id: number;
@@ -22,14 +24,11 @@ export interface CreateTutorStudentPayload {
   subject_id: number;
   hourly_rate: number;
   started_at: string;
-  subscription_hours?: number | null;
 }
 
 export interface UpdateTutorStudentPayload {
   hourly_rate?: number;
   status?: TutorStudentStatus;
-  subscription_hours?: number | null;
-  used_hours?: number | null;
   level_ids?: number[];
 }
 

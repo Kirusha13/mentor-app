@@ -30,6 +30,7 @@ export interface Lesson {
   created_at: string;
   tutor_name?: string | null;
   subject_name?: string | null;
+  subscription_covered?: boolean;
 }
 
 export interface CreateLessonPayload {
