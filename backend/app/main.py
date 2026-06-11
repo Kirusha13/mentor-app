@@ -31,7 +31,8 @@ from app.api.v1.router import api_router
 from app.models.tutor import Tutor
 from app.models.lesson import ConductStatus, Lesson
 from app.models.student import Student
-from app.services.subscription_service import apply_conduct_status_transition
+from app.models.subscription import Subscription
+from app.services.subscription_service import apply_conduct_status_transition, recompute_coverage
 from app.services.telegram_bot import start_bot, stop_bot
 from app.services.telegram_service import notify_student_contacts, send_to_user
 
@@ -77,6 +78,15 @@ async def auto_conduct_lessons():
         )
         for lesson in pending_booking.scalars().all():
             lesson.conduct_status = ConductStatus.booking_rejected
+
+        # Пересчёт покрытия абонементом для всех связок с пакетами.
+        # Идемпотентно; на старте сервера выполняет первичный бэкфилл
+        # lessons.subscription_covered, а далее обновляет только что проведённые занятия.
+        sub_link_ids = (
+            await db.execute(select(Subscription.tutor_student_id).distinct())
+        ).scalars().all()
+        for link_id in sub_link_ids:
+            await recompute_coverage(db, link_id)
 
         await db.commit()
 

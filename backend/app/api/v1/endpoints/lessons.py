@@ -16,6 +16,7 @@ from app.services.scheduling import lock_tutor_schedule
 from app.services.subscription_service import (
     apply_conduct_status_transition,
     get_tutor_student_for_lesson,
+    recompute_coverage,
 )
 from app.services.telegram_service import notify_student_contacts, send_to_user
 
@@ -274,6 +275,9 @@ async def update_lesson(
     if "starts_at" in payload or "ends_at" in payload:
         lesson.reminder_sent = False
 
+    if "conduct_status" in payload and lesson.tutor_student_id is not None:
+        await recompute_coverage(db, lesson.tutor_student_id)
+
     await db.commit()
     await db.refresh(lesson)
 
@@ -433,6 +437,9 @@ async def approve_reschedule(
         if original:
             original.conduct_status = ConductStatus.rescheduled
 
+    if new_lesson.tutor_student_id is not None:
+        await recompute_coverage(db, new_lesson.tutor_student_id)
+
     await db.commit()
     await db.refresh(new_lesson)
     student = await _get_student_for_lesson(db, new_lesson)
@@ -484,6 +491,8 @@ async def cancel_lesson(
 
     tutor_student = await get_tutor_student_for_lesson(db, lesson)
     apply_conduct_status_transition(lesson, tutor_student, ConductStatus.cancelled)
+
+    await recompute_coverage(db, lesson.tutor_student_id)
 
     await db.commit()
     student = await _get_student_for_lesson(db, lesson)
