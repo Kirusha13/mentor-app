@@ -136,8 +136,9 @@ async def delete_tutor_student(
     if ts is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связь не найдена")
 
-    # Связь с историей занятий/заданий не удаляем физически (потеряли бы историю),
-    # а архивируем: она исчезает из активной работы, но данные сохраняются.
+    # Связь с историей занятий/заданий не удаляем физически (потеряли бы историю).
+    # Чтобы убрать ученика из активных, репетитор меняет статус связи на
+    # paused/completed (PATCH) — такие связи скрыты из списка по умолчанию.
     lesson_exists = await db.execute(select(Lesson.id).where(Lesson.tutor_student_id == ts_id).limit(1))
     assignment_exists = await db.execute(
         select(Assignment.id).where(Assignment.tutor_student_id == ts_id).limit(1)
@@ -148,9 +149,12 @@ async def delete_tutor_student(
     )
 
     if has_history:
-        ts.status = TutorStudentStatus.archived
-    else:
-        await db.delete(ts)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="У связи есть история занятий или заданий. Чтобы убрать ученика из активных, смените статус связи на «на паузе» или «завершён».",
+        )
+
+    await db.delete(ts)
     await db.commit()
 
 

@@ -16,7 +16,9 @@ class TutorStudentStatus(str, enum.Enum):
     paused = "paused"
     completed = "completed"
     pending = "pending"
-    archived = "archived"
+    # Примечание: значение 'archived' есть в enum БД (миграция от 2026-06-10),
+    # но в коде намеренно не используется — «убрать ученика» решается сменой
+    # статуса на paused/completed + дефолтным показом только активных.
 
 
 class TutorStudent(TimestampMixin, Base):
