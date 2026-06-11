@@ -338,12 +338,14 @@ async def approve_booking(
     relation = await get_tutor_student_for_lesson(db, lesson)
     tutor_id = relation.tutor_id if relation is not None else tutor.id
     await lock_tutor_schedule(db, tutor_id)
+    # Слот блокируют только подтверждённое занятие или ожидающий перенос.
+    # Конкурирующие заявки (booking_pending) не мешают подтверждению — их отклоняем ниже.
     conflict = await db.execute(
         select(Lesson)
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .where(
             TutorStudent.tutor_id == tutor_id,
-            Lesson.conduct_status.in_(ACTIVE_BOOKING_STATUSES),
+            Lesson.conduct_status.in_((ConductStatus.scheduled, ConductStatus.reschedule_pending)),
             Lesson.starts_at < lesson.ends_at,
             Lesson.ends_at > lesson.starts_at,
             Lesson.id != lesson.id,
@@ -353,13 +355,44 @@ async def approve_booking(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Этот слот уже занят другим занятием")
 
     lesson.conduct_status = ConductStatus.scheduled
+
+    # Авто-отклоняем остальные заявки на пересекающееся время — слот занят.
+    competitors_result = await db.execute(
+        select(Lesson)
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(
+            TutorStudent.tutor_id == tutor_id,
+            Lesson.conduct_status == ConductStatus.booking_pending,
+            Lesson.starts_at < lesson.ends_at,
+            Lesson.ends_at > lesson.starts_at,
+            Lesson.id != lesson.id,
+        )
+    )
+    competitors = list(competitors_result.scalars().all())
+    for competitor in competitors:
+        competitor.conduct_status = ConductStatus.booking_rejected
+
     await db.commit()
     await db.refresh(lesson)
+
     student = await _get_student_for_lesson(db, lesson)
     await send_to_user(
         student.telegram_id if student else None,
         f"Репетитор подтвердил запись на {_format_lesson_for_user(lesson.starts_at, student.timezone if student else None)}",
     )
+
+    # Уведомляем отклонённых конкурентов нейтрально — без упоминания, что слот достался другому ученику.
+    for competitor in competitors:
+        rejected_student = await _get_student_for_lesson(db, competitor)
+        if rejected_student is None:
+            continue
+        when = _format_lesson_for_user(competitor.starts_at, rejected_student.timezone)
+        await send_to_user(
+            rejected_student.telegram_id,
+            f"Запись на {when} не подтверждена — это время уже занято. "
+            "Вы можете выбрать другое свободное время.",
+        )
+
     return lesson
 
 

@@ -87,6 +87,9 @@ class AvailableSlot(BaseModel):
     end_time: time
     tutor_id: int
     tutor_name: str | None = None
+    # Сколько заявок на запись уже претендуют на это время (популярность слота).
+    # 0 — слот свободен и без конкуренции; >0 — заявку могут отклонить.
+    pending_count: int = 0
 
 
 class RescheduleRequest(BaseModel):

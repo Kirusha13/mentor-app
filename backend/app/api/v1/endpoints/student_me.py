@@ -446,18 +446,36 @@ async def book_lesson(
     if window_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Выбранный слот не существует или уже недоступен")
 
+    # Слот занят только подтверждённым занятием или ожидающим переносом.
+    # Несколько заявок (booking_pending) на свободный слот допускаются:
+    # репетитор подтвердит одного, остальные авто-отклонятся (см. approve_booking).
     conflict_result = await db.execute(
         select(Lesson)
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .where(
             TutorStudent.tutor_id == ts.tutor_id,
-            Lesson.conduct_status.in_(("scheduled", "booking_pending", "reschedule_pending")),
+            Lesson.conduct_status.in_(("scheduled", "reschedule_pending")),
             Lesson.starts_at < ends_at,
             Lesson.ends_at > starts_at,
         )
     )
     if conflict_result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Этот слот уже занят")
+
+    # Запрещаем тому же ученику дублировать заявку на пересекающееся время.
+    duplicate_result = await db.execute(
+        select(Lesson)
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(
+            TutorStudent.tutor_id == ts.tutor_id,
+            TutorStudent.student_id == student.id,
+            Lesson.conduct_status == "booking_pending",
+            Lesson.starts_at < ends_at,
+            Lesson.ends_at > starts_at,
+        )
+    )
+    if duplicate_result.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Вы уже отправили заявку на это время")
 
     duration_hours = (ends_at - starts_at).total_seconds() / 3600
     cost = float(ts.hourly_rate) * duration_hours
@@ -673,27 +691,45 @@ async def _get_available_windows(student, db):
     if not windows:
         return []
 
-    scheduled_result = await db.execute(
+    # Слот занимают только подтверждённые занятия и ожидающие переноса. Заявки
+    # на запись (booking_pending) НЕ скрывают слот: на свободное окно могут
+    # претендовать несколько учеников (Пункт 1) — репетитор выберет одного.
+    occupied_result = await db.execute(
         select(Lesson)
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .where(
             TutorStudent.tutor_id.in_(tutor_ids),
-            Lesson.conduct_status.in_(("scheduled", "booking_pending", "reschedule_pending")),
+            Lesson.conduct_status.in_(("scheduled", "reschedule_pending")),
         )
     )
-    scheduled = list(scheduled_result.scalars().all())
+    occupied = list(occupied_result.scalars().all())
+
+    # Заявки на запись — для подсчёта «популярности» слота (сколько претендентов).
+    pending_result = await db.execute(
+        select(Lesson)
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(
+            TutorStudent.tutor_id.in_(tutor_ids),
+            Lesson.conduct_status == "booking_pending",
+        )
+    )
+    pending = list(pending_result.scalars().all())
 
     def to_slot(start_utc: datetime, end_utc: datetime, tutor_id: int) -> AvailableSlot:
         tutor_name, tz_str = tutors_data.get(tutor_id, (None, None))
         tz = ZoneInfo(tz_str) if tz_str else ZoneInfo("Europe/Moscow")
         local_start = start_utc.astimezone(tz)
         local_end = end_utc.astimezone(tz)
+        pending_count = sum(
+            1 for l in pending if l.starts_at < end_utc and l.ends_at > start_utc
+        )
         return AvailableSlot(
             lesson_date=local_start.date(),
             start_time=local_start.time().replace(tzinfo=None),
             end_time=local_end.time().replace(tzinfo=None),
             tutor_id=tutor_id,
             tutor_name=tutor_name,
+            pending_count=pending_count,
         )
 
     slots: list[AvailableSlot] = []
@@ -701,7 +737,7 @@ async def _get_available_windows(student, db):
         overlapping = sorted(
             [
                 (l.starts_at, l.ends_at)
-                for l in scheduled
+                for l in occupied
                 if l.starts_at < window.ends_at and l.ends_at > window.starts_at
             ],
             key=lambda x: x[0],

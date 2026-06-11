@@ -94,7 +94,18 @@ export default function RequestsPage() {
         const relation = tutorStudents.find((item) => item.id === lesson.tutor_student_id);
         const student = students.find((item) => item.id === relation?.student_id);
         const subject = subjects.find((item) => item.id === relation?.subject_id);
-        return { lesson, relation, student, subject };
+        // Сколько ещё заявок на запись претендуют на это же пересекающееся время.
+        const competing =
+          lesson.conduct_status === 'booking_pending'
+            ? requests.filter(
+                (other) =>
+                  other.id !== lesson.id &&
+                  other.conduct_status === 'booking_pending' &&
+                  new Date(other.starts_at) < new Date(lesson.ends_at) &&
+                  new Date(other.ends_at) > new Date(lesson.starts_at)
+              ).length
+            : 0;
+        return { lesson, relation, student, subject, competing };
       }),
     [requests, tutorStudents, students, subjects]
   );
@@ -114,7 +125,23 @@ export default function RequestsPage() {
       else if (action === 'approve-payment') updated = await confirmPayment(lesson.id, { confirm: true });
       else updated = await confirmPayment(lesson.id, { confirm: false });
 
-      setLessons((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setLessons((prev) =>
+        prev.map((item) => {
+          if (item.id === updated.id) return updated;
+          // Подтверждение записи авто-отклоняет конкурирующие заявки на
+          // пересекающийся слот (см. approve_booking на бэкенде) — синхронизируем,
+          // чтобы «призрачные» заявки не зависали в списке до перезагрузки.
+          if (
+            action === 'approve-booking' &&
+            item.conduct_status === 'booking_pending' &&
+            new Date(item.starts_at) < new Date(updated.ends_at) &&
+            new Date(item.ends_at) > new Date(updated.starts_at)
+          ) {
+            return { ...item, conduct_status: 'booking_rejected' as const };
+          }
+          return item;
+        })
+      );
     } catch (error) {
       console.error('Ошибка обработки запроса:', error);
       alert(getApiErrorMessage(error, 'Не удалось обработать запрос'));
@@ -207,7 +234,7 @@ export default function RequestsPage() {
           <p style={{ color: '#687486', marginBottom: 0 }}>Активных запросов сейчас нет.</p>
         ) : (
           <div style={{ display: 'grid', gap: 14 }}>
-            {withMeta.map(({ lesson, student, subject }) => (
+            {withMeta.map(({ lesson, student, subject, competing }) => (
               <div
                 key={lesson.id}
                 style={{
@@ -230,6 +257,11 @@ export default function RequestsPage() {
                     <div style={{ color: '#5d6778' }}>
                       {subject?.name ?? 'Без предмета'} • {lessonDateRu(lesson)} • {toTime(lessonStartTime(lesson))} - {toTime(lessonEndTime(lesson))}
                     </div>
+                    {competing > 0 && (
+                      <div style={{ marginTop: 8, display: 'inline-flex', padding: '5px 10px', borderRadius: 999, background: 'rgba(217,119,6,0.1)', color: '#d97706', fontSize: 12, fontWeight: 700 }}>
+                        На это время ещё {competing} {competing === 1 ? 'заявка' : competing < 5 ? 'заявки' : 'заявок'} — подтвердив одну, остальные отклонятся
+                      </div>
+                    )}
                   </div>
                   <div style={{ fontWeight: 700, color: '#1f2a3b' }}>{lesson.cost ?? '—'} ₽</div>
                 </div>

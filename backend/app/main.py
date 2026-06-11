@@ -129,11 +129,69 @@ async def send_reminders():
 
 
 
+async def expire_pending_bookings():
+    """Авто-отклонение заявок на запись, не обработанных за BOOKING_REQUEST_TTL_HOURS.
+
+    Прошедшие заявки (starts_at <= now) закрывает auto_conduct_lessons — здесь только
+    будущие, по которым истёк срок ожидания подтверждения.
+    """
+    now = datetime.now(timezone.utc)
+    deadline = now - timedelta(hours=settings.BOOKING_REQUEST_TTL_HOURS)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Lesson)
+            .options(selectinload(Lesson.tutor_student))
+            .where(
+                Lesson.conduct_status == ConductStatus.booking_pending,
+                Lesson.created_at <= deadline,
+                Lesson.starts_at > now,
+            )
+        )
+        # Собираем примитивы до commit: после фиксации атрибуты ORM истекают.
+        payloads = []
+        for lesson in result.scalars().all():
+            lesson.conduct_status = ConductStatus.booking_rejected
+            ts = lesson.tutor_student
+            payloads.append(
+                {
+                    "student_id": ts.student_id if ts else None,
+                    "tutor_id": ts.tutor_id if ts else None,
+                    "starts_at": lesson.starts_at,
+                }
+            )
+        await db.commit()
+
+        for p in payloads:
+            student = await db.get(Student, p["student_id"]) if p["student_id"] else None
+            tutor = await db.get(Tutor, p["tutor_id"]) if p["tutor_id"] else None
+
+            if student and student.telegram_id:
+                tz = ZoneInfo(student.timezone) if student.timezone else APP_TIMEZONE
+                when = p["starts_at"].astimezone(tz).strftime("%d.%m.%Y в %H:%M")
+                await send_to_user(
+                    student.telegram_id,
+                    f"Срок ожидания подтверждения заявки на {when} истёк. "
+                    "Если время ещё свободно, вы можете оформить запись заново или выбрать другое.",
+                )
+
+            if tutor and tutor.telegram_id:
+                tz = ZoneInfo(tutor.timezone) if tutor.timezone else APP_TIMEZONE
+                when = p["starts_at"].astimezone(tz).strftime("%d.%m.%Y в %H:%M")
+                student_name = student.full_name if student else "ученика"
+                await send_to_user(
+                    tutor.telegram_id,
+                    f"Заявка ученика {student_name} на {when} отменена автоматически — "
+                    "не обработана за 24 часа.",
+                )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await auto_conduct_lessons()
+    await expire_pending_bookings()
     scheduler = AsyncIOScheduler(timezone=APP_TIMEZONE)
     scheduler.add_job(auto_conduct_lessons, "cron", hour=0, minute=5)
+    scheduler.add_job(expire_pending_bookings, "cron", minute=10)
     scheduler.add_job(send_reminders, "cron", hour=18, minute=0)
     scheduler.start()
     await start_bot()

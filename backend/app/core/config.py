@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     # ссылке только пока она не протухла; репетитор обновляет через refresh-token.
     INVITATION_TOKEN_TTL_DAYS: int = 30
 
+    # Срок ожидания подтверждения заявки на запись (часы). Если репетитор не
+    # обработал заявку (booking_pending) за это время — она авто-отклоняется.
+    BOOKING_REQUEST_TTL_HOURS: int = 24
+
     # Telegram bot
     TELEGRAM_BOT_TOKEN: str
     TELEGRAM_BOT_USERNAME: str  # без @, например: MentorAuthBot
