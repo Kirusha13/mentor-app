@@ -2,9 +2,11 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.lesson import ConductStatus, Lesson
+from app.models.subscription import Subscription
 from app.models.tutor_student import TutorStudent
 
 
@@ -123,3 +125,40 @@ def compute_coverage(
             covered.add(lesson.id)
             consumed += lesson.hours
     return covered
+
+
+async def recompute_coverage(db: AsyncSession, tutor_student_id: int) -> None:
+    """Пересчитать lessons.subscription_covered для связки и записать в БД.
+
+    Коммит делает вызывающий эндпоинт.
+    """
+    lessons_rows = (
+        await db.execute(
+            select(Lesson).where(
+                Lesson.tutor_student_id == tutor_student_id,
+                Lesson.conduct_status == ConductStatus.conducted,
+            )
+        )
+    ).scalars().all()
+    pkg_rows = (
+        await db.execute(
+            select(Subscription).where(
+                Subscription.tutor_student_id == tutor_student_id
+            )
+        )
+    ).scalars().all()
+
+    cov_lessons = [
+        CoverageLesson(id=l.id, starts_at=l.starts_at, ends_at=l.ends_at)
+        for l in lessons_rows
+    ]
+    cov_pkgs = [
+        CoveragePackage(hours=p.hours, start_date=p.start_date) for p in pkg_rows
+    ]
+    covered_ids = compute_coverage(cov_lessons, cov_pkgs)
+
+    for l in lessons_rows:
+        new_val = l.id in covered_ids
+        if l.subscription_covered != new_val:
+            l.subscription_covered = new_val
+    # commit делает вызывающий эндпоинт
