@@ -253,7 +253,6 @@ export default function FinancePage() {
   const [chartRange, setChartRange] = useState<ChartRange>('week');
   const [selectedTutorStudentId, setSelectedTutorStudentId] = useState('');
   const [savingAbonement, setSavingAbonement] = useState(false);
-  const [editRate, setEditRate] = useState('');
   const [processingPaymentId, setProcessingPaymentId] = useState<number | null>(null);
   const [dailyTooltip, setDailyTooltip] = useState<ChartTooltip | null>(null);
   const [subjectTooltip, setSubjectTooltip] = useState<ChartTooltip | null>(null);
@@ -321,6 +320,7 @@ export default function FinancePage() {
   }, [tutorStudents]);
 
   const refreshPackagesForRelation = async (relationId: number) => {
+    setSelectedPackagesLoading(true);
     try {
       const pkgs = await getSubscriptionsByLink(relationId);
       setPackagesMap((prev) => {
@@ -330,6 +330,8 @@ export default function FinancePage() {
       });
     } catch (error) {
       console.error('Ошибка обновления пакетов:', error);
+    } finally {
+      setSelectedPackagesLoading(false);
     }
   };
 
@@ -538,11 +540,6 @@ export default function FinancePage() {
     [relationOptions]
   );
 
-  const availableForCreation = useMemo(
-    () => relationOptions.filter((option) => option.total === 0),
-    [relationOptions]
-  );
-
   const selectedRelation = useMemo(
     () => relationOptions.find((option) => String(option.id) === selectedTutorStudentId) ?? null,
     [relationOptions, selectedTutorStudentId]
@@ -551,11 +548,9 @@ export default function FinancePage() {
   // When selected relation changes, reset package form and edit state
   useEffect(() => {
     if (!selectedRelation) {
-      setEditRate('');
       setEditingPackageId(null);
       return;
     }
-    setEditRate(selectedRelation.rate > 0 ? String(selectedRelation.rate) : '');
     setEditingPackageId(null);
     setPkgFormHours('');
     setPkgFormPrice('');
@@ -778,7 +773,7 @@ export default function FinancePage() {
       const weeksInMonth = Math.ceil(monthEnd.getDate() / 7);
 
       rows.push({
-        key: `${year}-${String(month + 1).padStart(2, '00')}`,
+        key: `${year}-${String(month + 1).padStart(2, '0')}`,
         label: new Intl.DateTimeFormat('ru-RU', { month: 'short' }).format(monthStart),
         fullLabel: new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(monthStart),
         total,
