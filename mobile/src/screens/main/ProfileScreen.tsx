@@ -408,7 +408,7 @@ export default function ProfileScreen() {
                   <Text style={styles.tutorName}>{tutor.tutor_name ?? '—'}</Text>
                 </View>
                 {subjects.map((ts) => {
-                  const totalH = ts.subscription_hours != null ? parseFloat(String(ts.subscription_hours)) : null;
+                  const totalH = ts.purchased_hours != null ? parseFloat(String(ts.purchased_hours)) : null;
                   const usedH = parseFloat(String(ts.used_hours ?? 0));
                   const remaining = totalH != null ? totalH - usedH : null;
                   return (
