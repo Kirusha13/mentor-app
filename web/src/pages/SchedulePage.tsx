@@ -1751,7 +1751,7 @@ export default function SchedulePage() {
                             {student?.full_name ?? 'Ученик'}
                           </div>
                           <div style={{ color: '#687486', fontSize: 13 }}>
-                            {subject?.name ?? 'Без предмета'} • {lesson.cost ?? '—'} ₽ • {paymentLabel(lesson.payment_status, Boolean(relation?.subscription_hours))}
+                            {subject?.name ?? 'Без предмета'} • {lesson.cost ?? '—'} ₽ • {paymentLabel(lesson.payment_status, Boolean(lesson.subscription_covered))}
                           </div>
                         </>
                       )}
@@ -2038,7 +2038,7 @@ export default function SchedulePage() {
                         ['Занятие', `${toLessonDateStr(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`],
                         ['Тема занятия', topic?.title ?? 'Без темы'],
                         ['Стоимость', `${selectedLesson.cost ?? '—'} ₽`],
-                        ['Оплата', paymentLabel(selectedLesson.payment_status, Boolean(tutorStudents.find((i) => i.id === selectedLesson.tutor_student_id)?.subscription_hours))],
+                        ['Оплата', paymentLabel(selectedLesson.payment_status, Boolean(selectedLesson.subscription_covered))],
                       ]
                   ).map(([label, value]) => (
                     <div key={label} style={{ padding: 14, borderRadius: 16, background: 'rgba(23,32,51,0.04)', border: '1px solid rgba(24,33,47,0.06)' }}>
