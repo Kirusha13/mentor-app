@@ -9,6 +9,7 @@ from app.models.theory_topic import TheoryTopic
 from app.models.material import Material
 from app.models.lesson import Lesson
 from app.models.assignment import Assignment
+from app.models.subscription import Subscription
 
 __all__ = [
     "Tutor",
@@ -24,4 +25,5 @@ __all__ = [
     "Material",
     "Lesson",
     "Assignment",
+    "Subscription",
 ]

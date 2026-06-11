@@ -51,6 +51,7 @@ class Lesson(TimestampMixin, Base):
     grade_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     student_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     reminder_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    subscription_covered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     tutor_student_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("tutor_student.id", ondelete="RESTRICT"), nullable=True
     )

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import TimestampMixin
 from app.models.lesson import ConductStatus, Lesson
+from app.models.subscription import Subscription
 
 
 class TutorStudentStatus(str, enum.Enum):
@@ -33,7 +34,6 @@ class TutorStudent(TimestampMixin, Base):
     hourly_rate: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     rate_set_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     started_at: Mapped[date] = mapped_column(Date, nullable=False)
-    subscription_hours: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     tutor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tutors.id", ondelete="RESTRICT"), nullable=False)
     student_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("students.id", ondelete="RESTRICT"), nullable=False)
     subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="RESTRICT"), nullable=False)
@@ -48,15 +48,27 @@ class TutorStudent(TimestampMixin, Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    subscriptions: Mapped[list["Subscription"]] = relationship(
+        back_populates="tutor_student",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     @property
     def level_ids(self) -> list[int]:
         return [sl.level_id for sl in self.student_levels]
 
 
-# Израсходованные часы абонемента — производная величина, а не хранимое поле:
-# сумма длительностей проведённых занятий этой связки. Так нет рассинхрона
-# счётчика и не нужна ручная логика отката при отмене/переносе.
+# Куплено часов = сумма пакетов связки.
+TutorStudent.purchased_hours = column_property(
+    select(cast(func.coalesce(func.sum(Subscription.hours), 0), Numeric(10, 2)))
+    .where(Subscription.tutor_student_id == TutorStudent.id)
+    .correlate_except(Subscription)
+    .scalar_subquery(),
+    deferred=False,
+)
+
+# Израсходовано = сумма длительностей ПОКРЫТЫХ conducted-занятий.
 TutorStudent.used_hours = column_property(
     select(
         cast(
@@ -70,6 +82,7 @@ TutorStudent.used_hours = column_property(
     .where(
         Lesson.tutor_student_id == TutorStudent.id,
         Lesson.conduct_status == ConductStatus.conducted,
+        Lesson.subscription_covered.is_(True),
     )
     .correlate_except(Lesson)
     .scalar_subquery(),
