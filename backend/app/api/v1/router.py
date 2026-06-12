@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     contacts,
     lessons,
     materials,
+    series,
     student_auth,
     student_me,
     students,
@@ -27,6 +28,7 @@ api_router.include_router(students.router, prefix="/students", tags=["students"]
 api_router.include_router(subjects.router, prefix="/subjects", tags=["subjects"])
 api_router.include_router(tutor_students.router, prefix="/tutor-students", tags=["tutor-students"])
 api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
+api_router.include_router(series.router, prefix="/series", tags=["series"])
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
 api_router.include_router(lessons.router, prefix="/lessons", tags=["lessons"])
 api_router.include_router(assignments.router, prefix="/assignments", tags=["assignments"])

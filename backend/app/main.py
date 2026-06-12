@@ -32,6 +32,7 @@ from app.models.tutor import Tutor
 from app.models.lesson import ConductStatus, Lesson
 from app.models.student import Student
 from app.models.subscription import Subscription
+from app.services.series_service import materialize_series
 from app.services.subscription_service import apply_conduct_status_transition, recompute_coverage
 from app.services.telegram_bot import start_bot, stop_bot
 from app.services.telegram_service import notify_student_contacts, send_to_user
@@ -139,6 +140,14 @@ async def send_reminders():
 
 
 
+async def materialize_all_series():
+    async with AsyncSessionLocal() as db:
+        created = await materialize_series(db)
+        await db.commit()
+        if created:
+            logger.info("Серии: создано %d занятий", created)
+
+
 async def expire_pending_bookings():
     """Авто-отклонение заявок на запись, не обработанных за BOOKING_REQUEST_TTL_HOURS.
 
@@ -199,9 +208,11 @@ async def expire_pending_bookings():
 async def lifespan(app: FastAPI):
     await auto_conduct_lessons()
     await expire_pending_bookings()
+    await materialize_all_series()
     scheduler = AsyncIOScheduler(timezone=APP_TIMEZONE)
     scheduler.add_job(auto_conduct_lessons, "cron", hour=0, minute=5)
     scheduler.add_job(expire_pending_bookings, "cron", minute=10)
+    scheduler.add_job(materialize_all_series, "cron", hour=0, minute=15)
     scheduler.add_job(send_reminders, "cron", hour=18, minute=0)
     scheduler.start()
     await start_bot()

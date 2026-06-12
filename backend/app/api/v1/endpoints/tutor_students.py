@@ -14,6 +14,7 @@ from app.models.tutor_level import StudentLevel
 from app.models.tutor_student import TutorStudent
 from app.models.tutor_student import TutorStudentStatus
 from app.schemas.tutor_student import TutorStudentCreate, TutorStudentOut, TutorStudentUpdate
+from app.services.series_service import pause_series_for_link
 from app.services.student_service import get_student_by_id
 
 router = APIRouter()
@@ -90,6 +91,8 @@ async def update_tutor_student(
 
     if data.status is not None:
         ts.status = data.status
+        if data.status in (TutorStudentStatus.paused, TutorStudentStatus.completed):
+            await pause_series_for_link(db, ts.id)
     if data.hourly_rate is not None:
         ts.hourly_rate = data.hourly_rate
         ts.rate_set_at = datetime.now(timezone.utc)

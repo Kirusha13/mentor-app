@@ -52,3 +52,13 @@ def test_empty_when_horizon_misses_weekday():
         horizon_from=date(2026, 6, 17), horizon_to=date(2026, 6, 22), tz=TZ,  # ср–пн, вторника нет
     )
     assert occ == []
+
+
+def test_starts_on_equals_horizon_on_weekday():
+    # 2026-06-16 — вторник; horizon_from == starts_on == вторник
+    occ = compute_series_occurrences(
+        weekday=1, start_time=time(17, 0), duration_minutes=60,
+        starts_on=date(2026, 6, 16), ends_on=None,
+        horizon_from=date(2026, 6, 16), horizon_to=date(2026, 6, 16), tz=TZ,
+    )
+    assert [o[0] for o in occ] == [date(2026, 6, 16)]

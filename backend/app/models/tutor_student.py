@@ -53,6 +53,7 @@ class TutorStudent(TimestampMixin, Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    lesson_series: Mapped[list["LessonSeries"]] = relationship(back_populates="tutor_student")
 
     @property
     def level_ids(self) -> list[int]:

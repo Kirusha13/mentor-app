@@ -27,4 +27,4 @@ class LessonSeries(TimestampMixin, Base):
     ends_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    tutor_student: Mapped[TutorStudent] = relationship()
+    tutor_student: Mapped["TutorStudent"] = relationship(back_populates="lesson_series")
