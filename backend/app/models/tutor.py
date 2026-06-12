@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, String, DateTime, Text
+from sqlalchemy import BigInteger, Date, DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -20,6 +20,7 @@ class Tutor(TimestampMixin, Base):
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Europe/Moscow")
     payment_bank_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    week_summary_sent_for: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     subjects: Mapped[list["Subject"]] = relationship(
         back_populates="tutor",

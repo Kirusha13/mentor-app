@@ -10,6 +10,8 @@ from app.models.material import Material
 from app.models.lesson import Lesson
 from app.models.assignment import Assignment
 from app.models.subscription import Subscription
+from app.models.availability import AvailabilityRule, AvailabilityOverride
+from app.models.lesson_series import LessonSeries
 
 __all__ = [
     "Tutor",
@@ -26,4 +28,7 @@ __all__ = [
     "Lesson",
     "Assignment",
     "Subscription",
+    "AvailabilityRule",
+    "AvailabilityOverride",
+    "LessonSeries",
 ]

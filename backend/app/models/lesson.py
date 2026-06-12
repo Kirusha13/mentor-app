@@ -52,6 +52,11 @@ class Lesson(TimestampMixin, Base):
     student_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     reminder_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     subscription_covered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    attendance_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reminder72_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    series_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("lesson_series.id", ondelete="SET NULL"), nullable=True
+    )
     tutor_student_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("tutor_student.id", ondelete="RESTRICT"), nullable=True
     )
