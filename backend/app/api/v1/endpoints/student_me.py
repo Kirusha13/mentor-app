@@ -23,8 +23,9 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.telegram_auth import verify_telegram_data
 from app.core.vk_auth import verify_vk_mobile_sign
+from app.services.availability_service import load_windows
 from app.models.assignment import Assignment
-from app.models.lesson import Lesson
+from app.models.lesson import ConductStatus, Lesson
 from app.models.material import Material
 from app.models.student import Student
 from app.models.subject import Subject
@@ -436,16 +437,15 @@ async def book_lesson(
 
     await lock_tutor_schedule(db, ts.tutor_id)
 
-    window_result = await db.execute(
-        select(Lesson).where(
-            Lesson.tutor_id == ts.tutor_id,
-            Lesson.tutor_student_id.is_(None),
-            Lesson.starts_at <= starts_at,
-            Lesson.ends_at >= ends_at,
-        )
+    day_windows = await load_windows(
+        db, ts.tutor_id, data.lesson_date, data.lesson_date, tz, datetime.now(timezone.utc)
     )
-    if window_result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Выбранный слот не существует или уже недоступен")
+    fits = any(
+        w.start_time <= data.start_time and data.end_time <= w.end_time for w in day_windows
+    )
+    if not fits:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Выбранный слот не существует или уже недоступен")
 
     # Слот занят только подтверждённым занятием или ожидающим переносом.
     # Несколько заявок (booking_pending) на свободный слот допускаются:
@@ -681,81 +681,39 @@ async def _get_available_windows(student, db):
         return []
 
     tutors_result = await db.execute(select(Tutor).where(Tutor.id.in_(tutor_ids)))
-    tutors_data = {t.id: (t.full_name, t.timezone) for t in tutors_result.scalars().all()}
+    tutors_map = {t.id: t for t in tutors_result.scalars().all()}
 
-    windows_result = await db.execute(
-        select(Lesson)
-        .where(Lesson.tutor_student_id.is_(None), Lesson.tutor_id.in_(tutor_ids))
-        .order_by(Lesson.starts_at)
-    )
-    windows = list(windows_result.scalars().all())
-    if not windows:
-        return []
-
-    # Слот занимают только подтверждённые занятия и ожидающие переноса. Заявки
-    # на запись (booking_pending) НЕ скрывают слот: на свободное окно могут
-    # претендовать несколько учеников (Пункт 1) — репетитор выберет одного.
-    occupied_result = await db.execute(
-        select(Lesson)
-        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
-        .where(
-            TutorStudent.tutor_id.in_(tutor_ids),
-            Lesson.conduct_status.in_(("scheduled", "reschedule_pending")),
-        )
-    )
-    occupied = list(occupied_result.scalars().all())
-
-    # Заявки на запись — для подсчёта «популярности» слота (сколько претендентов).
     pending_result = await db.execute(
         select(Lesson)
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .where(
             TutorStudent.tutor_id.in_(tutor_ids),
-            Lesson.conduct_status == "booking_pending",
+            Lesson.conduct_status == ConductStatus.booking_pending,
         )
     )
     pending = list(pending_result.scalars().all())
 
-    def to_slot(start_utc: datetime, end_utc: datetime, tutor_id: int) -> AvailableSlot:
-        tutor_name, tz_str = tutors_data.get(tutor_id, (None, None))
-        tz = ZoneInfo(tz_str) if tz_str else ZoneInfo("Europe/Moscow")
-        local_start = start_utc.astimezone(tz)
-        local_end = end_utc.astimezone(tz)
-        pending_count = sum(
-            1 for l in pending if l.starts_at < end_utc and l.ends_at > start_utc
-        )
-        return AvailableSlot(
-            lesson_date=local_start.date(),
-            start_time=local_start.time().replace(tzinfo=None),
-            end_time=local_end.time().replace(tzinfo=None),
-            tutor_id=tutor_id,
-            tutor_name=tutor_name,
-            pending_count=pending_count,
-        )
-
+    now = datetime.now(timezone.utc)
+    today = now.date()
     slots: list[AvailableSlot] = []
-    for window in windows:
-        overlapping = sorted(
-            [
-                (l.starts_at, l.ends_at)
-                for l in occupied
-                if l.starts_at < window.ends_at and l.ends_at > window.starts_at
-            ],
-            key=lambda x: x[0],
-        )
-
-        free_start = window.starts_at
-        for lesson_start, lesson_end in overlapping:
-            cut_start = max(lesson_start, window.starts_at)
-            cut_end = min(lesson_end, window.ends_at)
-            if cut_start > free_start:
-                slots.append(to_slot(free_start, cut_start, window.tutor_id))
-            if cut_end > free_start:
-                free_start = cut_end
-
-        if free_start < window.ends_at:
-            slots.append(to_slot(free_start, window.ends_at, window.tutor_id))
-
+    for tutor_id in tutor_ids:
+        tutor = tutors_map.get(tutor_id)
+        tz = ZoneInfo(tutor.timezone) if tutor and tutor.timezone else ZoneInfo("Europe/Moscow")
+        windows = await load_windows(db, tutor_id, today, today + timedelta(days=28), tz, now)
+        for w in windows:
+            w_start_utc = datetime.combine(w.date, w.start_time, tzinfo=tz).astimezone(timezone.utc)
+            w_end_utc = datetime.combine(w.date, w.end_time, tzinfo=tz).astimezone(timezone.utc)
+            pending_count = sum(
+                1 for l in pending if l.starts_at < w_end_utc and l.ends_at > w_start_utc
+            )
+            slots.append(AvailableSlot(
+                lesson_date=w.date,
+                start_time=w.start_time,
+                end_time=w.end_time,
+                tutor_id=tutor_id,
+                tutor_name=tutor.full_name if tutor else None,
+                pending_count=pending_count,
+            ))
     return slots
 
 

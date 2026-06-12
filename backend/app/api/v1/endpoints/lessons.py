@@ -70,42 +70,6 @@ def _ensure_not_past(starts_at: datetime) -> None:
         )
 
 
-async def _ensure_window_has_no_overlap(
-    db: AsyncSession,
-    tutor_id: int,
-    starts_at: datetime,
-    ends_at: datetime,
-) -> None:
-    window_conflict = await db.execute(
-        select(Lesson.id).where(
-            Lesson.tutor_id == tutor_id,
-            Lesson.tutor_student_id.is_(None),
-            Lesson.starts_at < ends_at,
-            Lesson.ends_at > starts_at,
-        )
-    )
-    if window_conflict.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Свободный слот пересекается с другим окном",
-        )
-
-    lesson_conflict = await db.execute(
-        select(Lesson.id)
-        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
-        .where(
-            TutorStudent.tutor_id == tutor_id,
-            Lesson.conduct_status.in_(ACTIVE_BOOKING_STATUSES),
-            Lesson.starts_at < ends_at,
-            Lesson.ends_at > starts_at,
-        )
-    )
-    if lesson_conflict.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Свободный слот пересекается с уже занятым или ожидающим подтверждения временем",
-        )
-
 
 async def _ensure_lesson_has_no_overlap(
     db: AsyncSession,
@@ -192,39 +156,26 @@ async def create_lesson(
 
     await lock_tutor_schedule(db, tutor.id)
 
-    if data.is_window or data.tutor_student_id is None:
-        await _ensure_window_has_no_overlap(db, tutor.id, data.starts_at, data.ends_at)
-
-        lesson = Lesson(
-            tutor_id=tutor.id,
-            tutor_student_id=None,
-            starts_at=data.starts_at,
-            ends_at=data.ends_at,
-            cost=data.cost or 0,
-            topic_id=data.topic_id,
-            reminder_sent=False,
+    ts_result = await db.execute(
+        select(TutorStudent).where(
+            TutorStudent.id == data.tutor_student_id,
+            TutorStudent.tutor_id == tutor.id,
         )
-    else:
-        ts_result = await db.execute(
-            select(TutorStudent).where(
-                TutorStudent.id == data.tutor_student_id,
-                TutorStudent.tutor_id == tutor.id,
-            )
-        )
-        tutor_student = ts_result.scalar_one_or_none()
-        if tutor_student is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связка репетитор-ученик не найдена")
+    )
+    tutor_student = ts_result.scalar_one_or_none()
+    if tutor_student is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связка репетитор-ученик не найдена")
 
-        await _ensure_lesson_has_no_overlap(db, tutor.id, data.starts_at, data.ends_at)
+    await _ensure_lesson_has_no_overlap(db, tutor.id, data.starts_at, data.ends_at)
 
-        lesson = Lesson(
-            tutor_student_id=data.tutor_student_id,
-            starts_at=data.starts_at,
-            ends_at=data.ends_at,
-            cost=data.cost or 0,
-            topic_id=data.topic_id,
-            reminder_sent=False,
-        )
+    lesson = Lesson(
+        tutor_student_id=data.tutor_student_id,
+        starts_at=data.starts_at,
+        ends_at=data.ends_at,
+        cost=data.cost or 0,
+        topic_id=data.topic_id,
+        reminder_sent=False,
+    )
 
     db.add(lesson)
     await db.commit()

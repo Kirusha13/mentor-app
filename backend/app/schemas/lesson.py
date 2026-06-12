@@ -103,11 +103,10 @@ class RescheduleRequest(BaseModel):
 
 
 class LessonCreate(BaseModel):
-    tutor_student_id: int | None = None
+    tutor_student_id: int
     starts_at: datetime
     ends_at: datetime
     cost: Decimal | None = None
-    is_window: bool = False
     topic_id: int | None = None
 
     @model_validator(mode="after")

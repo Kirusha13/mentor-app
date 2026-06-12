@@ -28,6 +28,7 @@ from app.core.vk_auth import (
     sign_vk_mobile_data,
 )
 from app.api.v1.router import api_router
+from app.models.availability import AvailabilityOverride, OverrideKind
 from app.models.tutor import Tutor
 from app.models.lesson import ConductStatus, Lesson
 from app.models.student import Student
@@ -41,6 +42,35 @@ from app.services.telegram_service import notify_student_contacts, send_to_user
 APP_TIMEZONE = ZoneInfo("Europe/Moscow")
 
 logger = logging.getLogger(__name__)
+
+
+async def migrate_legacy_windows():
+    """Однократная конвертация строк-окон lessons -> availability_overrides.
+
+    Идемпотентна: окон нет — ничего не делает. Прошедшие окна удаляются,
+    будущие переносятся в overrides (kind=window) и удаляются.
+    После стабилизации релиза функцию можно удалить.
+    """
+    async with AsyncSessionLocal() as db:
+        windows = (await db.execute(
+            select(Lesson).where(Lesson.tutor_student_id.is_(None))
+        )).scalars().all()
+        if not windows:
+            return
+        now = datetime.now(timezone.utc)
+        for w in windows:
+            if w.ends_at > now and w.tutor_id is not None:
+                tutor = await db.get(Tutor, w.tutor_id)
+                tz = ZoneInfo(tutor.timezone) if tutor and tutor.timezone else ZoneInfo("Europe/Moscow")
+                local_start = w.starts_at.astimezone(tz)
+                local_end = w.ends_at.astimezone(tz)
+                db.add(AvailabilityOverride(
+                    tutor_id=w.tutor_id, date=local_start.date(), kind=OverrideKind.window,
+                    start_time=local_start.time(), end_time=local_end.time(),
+                ))
+            await db.delete(w)
+        await db.commit()
+        logger.info("Конвертировано legacy-окон: %d", len(windows))
 
 
 async def auto_conduct_lessons():
@@ -206,6 +236,7 @@ async def expire_pending_bookings():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await migrate_legacy_windows()
     await auto_conduct_lessons()
     await expire_pending_bookings()
     await materialize_all_series()
