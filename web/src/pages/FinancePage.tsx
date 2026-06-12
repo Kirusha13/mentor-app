@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { confirmPayment, getLessons, updateLesson, type Lesson } from '../api/lessons';
 import {
-  backdateCheck,
   createSubscription,
   deleteSubscription,
   getSubscriptionsByLink,
@@ -17,6 +16,8 @@ import {
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { getApiErrorMessage } from '../utils/apiError';
 import { lessonDate } from '../utils/lessonTime';
+import { SubscriptionCard } from '../components/subscriptions/SubscriptionCard';
+import { SubscriptionModal, type RelationOption as SubModalRelation, type SubscriptionModalSubmit } from '../components/subscriptions/SubscriptionModal';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -251,7 +252,6 @@ export default function FinancePage() {
   const [financePeriod, setFinancePeriod] = useState<ForecastRange>('week');
   const [financeAnchorDate, setFinanceAnchorDate] = useState(() => new Date());
   const [chartRange, setChartRange] = useState<ChartRange>('week');
-  const [selectedTutorStudentId, setSelectedTutorStudentId] = useState('');
   const [savingAbonement, setSavingAbonement] = useState(false);
   const [processingPaymentId, setProcessingPaymentId] = useState<number | null>(null);
   const [dailyTooltip, setDailyTooltip] = useState<ChartTooltip | null>(null);
@@ -260,17 +260,13 @@ export default function FinancePage() {
   // Package management state
   const [packagesMap, setPackagesMap] = useState<Map<number, Subscription[]>>(new Map());
   const [packagesLoading, setPackagesLoading] = useState(false);
-  // Per-relation package list loading
-  const [selectedPackagesLoading, setSelectedPackagesLoading] = useState(false);
-  // Add-package form
-  const [pkgFormHours, setPkgFormHours] = useState('');
-  const [pkgFormPrice, setPkgFormPrice] = useState('');
-  const [pkgFormStartDate, setPkgFormStartDate] = useState(() => formatDate(new Date()));
-  // Edit-package form
-  const [editingPackageId, setEditingPackageId] = useState<number | null>(null);
-  const [editPkgHours, setEditPkgHours] = useState('');
-  const [editPkgPrice, setEditPkgPrice] = useState('');
-  const [editPkgStartDate, setEditPkgStartDate] = useState('');
+
+  // New subscription modal state
+  const [subModal, setSubModal] = useState<
+    | { mode: 'create'; lockedRelationId: number | null }
+    | { mode: 'edit'; lockedRelationId: number; editingId: number; initial: { hours: string; price: string; startDate: string } }
+    | null
+  >(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -540,45 +536,6 @@ export default function FinancePage() {
     [relationOptions]
   );
 
-  const selectedRelation = useMemo(
-    () => relationOptions.find((option) => String(option.id) === selectedTutorStudentId) ?? null,
-    [relationOptions, selectedTutorStudentId]
-  );
-
-  // When selected relation changes, reset package form and edit state
-  useEffect(() => {
-    if (!selectedRelation) {
-      setEditingPackageId(null);
-      return;
-    }
-    setEditingPackageId(null);
-    setPkgFormHours('');
-    setPkgFormPrice('');
-    setPkgFormStartDate(formatDate(new Date()));
-  }, [selectedRelation]);
-
-  useEffect(() => {
-    if (!relationOptions.length) {
-      setSelectedTutorStudentId('');
-      return;
-    }
-
-    setSelectedTutorStudentId((current) => {
-      if (current && relationOptions.some((option) => String(option.id) === current)) {
-        return current;
-      }
-
-      const defaultRelation = activeAbonements[0] ?? relationOptions[0] ?? null;
-      return defaultRelation ? String(defaultRelation.id) : '';
-    });
-  }, [activeAbonements, relationOptions]);
-
-  // Packages for the currently selected relation
-  const selectedRelationPackages = useMemo(() => {
-    if (!selectedTutorStudentId) return [];
-    const id = Number(selectedTutorStudentId);
-    return packagesMap.get(id) ?? [];
-  }, [packagesMap, selectedTutorStudentId]);
 
   const allPaymentPendingLessons = lessons
     .filter(isRealFinancialLesson)
@@ -835,119 +792,32 @@ export default function FinancePage() {
     }
   };
 
-  // ---- Package CRUD handlers ----
+  // ---- Subscription modal handlers ----
 
-  const handleAddPackage = async () => {
-    if (!selectedTutorStudentId) return;
-    const hours = Number(pkgFormHours);
-    const price = Number(pkgFormPrice);
+  const relationsForModal: SubModalRelation[] = relationOptions.map((o) => ({
+    id: o.id,
+    label: `${o.studentName} · ${o.subjectName}`,
+  }));
 
-    if (!Number.isFinite(hours) || hours <= 0) {
-      alert('Введи количество часов (больше нуля). Помни: вводи ЧАСЫ, не занятия.');
-      return;
+  const handleSubSubmit = async (a: SubscriptionModalSubmit) => {
+    if (a.mode === 'edit' && a.editingId != null) {
+      await updateSubscription(a.editingId, { hours: a.hours, price: a.price, start_date: a.startDate });
+    } else {
+      await createSubscription({ tutor_student_id: a.linkId, hours: a.hours, price: a.price, start_date: a.startDate });
     }
-    if (!Number.isFinite(price) || price < 0) {
-      alert('Введи корректную стоимость пакета (₽).');
-      return;
-    }
+    await refreshPackagesForRelation(a.linkId);
+    await refreshTutorStudents();
+    setSubModal(null);
+  };
 
-    const relationId = Number(selectedTutorStudentId);
-    const today = formatDate(new Date());
-    const isBackdate = pkgFormStartDate < today;
-
+  const handleSubDelete = async (linkId: number, sub: Subscription) => {
+    if (!window.confirm('Удалить этот абонемент?')) return;
     try {
-      setSavingAbonement(true);
-
-      if (isBackdate) {
-        const check = await backdateCheck(relationId, pkgFormStartDate);
-        if (check.covered_paid_lessons.length > 0) {
-          const count = check.covered_paid_lessons.length;
-          const ok = window.confirm(
-            `Дата начала действия пакета (${pkgFormStartDate}) — в прошлом.\n` +
-            `Это ретроактивно покроет ${count} уже оплаченных занятий, начиная с этой даты.\n\n` +
-            `Продолжить?`
-          );
-          if (!ok) return;
-        }
-      }
-
-      await createSubscription({
-        tutor_student_id: relationId,
-        hours,
-        price,
-        start_date: pkgFormStartDate || null,
-      });
-
-      setPkgFormHours('');
-      setPkgFormPrice('');
-      setPkgFormStartDate(formatDate(new Date()));
-      await refreshPackagesForRelation(relationId);
+      await deleteSubscription(sub.id);
+      await refreshPackagesForRelation(linkId);
       await refreshTutorStudents();
     } catch (error) {
-      console.error('Ошибка создания пакета:', error);
-      alert(getApiErrorMessage(error, 'Не удалось создать пакет абонемента.'));
-    } finally {
-      setSavingAbonement(false);
-    }
-  };
-
-  const handleStartEditPackage = (pkg: Subscription) => {
-    setEditingPackageId(pkg.id);
-    setEditPkgHours(String(pkg.hours));
-    setEditPkgPrice(String(pkg.price));
-    setEditPkgStartDate(pkg.start_date);
-  };
-
-  const handleCancelEditPackage = () => {
-    setEditingPackageId(null);
-    setEditPkgHours('');
-    setEditPkgPrice('');
-    setEditPkgStartDate('');
-  };
-
-  const handleSaveEditPackage = async (pkgId: number) => {
-    const hours = Number(editPkgHours);
-    const price = Number(editPkgPrice);
-    if (!Number.isFinite(hours) || hours <= 0) {
-      alert('Часы должны быть больше нуля.');
-      return;
-    }
-    if (!Number.isFinite(price) || price < 0) {
-      alert('Введи корректную стоимость.');
-      return;
-    }
-    if (!selectedTutorStudentId) return;
-    const relationId = Number(selectedTutorStudentId);
-
-    try {
-      setSavingAbonement(true);
-      await updateSubscription(pkgId, { hours, price, start_date: editPkgStartDate });
-      setEditingPackageId(null);
-      await refreshPackagesForRelation(relationId);
-      await refreshTutorStudents();
-    } catch (error) {
-      console.error('Ошибка обновления пакета:', error);
-      alert(getApiErrorMessage(error, 'Не удалось обновить пакет.'));
-    } finally {
-      setSavingAbonement(false);
-    }
-  };
-
-  const handleDeletePackage = async (pkgId: number) => {
-    if (!window.confirm('Удалить этот пакет абонемента?')) return;
-    if (!selectedTutorStudentId) return;
-    const relationId = Number(selectedTutorStudentId);
-
-    try {
-      setSavingAbonement(true);
-      await deleteSubscription(pkgId);
-      await refreshPackagesForRelation(relationId);
-      await refreshTutorStudents();
-    } catch (error) {
-      console.error('Ошибка удаления пакета:', error);
-      alert(getApiErrorMessage(error, 'Не удалось удалить пакет.'));
-    } finally {
-      setSavingAbonement(false);
+      alert(getApiErrorMessage(error, 'Не удалось удалить абонемент.'));
     }
   };
 
@@ -1785,343 +1655,64 @@ export default function FinancePage() {
       {activeTab === 'subscriptions' && (
         <section style={{ display: 'grid', gap: 12 }}>
           <article style={panelStyle}>
-            <div style={{ marginBottom: 14 }}>
-              <h3 style={{ fontSize: 20, marginBottom: 0 }}>Абонементы</h3>
-            </div>
-
-            {!relationOptions.length ? (
-              <p style={{ color: '#687486', marginBottom: 0 }}>
-                Пока нет связок учеников с предметами. Сначала создай их на странице «Ученики».
-              </p>
+            {packagesLoading ? (
+              <p style={{ color: '#687486', fontSize: 14 }}>Загрузка абонементов...</p>
             ) : (
-              <div style={{ display: 'grid', gap: 16 }}>
-                {/* Relation selector */}
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ color: '#556173', fontSize: 14, fontWeight: 700 }}>
-                    Ученик / Предмет
-                  </label>
-                  <select
-                    value={selectedTutorStudentId}
-                    onChange={(e) => setSelectedTutorStudentId(e.target.value)}
-                    style={{
-                      height: 42,
-                      borderRadius: 14,
-                      border: '1px solid rgba(24,33,47,0.12)',
-                      padding: '0 12px',
-                      background: '#fff',
-                      color: '#1f2a3b',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {relationOptions.map((option) => (
-                      <option key={option.id} value={String(option.id)}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Selected relation aggregate */}
-                {selectedRelation && (
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, minmax(0, 1fr))',
-                      gap: 10,
-                    }}
-                  >
-                    <div style={{ padding: '12px 14px', borderRadius: 14, background: 'rgba(42,171,238,0.07)', border: '1px solid rgba(42,171,238,0.14)' }}>
-                      <div style={{ color: '#687486', fontSize: 13, marginBottom: 4 }}>Куплено часов</div>
-                      <div style={{ fontWeight: 800, color: '#1f2a3b', fontSize: 18 }}>{selectedRelation.total} ч</div>
-                    </div>
-                    <div style={{ padding: '12px 14px', borderRadius: 14, background: 'rgba(23,32,51,0.04)', border: '1px solid rgba(24,33,47,0.08)' }}>
-                      <div style={{ color: '#687486', fontSize: 13, marginBottom: 4 }}>Использовано</div>
-                      <div style={{ fontWeight: 800, color: '#1f2a3b', fontSize: 18 }}>{selectedRelation.used} ч</div>
-                    </div>
-                    <div style={{ padding: '12px 14px', borderRadius: 14, background: selectedRelation.subscriptionLow ? 'rgba(255,152,0,0.1)' : 'rgba(47,125,90,0.07)', border: `1px solid ${selectedRelation.subscriptionLow ? 'rgba(255,152,0,0.22)' : 'rgba(47,125,90,0.14)'}` }}>
-                      <div style={{ color: '#687486', fontSize: 13, marginBottom: 4 }}>Остаток</div>
-                      <div style={{ fontWeight: 800, color: selectedRelation.subscriptionLow ? '#FF9800' : '#4CAF50', fontSize: 18 }}>
-                        {selectedRelation.remaining} ч
-                        {selectedRelation.subscriptionLow && (
-                          <span style={{ fontSize: 13, marginLeft: 6, fontWeight: 700 }}>⚠ мало</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Package list */}
-                <div>
-                  <div style={{ fontWeight: 700, color: '#556173', fontSize: 14, marginBottom: 10 }}>
-                    Пакеты абонемента
-                  </div>
-
-                  {(packagesLoading || selectedPackagesLoading) ? (
-                    <p style={{ color: '#687486', fontSize: 14 }}>Загрузка пакетов...</p>
-                  ) : selectedRelationPackages.length === 0 ? (
-                    <div
-                      style={{
-                        padding: '12px 14px',
-                        borderRadius: 14,
-                        border: '1px dashed rgba(24,33,47,0.14)',
-                        color: '#687486',
-                        fontSize: 14,
-                      }}
-                    >
-                      У этой связки пока нет пакетов абонемента.
-                    </div>
-                  ) : (
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      {selectedRelationPackages.map((pkg) => {
-                        const isEditing = editingPackageId === pkg.id;
-                        return (
-                          <div
-                            key={pkg.id}
-                            style={{
-                              padding: '12px 14px',
-                              borderRadius: 14,
-                              border: isEditing ? '1px solid rgba(42,171,238,0.32)' : '1px solid rgba(24,33,47,0.08)',
-                              background: isEditing ? 'rgba(42,171,238,0.06)' : 'rgba(23,32,51,0.03)',
-                              display: 'grid',
-                              gap: 10,
-                            }}
-                          >
-                            {isEditing ? (
-                              <>
-                                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 10 }}>
-                                  <label style={{ display: 'grid', gap: 4, color: '#556173', fontSize: 13 }}>
-                                    Часов
-                                    <input
-                                      type="number"
-                                      min="0.5"
-                                      step="0.5"
-                                      value={editPkgHours}
-                                      onChange={(e) => setEditPkgHours(e.target.value)}
-                                    />
-                                  </label>
-                                  <label style={{ display: 'grid', gap: 4, color: '#556173', fontSize: 13 }}>
-                                    Стоимость (₽)
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="50"
-                                      value={editPkgPrice}
-                                      onChange={(e) => setEditPkgPrice(e.target.value)}
-                                    />
-                                  </label>
-                                  <label style={{ display: 'grid', gap: 4, color: '#556173', fontSize: 13 }}>
-                                    Дата начала
-                                    <input
-                                      type="date"
-                                      value={editPkgStartDate}
-                                      onChange={(e) => setEditPkgStartDate(e.target.value)}
-                                    />
-                                  </label>
-                                </div>
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSaveEditPackage(pkg.id)}
-                                    disabled={savingAbonement}
-                                    className="modal-primary"
-                                    style={{ fontSize: 13, padding: '7px 14px' }}
-                                  >
-                                    {savingAbonement ? 'Сохраняем...' : 'Сохранить'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={handleCancelEditPackage}
-                                    className="modal-secondary"
-                                    style={{ fontSize: 13, padding: '7px 14px' }}
-                                  >
-                                    Отмена
-                                  </button>
-                                </div>
-                              </>
-                            ) : (
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, auto)', gap: '4px 20px', alignItems: 'start' }}>
-                                  <div>
-                                    <div style={{ color: '#687486', fontSize: 12 }}>Часов</div>
-                                    <div style={{ fontWeight: 800, color: '#1f2a3b' }}>{pkg.hours} ч</div>
-                                  </div>
-                                  <div>
-                                    <div style={{ color: '#687486', fontSize: 12 }}>Стоимость</div>
-                                    <div style={{ fontWeight: 800, color: '#1f2a3b' }}>{formatCurrency(pkg.price)}</div>
-                                  </div>
-                                  <div>
-                                    <div style={{ color: '#687486', fontSize: 12 }}>Начало действия</div>
-                                    <div style={{ fontWeight: 700, color: '#1f2a3b' }}>{formatReadableDate(pkg.start_date)}</div>
-                                  </div>
-                                  <div>
-                                    <div style={{ color: '#687486', fontSize: 12 }}>Дата покупки</div>
-                                    <div style={{ color: '#435066', fontSize: 13 }}>
-                                      {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(pkg.created_at))}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: 6 }}>
-                                  <button
-                                    type="button"
-                                    title="Редактировать пакет"
-                                    onClick={() => handleStartEditPackage(pkg)}
-                                    className="icon-button icon-button-primary"
-                                    style={{ width: 32, height: 32 }}
-                                  >
-                                    ✎
-                                  </button>
-                                  <button
-                                    type="button"
-                                    title="Удалить пакет"
-                                    onClick={() => handleDeletePackage(pkg.id)}
-                                    disabled={savingAbonement}
-                                    className="icon-button icon-button-danger"
-                                    style={{ width: 32, height: 32 }}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Add package form */}
-                <div style={{ border: '1px solid rgba(42,171,238,0.18)', borderRadius: 16, padding: '14px 16px', background: 'rgba(42,171,238,0.04)' }}>
-                  <div style={{ fontWeight: 700, color: '#1f2a3b', fontSize: 15, marginBottom: 12 }}>
-                    Добавить абонемент
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
-                    <label style={{ display: 'grid', gap: 5, color: '#556173', fontSize: 14 }}>
-                      Часов
-                      <input
-                        type="number"
-                        min="0.5"
-                        step="0.5"
-                        value={pkgFormHours}
-                        onChange={(e) => setPkgFormHours(e.target.value)}
-                        placeholder="Например, 15"
-                      />
-                      <span style={{ color: '#8a95a8', fontSize: 12 }}>
-                        Вводите ЧАСЫ, не занятия: 10 занятий по 1.5 ч → 15
-                      </span>
-                    </label>
-                    <label style={{ display: 'grid', gap: 5, color: '#556173', fontSize: 14 }}>
-                      Стоимость (₽)
-                      <input
-                        type="number"
-                        min="0"
-                        step="50"
-                        value={pkgFormPrice}
-                        onChange={(e) => setPkgFormPrice(e.target.value)}
-                        placeholder="Например, 5000"
-                      />
-                    </label>
-                    <label style={{ display: 'grid', gap: 5, color: '#556173', fontSize: 14 }}>
-                      Дата начала действия
-                      <input
-                        type="date"
-                        value={pkgFormStartDate}
-                        onChange={(e) => setPkgFormStartDate(e.target.value)}
-                      />
-                      <span style={{ color: '#8a95a8', fontSize: 12 }}>
-                        С этой даты пакет покрывает занятия. Прошедшая дата покроет уже проведённые занятия.
-                      </span>
-                    </label>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAddPackage}
-                    disabled={savingAbonement || !selectedTutorStudentId}
-                    className="modal-primary"
-                    style={{ fontSize: 14 }}
-                  >
-                    {savingAbonement ? 'Сохраняем...' : 'Добавить абонемент'}
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: 20, margin: 0 }}>Абонементы</h3>
+                  <button type="button" className="modal-primary" style={{ padding: '9px 16px', fontWeight: 700 }}
+                    onClick={() => setSubModal({ mode: 'create', lockedRelationId: null })}>
+                    + Добавить абонемент
                   </button>
                 </div>
 
-                {/* Summary over all relations */}
-                {activeAbonements.length > 0 && (
-                  <div>
-                    <div style={{ fontWeight: 700, color: '#556173', fontSize: 14, marginBottom: 10 }}>
-                      Все активные абонементы
-                    </div>
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      {activeAbonements.map((option) => {
-                        const progress =
-                          option.total > 0 ? clampPercent((option.used / option.total) * 100) : 0;
-                        const isSelected = String(option.id) === selectedTutorStudentId;
-
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => setSelectedTutorStudentId(String(option.id))}
-                            style={{
-                              display: 'grid',
-                              gap: 8,
-                              textAlign: 'left',
-                              padding: '12px 14px',
-                              borderRadius: 16,
-                              background: isSelected ? 'rgba(42,171,238,0.1)' : 'rgba(23,32,51,0.03)',
-                              color: '#1f2a3b',
-                              border: isSelected
-                                ? '1px solid rgba(42,171,238,0.28)'
-                                : '1px solid rgba(24,33,47,0.08)',
-                              boxShadow: 'none',
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-                              <div>
-                                <div style={{ fontWeight: 700, marginBottom: 2 }}>{option.studentName}</div>
-                                <div style={{ color: '#687486', fontSize: 13 }}>{option.subjectName}</div>
-                              </div>
-                              <div style={{ textAlign: 'right', fontWeight: 800, color: option.subscriptionLow ? '#FF9800' : '#1f2a3b', fontSize: 14 }}>
-                                Остаток: {option.remaining} ч
-                                {option.subscriptionLow && <span style={{ marginLeft: 5 }}>⚠</span>}
-                              </div>
-                            </div>
-                            <div
-                              style={{
-                                height: 6,
-                                borderRadius: 999,
-                                background: 'rgba(23,32,51,0.08)',
-                                overflow: 'hidden',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: `${progress}%`,
-                                  height: '100%',
-                                  borderRadius: 999,
-                                  background: option.subscriptionLow
-                                    ? 'linear-gradient(90deg, #FF9800 0%, #FF9800 100%)'
-                                    : 'linear-gradient(90deg, #2AABEE 0%, #2AABEE 100%)',
-                                }}
-                              />
-                            </div>
-                            <div
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                                gap: 8,
-                                color: '#435066',
-                                fontSize: 13,
-                              }}
-                            >
-                              <span>Всего: {option.total} ч</span>
-                              <span>Использовано: {option.used} ч</span>
-                              <span>Пакетов: {packagesMap.get(option.id)?.length ?? '—'}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
+                {activeAbonements.length === 0 ? (
+                  <div style={{ padding: '16px', borderRadius: 14, border: '1px dashed rgba(24,33,47,0.14)', color: '#687486', fontSize: 14 }}>
+                    Пока нет ни одного абонемента. Нажмите «Добавить абонемент».
                   </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {activeAbonements.map((opt) => {
+                      const subs = packagesMap.get(opt.id) ?? [];
+                      const totalPrice = subs.reduce((s, p) => s + Number(p.price ?? 0), 0);
+                      return (
+                        <SubscriptionCard
+                          key={opt.id}
+                          studentName={opt.studentName}
+                          subjectName={opt.subjectName}
+                          purchasedHours={opt.total}
+                          usedHours={opt.used}
+                          remainingHours={opt.remaining}
+                          subscriptionLow={opt.subscriptionLow}
+                          totalPrice={totalPrice}
+                          subscriptions={subs}
+                          isMobile={isMobile}
+                          busy={savingAbonement}
+                          onAdd={() => setSubModal({ mode: 'create', lockedRelationId: opt.id })}
+                          onEdit={(sub) => setSubModal({
+                            mode: 'edit', lockedRelationId: opt.id, editingId: sub.id,
+                            initial: { hours: String(sub.hours), price: String(sub.price), startDate: sub.start_date },
+                          })}
+                          onDelete={(sub) => handleSubDelete(opt.id, sub)}
+                          formatCurrency={formatCurrency}
+                          formatReadableDate={formatReadableDate}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+
+                {subModal && (
+                  <SubscriptionModal
+                    mode={subModal.mode}
+                    relations={relationsForModal}
+                    lockedRelationId={subModal.lockedRelationId}
+                    initial={subModal.mode === 'edit' ? subModal.initial : undefined}
+                    editingId={subModal.mode === 'edit' ? subModal.editingId : null}
+                    onClose={() => setSubModal(null)}
+                    onSubmit={handleSubSubmit}
+                  />
                 )}
               </div>
             )}
