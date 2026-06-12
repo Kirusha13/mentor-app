@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time as dt_time, timedelta, timezone
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
@@ -64,10 +64,22 @@ async def migrate_legacy_windows():
                 tz = ZoneInfo(tutor.timezone) if tutor and tutor.timezone else ZoneInfo("Europe/Moscow")
                 local_start = w.starts_at.astimezone(tz)
                 local_end = w.ends_at.astimezone(tz)
-                db.add(AvailabilityOverride(
-                    tutor_id=w.tutor_id, date=local_start.date(), kind=OverrideKind.window,
-                    start_time=local_start.time(), end_time=local_end.time(),
-                ))
+                if local_end.date() == local_start.date():
+                    db.add(AvailabilityOverride(
+                        tutor_id=w.tutor_id, date=local_start.date(), kind=OverrideKind.window,
+                        start_time=local_start.time(), end_time=local_end.time(),
+                    ))
+                else:
+                    # окно через полночь: режем на два дневных куска
+                    db.add(AvailabilityOverride(
+                        tutor_id=w.tutor_id, date=local_start.date(), kind=OverrideKind.window,
+                        start_time=local_start.time(), end_time=dt_time(23, 59, 59),
+                    ))
+                    if local_end.time() > dt_time(0, 0):
+                        db.add(AvailabilityOverride(
+                            tutor_id=w.tutor_id, date=local_end.date(), kind=OverrideKind.window,
+                            start_time=dt_time(0, 0), end_time=local_end.time(),
+                        ))
             await db.delete(w)
         await db.commit()
         logger.info("Конвертировано legacy-окон: %d", len(windows))
