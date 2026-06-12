@@ -36,7 +36,7 @@ from app.models.subscription import Subscription
 from app.services.series_service import materialize_series
 from app.services.subscription_service import apply_conduct_status_transition, recompute_coverage
 from app.services.telegram_bot import start_bot, stop_bot
-from app.services.telegram_service import notify_student_contacts, send_to_user
+from app.services.telegram_service import notify_student_contacts, send_to_user, send_with_keyboard
 
 
 APP_TIMEZONE = ZoneInfo("Europe/Moscow")
@@ -146,36 +146,60 @@ async def auto_conduct_lessons():
             )
 
 
-async def send_reminders():
+async def process_reminders():
+    """72ч-касание с кнопками + 24ч-напоминание. Дедуп флагами, безопасно на старте."""
     now = datetime.now(timezone.utc)
-    window_start = now + timedelta(hours=23)
-    window_end = now + timedelta(hours=25)
-
     async with AsyncSessionLocal() as db:
-        result = await db.execute(
+        # 72ч: «всё в силе?» с кнопками
+        rows72 = (await db.execute(
             select(Lesson)
             .options(selectinload(Lesson.tutor_student))
             .where(
-                Lesson.starts_at >= window_start,
-                Lesson.starts_at < window_end,
+                Lesson.starts_at > now,
+                Lesson.starts_at <= now + timedelta(hours=72),
                 Lesson.conduct_status == ConductStatus.scheduled,
-                Lesson.reminder_sent.is_(False),
+                Lesson.reminder72_sent.is_(False),
                 Lesson.tutor_student_id.is_not(None),
             )
-        )
-
-        for lesson in result.scalars().all():
-            if lesson.tutor_student is None:
-                continue
-
+        )).scalars().all()
+        ids72: set[int] = set()
+        for lesson in rows72:
             student = await db.get(Student, lesson.tutor_student.student_id)
-            student_tz = ZoneInfo(student.timezone) if student and student.timezone else APP_TIMEZONE
-            local_time = lesson.starts_at.astimezone(student_tz)
             if student and student.telegram_id:
-                await send_to_user(
+                tz = ZoneInfo(student.timezone) if student.timezone else APP_TIMEZONE
+                local = lesson.starts_at.astimezone(tz)
+                await send_with_keyboard(
                     student.telegram_id,
-                    f"Напоминание: завтра занятие в {local_time.strftime('%H:%M')}",
+                    f"{local.strftime('%d.%m')} занятие в {local.strftime('%H:%M')}. Всё в силе?",
+                    [("✓ Буду", f"confirm:{lesson.id}"), ("↻ Нужен перенос", f"resched:{lesson.id}")],
                 )
+            lesson.reminder72_sent = True
+            ids72.add(lesson.id)
+
+        # 24ч: обычное напоминание, если не подтверждено
+        rows24 = (await db.execute(
+            select(Lesson)
+            .options(selectinload(Lesson.tutor_student))
+            .where(
+                Lesson.starts_at > now,
+                Lesson.starts_at <= now + timedelta(hours=24),
+                Lesson.conduct_status == ConductStatus.scheduled,
+                Lesson.reminder_sent.is_(False),
+                Lesson.attendance_confirmed.is_(False),
+                Lesson.tutor_student_id.is_not(None),
+            )
+        )).scalars().all()
+        for lesson in rows24:
+            # Пропускаем занятия, которые в ЭТОМ прогоне только что получили 72ч-сообщение,
+            # чтобы не слать два сообщения подряд — придут следующим прогоном.
+            if lesson.id in ids72:
+                continue
+            student = await db.get(Student, lesson.tutor_student.student_id)
+            if student and student.telegram_id:
+                tz = ZoneInfo(student.timezone) if student.timezone else APP_TIMEZONE
+                local = lesson.starts_at.astimezone(tz)
+                day_word = "сегодня" if local.date() == now.astimezone(tz).date() else "завтра"
+                await send_to_user(student.telegram_id, f"Напоминание: {day_word} занятие в {local.strftime('%H:%M')}")
             lesson.reminder_sent = True
 
         await db.commit()
@@ -252,11 +276,12 @@ async def lifespan(app: FastAPI):
     await auto_conduct_lessons()
     await expire_pending_bookings()
     await materialize_all_series()
+    await process_reminders()
     scheduler = AsyncIOScheduler(timezone=APP_TIMEZONE)
     scheduler.add_job(auto_conduct_lessons, "cron", hour=0, minute=5)
     scheduler.add_job(expire_pending_bookings, "cron", minute=10)
     scheduler.add_job(materialize_all_series, "cron", hour=0, minute=15)
-    scheduler.add_job(send_reminders, "cron", hour=18, minute=0)
+    scheduler.add_job(process_reminders, "cron", minute=20)
     scheduler.start()
     await start_bot()
     yield

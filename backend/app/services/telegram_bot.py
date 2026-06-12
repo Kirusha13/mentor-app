@@ -14,13 +14,17 @@ getUpdates — нельзя запускать несколько инстанс
 """
 import logging
 
+from sqlalchemy import select
 from telegram import Update
-from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import Application, ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from app.core.config import settings
 from app.core.contact_link import decode_contact_token
 from app.core.database import AsyncSessionLocal
 from app.models.contact import Contact
+from app.models.lesson import Lesson
+from app.models.student import Student
+from app.models.tutor_student import TutorStudent
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +70,40 @@ async def _start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def _callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if query is None or query.from_user is None or not query.data:
+        return
+    action, _, raw_id = query.data.partition(":")
+    if action not in ("confirm", "resched") or not raw_id.isdigit():
+        await query.answer()
+        return
+
+    async with AsyncSessionLocal() as db:
+        student = (await db.execute(
+            select(Student).where(Student.telegram_id == query.from_user.id)
+        )).scalar_one_or_none()
+        lesson = await db.get(Lesson, int(raw_id))
+        link = await db.get(TutorStudent, lesson.tutor_student_id) if lesson and lesson.tutor_student_id else None
+        if student is None or lesson is None or link is None or link.student_id != student.id:
+            await query.answer("Занятие не найдено", show_alert=True)
+            return
+        if action == "confirm":
+            lesson.attendance_confirmed = True
+            await db.commit()
+            await query.answer("Отлично, ждём вас!")
+            try:
+                await query.edit_message_reply_markup(reply_markup=None)
+            except Exception:
+                logger.exception("Не удалось убрать кнопки после подтверждения")
+        else:  # resched
+            await query.answer()
+            if query.message is not None:
+                await query.message.reply_text(
+                    "Чтобы перенести занятие, откройте приложение → расписание → занятие → «Перенести»."
+                )
+
+
 async def start_bot() -> None:
     """Запустить бота (polling). Безопасно вызывать из lifespan."""
     global _application
@@ -75,6 +113,7 @@ async def start_bot() -> None:
     try:
         application = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).build()
         application.add_handler(CommandHandler("start", _start))
+        application.add_handler(CallbackQueryHandler(_callback))
         await application.initialize()
         await application.start()
         await application.updater.start_polling(drop_pending_updates=True)

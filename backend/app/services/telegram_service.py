@@ -1,6 +1,6 @@
 import logging
 
-from telegram import Bot
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,18 @@ async def send_to_user(telegram_id: int | None, text: str) -> None:
             await bot.send_message(chat_id=telegram_id, text=text)
     except Exception:
         logger.exception("Не удалось отправить Telegram-уведомление пользователю %s", telegram_id)
+
+
+async def send_with_keyboard(telegram_id: int | None, text: str, buttons: list[tuple[str, str]]) -> None:
+    """Отправить сообщение с inline-кнопками. buttons: [(label, callback_data)]."""
+    if not telegram_id or not text.strip():
+        return
+    try:
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton(lbl, callback_data=cb)] for lbl, cb in buttons])
+        async with Bot(token=settings.TELEGRAM_BOT_TOKEN) as bot:
+            await bot.send_message(chat_id=telegram_id, text=text, reply_markup=markup)
+    except Exception:
+        logger.exception("Не удалось отправить сообщение с кнопками пользователю %s", telegram_id)
 
 
 async def notify_student_contacts(db: AsyncSession, student_id: int, text: str) -> None:
