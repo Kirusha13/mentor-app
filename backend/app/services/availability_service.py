@@ -3,10 +3,17 @@
 Чистая функция compute_windows — без БД (по образцу compute_coverage).
 Инвариант: дата либо целиком по правилам, либо целиком по override.
 """
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from zoneinfo import ZoneInfo
+
+from sqlalchemy import select
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @dataclass(frozen=True)
@@ -121,3 +128,42 @@ def compute_windows(
 
         day += timedelta(days=1)
     return result
+
+
+async def load_windows(
+    db: "AsyncSession",
+    tutor_id: int,
+    date_from: date,
+    date_to: date,
+    tz: ZoneInfo,
+    now: datetime,
+) -> list[Window]:
+    """Окна репетитора за период: правила/overrides из БД − занятость."""
+    from app.models.availability import AvailabilityOverride, AvailabilityRule
+    from app.models.lesson import Lesson
+    from app.models.tutor_student import TutorStudent
+
+    rules_rows = (await db.execute(
+        select(AvailabilityRule).where(AvailabilityRule.tutor_id == tutor_id)
+    )).scalars().all()
+    ovr_rows = (await db.execute(
+        select(AvailabilityOverride).where(
+            AvailabilityOverride.tutor_id == tutor_id,
+            AvailabilityOverride.date >= date_from,
+            AvailabilityOverride.date <= date_to,
+        )
+    )).scalars().all()
+    busy_rows = (await db.execute(
+        select(Lesson)
+        .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+        .where(
+            TutorStudent.tutor_id == tutor_id,
+            Lesson.conduct_status.in_(("scheduled", "reschedule_pending")),
+        )
+    )).scalars().all()
+
+    rules = [RuleInput(r.weekday, r.start_time, r.end_time, r.effective_from, r.effective_until)
+             for r in rules_rows]
+    overrides = [OverrideInput(o.date, o.kind.value, o.start_time, o.end_time) for o in ovr_rows]
+    busy = [BusyInterval(l.starts_at, l.ends_at) for l in busy_rows]
+    return compute_windows(date_from, date_to, rules, overrides, busy, tz, now)
