@@ -840,6 +840,13 @@ export default function SchedulePage() {
         const dateTo = buildLocalDayEndIso(formatDate(range.to));
         const fromStr = formatDate(range.from);
         const toStr = formatDate(range.to);
+
+        // окна доступности — некритичны: при ошибке страница живёт без них
+        const windowsPromise = getWindows(fromStr, toStr).catch((err) => {
+          console.error('Не удалось загрузить окна доступности:', err);
+          return [] as ComputedWindow[];
+        });
+
         const [lessonData, requestLessonData, tutorStudentData, studentData, subjectData, topicData, levelData, windowData] = await Promise.all([
           getLessons({ date_from: dateFrom, date_to: dateTo }),
           getLessons(),
@@ -848,7 +855,7 @@ export default function SchedulePage() {
           getSubjects(),
           getTopics(),
           getTutorLevels(),
-          getWindows(fromStr, toStr),
+          windowsPromise,
         ]);
         setLessons(lessonData);
         setRequestLessons(requestLessonData);
@@ -950,7 +957,10 @@ export default function SchedulePage() {
       // Refetch windows for visible range
       const fromStr = formatDate(range.from);
       const toStr = formatDate(range.to);
-      const updated = await getWindows(fromStr, toStr);
+      const updated = await getWindows(fromStr, toStr).catch((err) => {
+        console.error('Не удалось загрузить окна доступности при рефетче:', err);
+        return [] as ComputedWindow[];
+      });
       setWindows(updated);
       setDayEditorOverridden(true);
     } catch (error) {
