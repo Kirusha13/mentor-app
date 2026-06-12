@@ -144,3 +144,10 @@ def test_fully_past_day_empty():
         compute_windows(date(2026, 6, 16), date(2026, 6, 16), rules, [], [], TZ, now)
         == []
     )
+
+
+def test_busy_exactly_at_boundary_no_zero_window():
+    rules = [_rule(1, (14, 0), (18, 0))]
+    busy = [_busy(date(2026, 6, 16), (14, 0), (15, 0))]  # начинается ровно на открытии окна
+    out = compute_windows(date(2026, 6, 16), date(2026, 6, 16), rules, [], busy, TZ, PAST)
+    assert [(w.start_time, w.end_time) for w in out] == [(time(15, 0), time(18, 0))]

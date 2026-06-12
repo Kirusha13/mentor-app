@@ -5,6 +5,7 @@
 """
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 
@@ -20,7 +21,7 @@ class RuleInput:
 @dataclass(frozen=True)
 class OverrideInput:
     date: date
-    kind: str  # "closed" | "window"
+    kind: Literal["closed", "window"]
     start_time: time | None
     end_time: time | None
 
