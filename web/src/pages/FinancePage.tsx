@@ -999,7 +999,7 @@ export default function FinancePage() {
               Доход от абонементов
             </div>
             <div style={{ color: '#556173', fontSize: 13, marginTop: 2 }}>
-              Пакеты, купленные в текущем периоде ({formatFinancePeriodLabel(dateFrom, dateTo)})
+              Абонементы, купленные в текущем периоде ({formatFinancePeriodLabel(dateFrom, dateTo)})
             </div>
           </div>
           <div style={{ fontWeight: 900, color: '#2AABEE', fontSize: 20 }}>
