@@ -16,6 +16,7 @@ import {
   type TutorStudentStatus,
 } from '../api/tutorStudents';
 import { getApiErrorMessage } from '../utils/apiError';
+import { SeriesBlock } from '../components/SeriesBlock';
 
 interface StudentGroupData {
   student: Student;
@@ -651,6 +652,8 @@ export default function StudentsPage() {
                     Открыть контактную книжку
                   </button>
                 </section>
+
+                <SeriesBlock linkId={selectedCard.tutorStudent.id} />
               </div>
             </div>
           </div>
