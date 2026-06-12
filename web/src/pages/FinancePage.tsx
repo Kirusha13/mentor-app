@@ -316,7 +316,6 @@ export default function FinancePage() {
   }, [tutorStudents]);
 
   const refreshPackagesForRelation = async (relationId: number) => {
-    setSelectedPackagesLoading(true);
     try {
       const pkgs = await getSubscriptionsByLink(relationId);
       setPackagesMap((prev) => {
@@ -326,8 +325,6 @@ export default function FinancePage() {
       });
     } catch (error) {
       console.error('Ошибка обновления пакетов:', error);
-    } finally {
-      setSelectedPackagesLoading(false);
     }
   };
 
@@ -812,12 +809,15 @@ export default function FinancePage() {
 
   const handleSubDelete = async (linkId: number, sub: Subscription) => {
     if (!window.confirm('Удалить этот абонемент?')) return;
+    setSavingAbonement(true);
     try {
       await deleteSubscription(sub.id);
       await refreshPackagesForRelation(linkId);
       await refreshTutorStudents();
     } catch (error) {
       alert(getApiErrorMessage(error, 'Не удалось удалить абонемент.'));
+    } finally {
+      setSavingAbonement(false);
     }
   };
 

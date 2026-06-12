@@ -23,7 +23,7 @@ const clampPct = (v: number) => Math.max(0, Math.min(100, v));
 
 export function SubscriptionCard({
   studentName, subjectName, purchasedHours, usedHours, remainingHours,
-  subscriptionLow, totalPrice, subscriptions, isMobile, busy,
+  subscriptionLow, totalPrice, subscriptions, busy,
   onAdd, onEdit, onDelete, formatCurrency, formatReadableDate,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
