@@ -33,10 +33,12 @@ from app.models.tutor import Tutor
 from app.models.lesson import ConductStatus, Lesson
 from app.models.student import Student
 from app.models.subscription import Subscription
+from app.models.tutor_student import TutorStudent
 from app.services.series_service import materialize_series
 from app.services.subscription_service import apply_conduct_status_transition, recompute_coverage
 from app.services.telegram_bot import start_bot, stop_bot
 from app.services.telegram_service import notify_student_contacts, send_to_user, send_with_keyboard
+from app.services.availability_service import load_windows
 
 
 APP_TIMEZONE = ZoneInfo("Europe/Moscow")
@@ -205,6 +207,57 @@ async def process_reminders():
         await db.commit()
 
 
+async def send_week_summaries():
+    """Вс 18:00 — пн 23:59 (локально для репетитора): сводка следующей недели. Дедуп week_summary_sent_for."""
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as db:
+        tutors = (await db.execute(
+            select(Tutor).where(Tutor.telegram_id.is_not(None))
+        )).scalars().all()
+        for tutor in tutors:
+            tz = ZoneInfo(tutor.timezone) if tutor.timezone else APP_TIMEZONE
+            local_now = now.astimezone(tz)
+            in_window = (local_now.weekday() == 6 and local_now.hour >= 18) or local_now.weekday() == 0
+            if not in_window:
+                continue
+            if local_now.weekday() == 6:
+                next_monday = (local_now + timedelta(days=1)).date()
+            else:  # понедельник: сводка про текущую неделю (догон после простоя)
+                next_monday = local_now.date()
+            if tutor.week_summary_sent_for == next_monday:
+                continue
+
+            week_end = next_monday + timedelta(days=6)
+            windows = await load_windows(db, tutor.id, next_monday, week_end, tz, now)
+            lessons = (await db.execute(
+                select(Lesson)
+                .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+                .where(
+                    TutorStudent.tutor_id == tutor.id,
+                    Lesson.conduct_status == ConductStatus.scheduled,
+                    Lesson.starts_at >= datetime.combine(next_monday, dt_time.min, tzinfo=tz),
+                    Lesson.starts_at < datetime.combine(week_end + timedelta(days=1), dt_time.min, tzinfo=tz),
+                )
+            )).scalars().all()
+
+            day_names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+            lines = [f"Расписание на неделю {next_monday.strftime('%d.%m')}–{week_end.strftime('%d.%m')}:"]
+            for i in range(7):
+                d = next_monday + timedelta(days=i)
+                day_lessons = [l for l in lessons if l.starts_at.astimezone(tz).date() == d]
+                day_windows = [w for w in windows if w.date == d]
+                parts = []
+                if day_lessons:
+                    parts.append(f"занятий: {len(day_lessons)}")
+                if day_windows:
+                    parts.append("окна: " + ", ".join(
+                        f"{w.start_time.strftime('%H:%M')}–{w.end_time.strftime('%H:%M')}" for w in day_windows))
+                lines.append(f"{day_names[i]} {d.strftime('%d.%m')}: " + ("; ".join(parts) if parts else "—"))
+            lines.append("Если что-то не так — поправь неделю в кабинете.")
+            await send_to_user(tutor.telegram_id, "\n".join(lines))
+            tutor.week_summary_sent_for = next_monday
+        await db.commit()
+
 
 async def materialize_all_series():
     async with AsyncSessionLocal() as db:
@@ -277,11 +330,13 @@ async def lifespan(app: FastAPI):
     await expire_pending_bookings()
     await materialize_all_series()
     await process_reminders()
+    await send_week_summaries()
     scheduler = AsyncIOScheduler(timezone=APP_TIMEZONE)
     scheduler.add_job(auto_conduct_lessons, "cron", hour=0, minute=5)
     scheduler.add_job(expire_pending_bookings, "cron", minute=10)
     scheduler.add_job(materialize_all_series, "cron", hour=0, minute=15)
     scheduler.add_job(process_reminders, "cron", minute=20)
+    scheduler.add_job(send_week_summaries, "cron", day_of_week="sun,mon", minute=30)
     scheduler.start()
     await start_bot()
     yield
