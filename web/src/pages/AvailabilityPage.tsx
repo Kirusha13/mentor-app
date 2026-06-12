@@ -187,7 +187,7 @@ export default function AvailabilityPage() {
 
       const result = await replaceRules(rules);
       setSaveResult(result);
-      setHasRulesEver(rules.length > 0 || hasRulesEver);
+      setHasRulesEver(rules.length > 0);
     } catch (err) {
       console.error('Ошибка сохранения правил доступности:', err);
       setNetworkError('Не удалось сохранить правила. Проверь подключение и попробуй снова.');
