@@ -22,7 +22,7 @@ from app.core.config import settings
 from app.core.contact_link import decode_contact_token
 from app.core.database import AsyncSessionLocal
 from app.models.contact import Contact
-from app.models.lesson import Lesson
+from app.models.lesson import Lesson, ConductStatus
 from app.models.student import Student
 from app.models.tutor_student import TutorStudent
 
@@ -83,12 +83,18 @@ async def _callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         student = (await db.execute(
             select(Student).where(Student.telegram_id == query.from_user.id)
         )).scalar_one_or_none()
+        if student is None:
+            await query.answer("Эта функция доступна только ученикам", show_alert=True)
+            return
         lesson = await db.get(Lesson, int(raw_id))
         link = await db.get(TutorStudent, lesson.tutor_student_id) if lesson and lesson.tutor_student_id else None
-        if student is None or lesson is None or link is None or link.student_id != student.id:
+        if lesson is None or link is None or link.student_id != student.id:
             await query.answer("Занятие не найдено", show_alert=True)
             return
         if action == "confirm":
+            if lesson.conduct_status != ConductStatus.scheduled:
+                await query.answer("Занятие уже не актуально", show_alert=True)
+                return
             lesson.attendance_confirmed = True
             await db.commit()
             await query.answer("Отлично, ждём вас!")
