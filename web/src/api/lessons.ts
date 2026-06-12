@@ -31,14 +31,14 @@ export interface Lesson {
   tutor_name?: string | null;
   subject_name?: string | null;
   subscription_covered?: boolean;
+  attendance_confirmed?: boolean;
 }
 
 export interface CreateLessonPayload {
-  tutor_student_id?: number | null;
+  tutor_student_id: number;
   starts_at: string;
   ends_at: string;
   cost?: number;
-  is_window?: boolean;
   topic_id?: number;
 }
 

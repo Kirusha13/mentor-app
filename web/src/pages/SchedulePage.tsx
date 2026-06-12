@@ -14,6 +14,7 @@ import {
   type Lesson,
   type PaymentStatus,
 } from '../api/lessons';
+import { getDay, getWindows, saveDay, type ComputedWindow, type DayWindow } from '../api/availability';
 import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTopics, type TheoryTopic } from '../api/topics';
@@ -36,61 +37,43 @@ import {
 type CalendarMode = 'day' | 'week' | 'month';
 type LessonCardViewMode = 'day' | 'week' | 'month';
 type LessonCardDensity = 'standard' | 'compact';
-type SlotDayDraft = {
-  enabled: boolean;
+
+interface DayEditorWindow {
   start: string;
   end: string;
-};
+  error?: string;
+}
 
 const DEFAULT_GRID_START_HOUR = 8;
 const DEFAULT_GRID_END_HOUR = 22;
 const TIMELINE_SLOT_MINUTES = 30;
 const MIN_EVENT_CARD_HEIGHT = 86;
 const WEEK_DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-const SLOT_PLANNER_STORAGE_KEY = 'mentor-app-slot-planner-v1';
 
-function createDefaultSlotDrafts(): SlotDayDraft[] {
-  return Array.from({ length: 7 }, () => ({
-    enabled: false,
-    start: '17:00',
-    end: '18:00',
-  }));
+function dayEditorTimeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
 }
 
-function normalizeSlotDrafts(value: unknown): SlotDayDraft[] {
-  const fallback = createDefaultSlotDrafts();
-  const source = Array.isArray(value) ? value : [];
-
-  return fallback.map((item, index) => {
-    const candidate = source[index] as Partial<SlotDayDraft> | undefined;
-    return {
-      enabled: Boolean(candidate?.enabled),
-      start: typeof candidate?.start === 'string' && candidate.start ? candidate.start : item.start,
-      end: typeof candidate?.end === 'string' && candidate.end ? candidate.end : item.end,
-    };
-  });
-}
-
-function readSlotPlannerStorage() {
-  if (typeof window === 'undefined') {
-    return null;
+function validateDayEditorWindows(windows: DayEditorWindow[]): DayEditorWindow[] {
+  const validated = windows.map((w) => ({ ...w, error: undefined as string | undefined }));
+  for (let i = 0; i < validated.length; i++) {
+    const w = validated[i];
+    if (!w) continue;
+    if (!w.start || !w.end) { w.error = 'Укажи начало и конец'; continue; }
+    const sMin = dayEditorTimeToMinutes(w.start);
+    const eMin = dayEditorTimeToMinutes(w.end);
+    if (sMin >= eMin) { w.error = 'Начало должно быть раньше конца'; continue; }
+    for (let j = 0; j < validated.length; j++) {
+      if (i === j) continue;
+      const other = validated[j];
+      if (!other || other.error || !other.start || !other.end) continue;
+      const oStart = dayEditorTimeToMinutes(other.start);
+      const oEnd = dayEditorTimeToMinutes(other.end);
+      if (sMin < oEnd && eMin > oStart) { w.error = 'Окна пересекаются'; break; }
+    }
   }
-
-  try {
-    const raw = window.localStorage.getItem(SLOT_PLANNER_STORAGE_KEY);
-    return raw ? JSON.parse(raw) as { drafts?: unknown; durationMinutes?: unknown } : null;
-  } catch {
-    return null;
-  }
-}
-
-function loadSlotDrafts() {
-  return normalizeSlotDrafts(readSlotPlannerStorage()?.drafts);
-}
-
-function loadSlotDurationMinutes() {
-  const value = readSlotPlannerStorage()?.durationMinutes;
-  return typeof value === 'string' && value.trim() ? value : '60';
+  return validated;
 }
 
 function atMidnight(date: Date) {
@@ -471,6 +454,7 @@ export default function SchedulePage() {
   const [viewportHeight, setViewportHeight] = useState(() =>
     typeof window === 'undefined' ? 900 : window.innerHeight
   );
+  const [windows, setWindows] = useState<ComputedWindow[]>([]);
   const [selectedTutorStudentId, setSelectedTutorStudentId] = useState('');
   const [lessonDate, setLessonDate] = useState(() => formatDate(new Date()));
   const [startTime, setStartTime] = useState('10:00');
@@ -478,10 +462,13 @@ export default function SchedulePage() {
   const [cost, setCost] = useState('');
   const [newTopicId, setNewTopicId] = useState('');
   const [isCreateLessonOpen, setIsCreateLessonOpen] = useState(false);
-  const [isSlotPlannerOpen, setIsSlotPlannerOpen] = useState(false);
-  const [slotWeekOffset, setSlotWeekOffset] = useState<0 | 1>(0);
-  const [slotDurationMinutes, setSlotDurationMinutes] = useState(() => loadSlotDurationMinutes());
-  const [slotDrafts, setSlotDrafts] = useState<SlotDayDraft[]>(() => loadSlotDrafts());
+  const [isDayEditorOpen, setIsDayEditorOpen] = useState(false);
+  const [dayEditorDate, setDayEditorDate] = useState('');
+  const [dayEditorClosed, setDayEditorClosed] = useState(false);
+  const [dayEditorWindows, setDayEditorWindows] = useState<DayEditorWindow[]>([]);
+  const [dayEditorOverridden, setDayEditorOverridden] = useState(false);
+  const [dayEditorSaving, setDayEditorSaving] = useState(false);
+  const [dayEditorResult, setDayEditorResult] = useState<{ conflicts: { lesson_id: number; starts_at: string; student_name: string | null }[]; rejected_bookings: number } | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [selectedMonthDay, setSelectedMonthDay] = useState<string | null>(null);
   const [isEditingLesson, setIsEditingLesson] = useState(false);
@@ -505,7 +492,6 @@ export default function SchedulePage() {
   const dayDate = useMemo(() => atMidnight(anchorDate), [anchorDate]);
   const weekStart = useMemo(() => startOfWeek(anchorDate), [anchorDate]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
-  const slotPlannerWeekStart = useMemo(() => addDays(weekStart, slotWeekOffset * 7), [slotWeekOffset, weekStart]);
   const monthDays = useMemo(() => monthGrid(anchorDate), [anchorDate]);
 
   const range = useMemo(() => {
@@ -559,14 +545,6 @@ export default function SchedulePage() {
       'reschedule_rejected',
     ];
 
-    const occupiedLessons = lessons.filter(
-      (lesson) =>
-        !isWindow(lesson) &&
-        ['scheduled', 'conducted', 'booking_pending', 'reschedule_pending'].includes(
-          lesson.conduct_status
-        )
-    );
-
     return lessons.filter((lesson) => {
       if (hiddenRequestStatuses.includes(lesson.conduct_status)) {
         return false;
@@ -577,10 +555,6 @@ export default function SchedulePage() {
         (lesson.conduct_status === 'rescheduled' || lesson.conduct_status === 'cancelled')
       ) {
         return false;
-      }
-
-      if (isWindow(lesson)) {
-        return !occupiedLessons.some((occupied) => overlaps(lesson, occupied));
       }
 
       return true;
@@ -658,7 +632,7 @@ export default function SchedulePage() {
   }, [range.from, range.to, visibleLessons]);
 
   const rangeBookedLessons = useMemo(
-    () => rangeLessons.filter((lesson) => !isWindow(lesson)),
+    () => rangeLessons.filter((lesson) => lesson.tutor_student_id != null),
     [rangeLessons]
   );
 
@@ -686,6 +660,27 @@ export default function SchedulePage() {
   }, [lessonsByDate, selectedMonthDay]);
   const selectedMonthDayDate = selectedMonthDay ? new Date(`${selectedMonthDay}T00:00:00`) : null;
 
+  // Computed windows grouped by date string for quick lookup in timeline
+  const windowsByDate = useMemo(() => {
+    const map = new Map<string, ComputedWindow[]>();
+    for (const w of windows) {
+      const existing = map.get(w.date) ?? [];
+      existing.push(w);
+      map.set(w.date, existing);
+    }
+    return map;
+  }, [windows]);
+
+  const dayWindows = useMemo(
+    () => windowsByDate.get(formatDate(dayDate)) ?? [],
+    [dayDate, windowsByDate]
+  );
+
+  const weekWindowsByDay = useMemo(
+    () => weekDays.map((day) => windowsByDate.get(formatDate(day)) ?? []),
+    [weekDays, windowsByDate]
+  );
+
   const timelineWindow = useMemo(() => {
     const timelineLessons =
       mode === 'day'
@@ -694,12 +689,24 @@ export default function SchedulePage() {
           ? weekLessonsByDay.flat()
           : [];
 
-    if (!timelineLessons.length) {
+    const timelineWins =
+      mode === 'day'
+        ? dayWindows
+        : mode === 'week'
+          ? weekWindowsByDay.flat()
+          : [];
+
+    if (!timelineLessons.length && !timelineWins.length) {
       return { startHour: DEFAULT_GRID_START_HOUR, endHour: DEFAULT_GRID_END_HOUR };
     }
 
-    const minStart = Math.min(...timelineLessons.map((lesson) => lessonStartMinutes(lesson)));
-    const maxEnd = Math.max(...timelineLessons.map((lesson) => lessonEndMinutes(lesson)));
+    const lessonMins = timelineLessons.map((lesson) => lessonStartMinutes(lesson));
+    const lessonMaxes = timelineLessons.map((lesson) => lessonEndMinutes(lesson));
+    const winMins = timelineWins.map((w) => toMinutes(w.start_time));
+    const winMaxes = timelineWins.map((w) => toMinutes(w.end_time));
+
+    const minStart = Math.min(...lessonMins, ...winMins);
+    const maxEnd = Math.max(...lessonMaxes, ...winMaxes);
     const startHour = Math.max(0, Math.floor(minStart / 60) - 1);
     const endHour = Math.min(24, Math.ceil(maxEnd / 60) + 1);
 
@@ -707,7 +714,7 @@ export default function SchedulePage() {
       startHour,
       endHour: Math.max(startHour + 2, endHour),
     };
-  }, [dayLessons, mode, weekLessonsByDay]);
+  }, [dayLessons, dayWindows, mode, weekLessonsByDay, weekWindowsByDay]);
   const availableTimelineHeight = useMemo(() => {
     if (mode === 'month') {
       return 0;
@@ -826,20 +833,14 @@ export default function SchedulePage() {
   }, [availableEditTopics, selectedLesson?.topic_id]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(
-      SLOT_PLANNER_STORAGE_KEY,
-      JSON.stringify({ drafts: slotDrafts, durationMinutes: slotDurationMinutes })
-    );
-  }, [slotDrafts, slotDurationMinutes]);
-
-  useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
         const dateFrom = buildLocalDayStartIso(formatDate(range.from));
         const dateTo = buildLocalDayEndIso(formatDate(range.to));
-        const [lessonData, requestLessonData, tutorStudentData, studentData, subjectData, topicData, levelData] = await Promise.all([
+        const fromStr = formatDate(range.from);
+        const toStr = formatDate(range.to);
+        const [lessonData, requestLessonData, tutorStudentData, studentData, subjectData, topicData, levelData, windowData] = await Promise.all([
           getLessons({ date_from: dateFrom, date_to: dateTo }),
           getLessons(),
           getTutorStudents(),
@@ -847,6 +848,7 @@ export default function SchedulePage() {
           getSubjects(),
           getTopics(),
           getTutorLevels(),
+          getWindows(fromStr, toStr),
         ]);
         setLessons(lessonData);
         setRequestLessons(requestLessonData);
@@ -855,6 +857,7 @@ export default function SchedulePage() {
         setSubjects(subjectData);
         setTopics(topicData);
         setTutorLevels(levelData);
+        setWindows(windowData);
       } catch (error) {
         console.error('Ошибка загрузки расписания:', error);
         alert('Не удалось загрузить расписание');
@@ -912,116 +915,49 @@ export default function SchedulePage() {
     }
   };
 
-  const handleSlotDraftChange = (index: number, patch: Partial<SlotDayDraft>) => {
-    setSlotDrafts((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+  const openDayEditor = async (dateStr: string) => {
+    setDayEditorDate(dateStr);
+    setDayEditorResult(null);
+    setDayEditorSaving(false);
+    try {
+      const override = await getDay(dateStr);
+      setDayEditorOverridden(override.overridden);
+      setDayEditorClosed(override.closed);
+      setDayEditorWindows(override.windows.map((w) => ({ start: w.start_time.slice(0, 5), end: w.end_time.slice(0, 5) })));
+    } catch {
+      setDayEditorOverridden(false);
+      setDayEditorClosed(false);
+      setDayEditorWindows([]);
+    }
+    setIsDayEditorOpen(true);
   };
 
-  const handleCreateSlots = async () => {
-    const duration = Number(slotDurationMinutes);
-    if (!duration || duration <= 0) {
-      alert('Укажи корректную длительность слота в минутах');
+  const handleDayEditorSave = async () => {
+    const validated = validateDayEditorWindows(dayEditorWindows);
+    const hasError = validated.some((w) => w.error);
+    if (hasError) {
+      setDayEditorWindows(validated);
       return;
     }
-
-    const enabledDays = slotDrafts
-      .map((draft, index) => ({ draft, index }))
-      .filter(({ draft }) => draft.enabled);
-
-    if (enabledDays.length === 0) {
-      alert('Выбери хотя бы один день недели для создания слотов');
-      return;
-    }
-
-    const payloads: Array<{ starts_at: string; ends_at: string; label: string }> = [];
-    const now = new Date();
-
-    for (const { draft, index } of enabledDays) {
-      if (!draft.start || !draft.end || draft.end <= draft.start) {
-        alert(`Проверь время для дня ${WEEK_DAYS[index]}`);
-        return;
-      }
-
-      const dayDate = addDays(slotPlannerWeekStart, index);
-      const startMinutes = toMinutes(draft.start);
-      const endMinutes = toMinutes(draft.end);
-
-      if (endMinutes - startMinutes < duration) {
-        alert(`Для дня ${WEEK_DAYS[index]} диапазон меньше длительности слота`);
-        return;
-      }
-
-      for (let cursor = startMinutes; cursor + duration <= endMinutes; cursor += duration) {
-        const slotStartHours = String(Math.floor(cursor / 60)).padStart(2, '0');
-        const slotStartMinutes = String(cursor % 60).padStart(2, '0');
-        const slotEndValue = cursor + duration;
-        const slotEndHours = String(Math.floor(slotEndValue / 60)).padStart(2, '0');
-        const slotEndMinutes = String(slotEndValue % 60).padStart(2, '0');
-
-        const slotDate = formatDate(dayDate);
-        const slotStart = new Date(`${slotDate}T${slotStartHours}:${slotStartMinutes}:00`);
-        if (slotStart <= now) {
-          continue;
-        }
-
-        payloads.push({
-          starts_at: buildLocalIso(slotDate, `${slotStartHours}:${slotStartMinutes}`),
-          ends_at: buildLocalIso(slotDate, `${slotEndHours}:${slotEndMinutes}`),
-          label: `${WEEK_DAYS[index]} ${slotStartHours}:${slotStartMinutes}-${slotEndHours}:${slotEndMinutes}`,
-        });
-      }
-    }
-
-    if (payloads.length === 0) {
-      alert('Не осталось ни одного будущего слота для создания. Проверь неделю и время.');
-      return;
-    }
-
+    const payload: { closed: boolean; windows: DayWindow[] } = {
+      closed: dayEditorClosed,
+      windows: dayEditorClosed ? [] : validated.map((w) => ({ start_time: w.start, end_time: w.end })),
+    };
     try {
-      setSaving(true);
-      const results = await Promise.allSettled(
-        payloads.map((payload) =>
-          createLesson({
-            starts_at: payload.starts_at,
-            ends_at: payload.ends_at,
-            tutor_student_id: null,
-            cost: 0,
-            is_window: true,
-          })
-        )
-      );
-      const created = results
-        .filter((result): result is PromiseFulfilledResult<Lesson> => result.status === 'fulfilled')
-        .map((result) => result.value);
-      const failed = results
-        .map((result, index) => ({ result, payload: payloads[index] }))
-        .filter((item): item is { result: PromiseRejectedResult; payload: { starts_at: string; ends_at: string; label: string } } => item.result.status === 'rejected');
-
-      setLessons((prev) =>
-        [...prev, ...created].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
-      );
-      setRequestLessons((prev) =>
-        [...prev, ...created].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
-      );
-
-      if (created.length > 0 && failed.length === 0) {
-        setIsSlotPlannerOpen(false);
-        alert(`Создано слотов: ${created.length}`);
-        return;
-      }
-
-      if (created.length > 0 && failed.length > 0) {
-        const firstError = getApiErrorMessage(failed[0].result.reason, 'Часть слотов не удалось создать');
-        alert(`Создано слотов: ${created.length}. Не удалось создать: ${failed.length}. Первая ошибка: ${firstError}`);
-        return;
-      }
-
-      const firstError = getApiErrorMessage(failed[0]?.result.reason, 'Не удалось создать свободные слоты');
-      alert(firstError);
+      setDayEditorSaving(true);
+      const result = await saveDay(dayEditorDate, payload);
+      setDayEditorResult(result);
+      // Refetch windows for visible range
+      const fromStr = formatDate(range.from);
+      const toStr = formatDate(range.to);
+      const updated = await getWindows(fromStr, toStr);
+      setWindows(updated);
+      setDayEditorOverridden(true);
     } catch (error) {
-      console.error('Ошибка создания свободных слотов:', error);
-      alert(getApiErrorMessage(error, 'Не удалось создать свободные слоты'));
+      console.error('Ошибка сохранения дня:', error);
+      alert(getApiErrorMessage(error, 'Не удалось сохранить расписание дня'));
     } finally {
-      setSaving(false);
+      setDayEditorSaving(false);
     }
   };
 
@@ -1273,7 +1209,7 @@ export default function SchedulePage() {
     </div>
   );
 
-  const renderTimelineColumn = (items: Lesson[], viewMode: LessonCardViewMode) => (
+  const renderTimelineColumn = (items: Lesson[], viewMode: LessonCardViewMode, colWindows: ComputedWindow[] = []) => (
     <div
       style={{
         position: 'relative',
@@ -1298,6 +1234,44 @@ export default function SchedulePage() {
           }}
         />
       ))}
+      {colWindows.map((w, wi) => {
+        const startMin = toMinutes(w.start_time) - timelineWindow.startHour * 60;
+        const endMin = toMinutes(w.end_time) - timelineWindow.startHour * 60;
+        const top = getTimelineOffset(Math.max(0, startMin));
+        const bottom = getTimelineOffset(Math.max(0, endMin));
+        const height = Math.max(4, bottom - top);
+        return (
+          <div
+            key={`win-${wi}`}
+            title={`Свободное окно • ${w.start_time.slice(0, 5)} - ${w.end_time.slice(0, 5)}`}
+            onClick={() => { void openDayEditor(w.date); }}
+            style={{
+              position: 'absolute',
+              left: 4,
+              right: 4,
+              top: top + 2,
+              height: height - 4,
+              borderRadius: 8,
+              background: 'linear-gradient(135deg, rgba(42,171,238,0.13), rgba(200,230,255,0.18))',
+              border: '1px dashed rgba(42,171,238,0.45)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10,
+              fontWeight: 700,
+              color: '#1a6fa8',
+              zIndex: 0,
+              cursor: 'pointer',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+              pointerEvents: 'auto',
+            }}
+          >
+            {height > 20 ? `${w.start_time.slice(0, 5)}–${w.end_time.slice(0, 5)}` : ''}
+          </div>
+        );
+      })}
       {layoutTimelineLessons(items, timelineWindow.startHour, timelineSlotHeights).map(({ lesson, top, height, column, columns }) => {
         const laneGap = viewMode === 'week' ? 4 : 6;
         const width = `calc((100% - 16px - ${(columns - 1) * laneGap}px) / ${columns})`;
@@ -1329,14 +1303,16 @@ export default function SchedulePage() {
 
   const renderCalendarBody = () => {
     if (mode === 'day') {
+      const dayStr = formatDate(dayDate);
       return (
         <div style={{ display: 'grid', gridTemplateColumns: '58px minmax(0, 1fr)', gap: 0, width: '100%', minWidth: 0, border: '1px solid rgba(24,33,47,0.1)', borderRadius: 20, overflow: 'hidden', background: '#fff' }}>
           <div />
-          <div style={{ textAlign: 'center', padding: '10px 6px', background: 'rgba(248,250,252,0.96)', fontWeight: 900, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 6px', background: 'rgba(248,250,252,0.96)', fontWeight: 900, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
             {formatDayLong(dayDate)}
+            <button type="button" title="Редактировать доступность дня" onClick={() => { void openDayEditor(dayStr); }} style={{ padding: '2px 8px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: '1px solid rgba(42,171,238,0.35)', background: 'rgba(42,171,238,0.08)', color: '#1a6fa8', cursor: 'pointer', flexShrink: 0 }}>✎</button>
           </div>
           {renderTimeLabels()}
-          {renderTimelineColumn(dayLessons, 'day')}
+          {renderTimelineColumn(dayLessons, 'day', dayWindows)}
         </div>
       );
     }
@@ -1345,15 +1321,19 @@ export default function SchedulePage() {
       return (
         <div style={{ display: 'grid', gridTemplateColumns: '58px repeat(7, minmax(0, 1fr))', gap: 0, width: '100%', minWidth: 0, border: '1px solid rgba(24,33,47,0.1)', borderRadius: 20, overflow: 'hidden', background: '#fff' }}>
           <div style={{ background: 'rgba(248,250,252,0.96)', borderBottom: '1px solid rgba(24,33,47,0.09)' }} />
-          {weekDays.map((day, index) => (
-            <div key={formatDate(day)} style={{ textAlign: 'center', padding: '8px 4px', background: 'rgba(248,250,252,0.96)', minWidth: 0, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
-              <div style={{ fontWeight: 900, color: '#1f2a3b' }}>{WEEK_DAYS[index]}</div>
-              <div style={{ color: '#667386', fontSize: 12 }}>{formatDayShort(day)}</div>
-            </div>
-          ))}
+          {weekDays.map((day, index) => {
+            const dayStr = formatDate(day);
+            return (
+              <div key={dayStr} style={{ textAlign: 'center', padding: '8px 4px', background: 'rgba(248,250,252,0.96)', minWidth: 0, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
+                <div style={{ fontWeight: 900, color: '#1f2a3b' }}>{WEEK_DAYS[index]}</div>
+                <div style={{ color: '#667386', fontSize: 12 }}>{formatDayShort(day)}</div>
+                <button type="button" title="Редактировать доступность дня" onClick={() => { void openDayEditor(dayStr); }} style={{ marginTop: 2, padding: '1px 6px', borderRadius: 7, fontSize: 11, fontWeight: 700, border: '1px solid rgba(42,171,238,0.3)', background: 'rgba(42,171,238,0.07)', color: '#1a6fa8', cursor: 'pointer' }}>✎</button>
+              </div>
+            );
+          })}
           {renderTimeLabels()}
           {weekLessonsByDay.map((items, index) => (
-            <div key={index} style={{ minWidth: 0 }}>{renderTimelineColumn(items, 'week')}</div>
+            <div key={index} style={{ minWidth: 0 }}>{renderTimelineColumn(items, 'week', weekWindowsByDay[index])}</div>
           ))}
         </div>
       );
@@ -1541,9 +1521,6 @@ export default function SchedulePage() {
 
           <button type="button" title="Добавить занятие" onClick={() => setIsCreateLessonOpen(true)} className="add-trigger">
             +
-          </button>
-          <button title="Создать свободные слоты" type="button" onClick={() => setIsSlotPlannerOpen(true)} className="icon-button ghost-button">
-            □
           </button>
         </div>
       </section>
@@ -1844,130 +1821,107 @@ export default function SchedulePage() {
         </div>
       )}
 
-      {isSlotPlannerOpen && (
-        <div
-          onClick={() => setIsSlotPlannerOpen(false)}
-          className="modal-overlay"
-        >
+      {isDayEditorOpen && (
+        <div onClick={() => setIsDayEditorOpen(false)} className="modal-overlay">
           <div
             onClick={(event) => event.stopPropagation()}
-            className="app-modal wide"
-            style={{ width: 'min(1040px, calc(100vw - 48px))', padding: 18, gap: 12 }}
+            className="app-modal"
+            style={{ width: 'min(520px, calc(100vw - 48px))' }}
           >
             <div className="modal-header">
-              <h3 className="modal-title" style={{ marginBottom: 0 }}>Свободные слоты</h3>
-              <button type="button" title="Закрыть" onClick={() => setIsSlotPlannerOpen(false)} className="modal-close">×</button>
+              <div>
+                <h3 className="modal-title">Доступность дня</h3>
+                <p className="modal-subtitle">
+                  {dayEditorDate}
+                  {dayEditorOverridden && (
+                    <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 999, background: 'rgba(42,171,238,0.12)', color: '#2AABEE', fontSize: 11, fontWeight: 700 }}>изменено</span>
+                  )}
+                </p>
+              </div>
+              <button type="button" title="Закрыть" onClick={() => setIsDayEditorOpen(false)} className="modal-close">×</button>
             </div>
 
-            <div style={{ display: 'grid', gap: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 200px', gap: 12, alignItems: 'center', padding: 10, borderRadius: 16, background: '#f8fafc', border: '1px solid rgba(31,42,59,0.08)' }}>
-                <div style={{ display: 'inline-flex', gap: 4, padding: 4, borderRadius: 13, background: '#fff', border: '1px solid rgba(31,42,59,0.1)', width: 'fit-content' }}>
+            {dayEditorResult && (
+              <div style={{ padding: '10px 14px', borderRadius: 12, background: dayEditorResult.conflicts.length > 0 ? 'rgba(237,137,54,0.1)' : 'rgba(72,187,120,0.1)', border: `1px solid ${dayEditorResult.conflicts.length > 0 ? 'rgba(237,137,54,0.3)' : 'rgba(72,187,120,0.3)'}`, color: dayEditorResult.conflicts.length > 0 ? '#c05621' : '#276749', fontSize: 13, marginBottom: 4 }}>
+                {dayEditorResult.conflicts.length > 0 && (
+                  <div style={{ marginBottom: dayEditorResult.rejected_bookings > 0 ? 8 : 0 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>Вне новой доступности остались занятия:</div>
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      {dayEditorResult.conflicts.map((c) => (
+                        <li key={c.lesson_id}>{c.student_name ?? 'Ученик'} — {new Date(c.starts_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {dayEditorResult.rejected_bookings > 0 && (
+                  <div>Отклонено заявок: <strong>{dayEditorResult.rejected_bookings}</strong></div>
+                )}
+                {dayEditorResult.conflicts.length === 0 && dayEditorResult.rejected_bookings === 0 && (
+                  <span style={{ fontWeight: 700 }}>Сохранено.</span>
+                )}
+              </div>
+            )}
+
+            <div className="modal-form-grid">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700, color: '#1f2a3b' }}>
+                <input
+                  type="checkbox"
+                  checked={dayEditorClosed}
+                  onChange={(e) => { setDayEditorClosed(e.target.checked); setDayEditorResult(null); }}
+                  style={{ width: 17, height: 17 }}
+                />
+                Выходной (нет окон)
+              </label>
+
+              {!dayEditorClosed && (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {dayEditorWindows.map((w, idx) => (
+                    <div key={idx} style={{ display: 'grid', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <input
+                          type="time"
+                          value={w.start}
+                          onChange={(e) => {
+                            setDayEditorWindows((prev) => prev.map((item, i) => i === idx ? { ...item, start: e.target.value, error: undefined } : item));
+                            setDayEditorResult(null);
+                          }}
+                          style={{ padding: '6px 10px', borderRadius: 10, border: w.error ? '1px solid #e53e3e' : '1px solid rgba(24,33,47,0.14)', fontSize: 14, fontFamily: 'inherit', background: '#fff', color: '#1f2a3b', outline: 'none' }}
+                        />
+                        <span style={{ color: '#687486', fontSize: 13, fontWeight: 600 }}>—</span>
+                        <input
+                          type="time"
+                          value={w.end}
+                          onChange={(e) => {
+                            setDayEditorWindows((prev) => prev.map((item, i) => i === idx ? { ...item, end: e.target.value, error: undefined } : item));
+                            setDayEditorResult(null);
+                          }}
+                          style={{ padding: '6px 10px', borderRadius: 10, border: w.error ? '1px solid #e53e3e' : '1px solid rgba(24,33,47,0.14)', fontSize: 14, fontFamily: 'inherit', background: '#fff', color: '#1f2a3b', outline: 'none' }}
+                        />
+                        <button
+                          type="button"
+                          title="Удалить окно"
+                          onClick={() => { setDayEditorWindows((prev) => prev.filter((_, i) => i !== idx)); setDayEditorResult(null); }}
+                          className="icon-button icon-button-danger"
+                        >
+                          🗑
+                        </button>
+                      </div>
+                      {w.error && <div style={{ color: '#c53030', fontSize: 12, paddingLeft: 2 }}>{w.error}</div>}
+                    </div>
+                  ))}
                   <button
                     type="button"
-                    title="Текущая неделя"
-                    onClick={() => setSlotWeekOffset(0)}
-                    style={{
-                      height: 34,
-                      borderRadius: 10,
-                      background: slotWeekOffset === 0 ? '#2AABEE' : 'transparent',
-                      color: slotWeekOffset === 0 ? '#fff' : '#324055',
-                      border: 'none',
-                      boxShadow: slotWeekOffset === 0 ? '0 10px 22px rgba(42,171,238,0.22)' : 'none',
-                      fontSize: 13,
-                    }}
+                    onClick={() => { setDayEditorWindows((prev) => [...prev, { start: '', end: '' }]); setDayEditorResult(null); }}
+                    style={{ alignSelf: 'start', padding: '5px 12px', borderRadius: 10, border: '1px solid rgba(42,171,238,0.35)', background: 'rgba(42,171,238,0.07)', color: '#1a6fa8', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                   >
-                    Текущая неделя
-                  </button>
-                  <button
-                    type="button"
-                    title="Следующая неделя"
-                    onClick={() => setSlotWeekOffset(1)}
-                    style={{
-                      height: 34,
-                      borderRadius: 10,
-                      background: slotWeekOffset === 1 ? '#2AABEE' : 'transparent',
-                      color: slotWeekOffset === 1 ? '#fff' : '#324055',
-                      border: 'none',
-                      boxShadow: slotWeekOffset === 1 ? '0 10px 22px rgba(42,171,238,0.22)' : 'none',
-                      fontSize: 13,
-                    }}
-                  >
-                    Следующая неделя
+                    + Добавить окно
                   </button>
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#768294', fontWeight: 700 }}>
-                  <span style={{ whiteSpace: 'nowrap' }}>Длит. (мин)</span>
-                  <input
-                    type="number"
-                    min="15"
-                    step="15"
-                    value={slotDurationMinutes}
-                    onChange={(event) => setSlotDurationMinutes(event.target.value)}
-                    placeholder="60"
-                    style={{ minWidth: 0, flex: 1 }}
-                  />
-                </label>
-              </div>
-
-              <div style={{ display: 'grid', gap: 6 }}>
-                {slotDrafts.map((draft, index) => {
-                  const dayDate = addDays(slotPlannerWeekStart, index);
-                  const enabled = draft.enabled;
-                  return (
-                    <div
-                      key={index}
-                      className="slot-day-row"
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'var(--slot-day-row-columns, minmax(170px, 1fr) minmax(120px, 160px) minmax(120px, 160px))',
-                        gap: 10,
-                        alignItems: 'center',
-                        padding: 8,
-                        borderRadius: 14,
-                        background: enabled ? '#eef6ff' : '#fff',
-                        border: enabled ? '1px solid rgba(42,171,238,0.35)' : '1px solid rgba(31,42,59,0.1)',
-                        boxShadow: enabled ? '0 12px 24px rgba(42,171,238,0.08)' : '0 8px 20px rgba(15,23,42,0.04)',
-                      }}
-                    >
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, fontSize: 13, color: '#1f2a3b', minWidth: 0 }}>
-                        <input
-                          type="checkbox"
-                          checked={draft.enabled}
-                          onChange={(event) => handleSlotDraftChange(index, { enabled: event.target.checked })}
-                          style={{ width: 16, height: 16, flex: '0 0 auto' }}
-                        />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {WEEK_DAYS[index]} • {formatDayShort(dayDate)}
-                        </span>
-                      </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                        <span style={{ fontSize: 13, color: '#768294', whiteSpace: 'nowrap', flexShrink: 0 }}>С</span>
-                        <input
-                          type="time"
-                          value={draft.start}
-                          disabled={!draft.enabled}
-                          onChange={(event) => handleSlotDraftChange(index, { start: event.target.value })}
-                          style={{ background: draft.enabled ? '#fff' : '#f8fafc', minWidth: 0, flex: 1 }}
-                        />
-                      </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                        <span style={{ fontSize: 13, color: '#768294', whiteSpace: 'nowrap', flexShrink: 0 }}>До</span>
-                        <input
-                          type="time"
-                          value={draft.end}
-                          disabled={!draft.enabled}
-                          onChange={(event) => handleSlotDraftChange(index, { end: event.target.value })}
-                          style={{ background: draft.enabled ? '#fff' : '#f8fafc', minWidth: 0, flex: 1 }}
-                        />
-                      </label>
-                    </div>
-                  );
-                })}
-              </div>
+              )}
 
               <div className="modal-actions">
-                <button type="button" onClick={handleCreateSlots} disabled={saving} className="modal-primary">
-                  {saving ? 'Сохраняем...' : 'Создать слоты'}
+                <button type="button" onClick={() => { void handleDayEditorSave(); }} disabled={dayEditorSaving} className="modal-primary">
+                  {dayEditorSaving ? 'Сохраняем...' : 'Сохранить'}
                 </button>
               </div>
             </div>
@@ -2019,6 +1973,11 @@ export default function SchedulePage() {
                       {selectedWindow
                         ? `Окно репетитора • ${toLessonDateStr(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`
                         : `${subject?.name ?? 'Без предмета'} • ${toLessonDateStr(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`}
+                      {!selectedWindow && selectedLesson.attendance_confirmed && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(72,187,120,0.15)', color: '#276749', fontSize: 12, fontWeight: 700, border: '1px solid rgba(72,187,120,0.3)' }}>
+                          ✓ Подтвердил участие
+                        </span>
+                      )}
                     </p>
                   </div>
                   <button type="button" title="Закрыть" onClick={() => setSelectedLessonId(null)} className="modal-close">×</button>
