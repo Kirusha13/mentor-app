@@ -61,10 +61,11 @@ async def update_series(series_id: int, payload: SeriesUpdate, db: AsyncSession 
     await _owned_link(db, series.tutor_student_id, tutor)
 
     await delete_untouched_future(db, series.id)
-    for field in ("weekday", "start_time", "duration_minutes", "ends_on", "is_active"):
-        value = getattr(payload, field)
-        if value is not None:
-            setattr(series, field, value)
+    data = payload.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        if value is None and field != "ends_on":
+            continue  # null допустим только для ends_on (сделать серию бессрочной)
+        setattr(series, field, value)
     await db.flush()
     if series.is_active:
         await materialize_series(db, series.id)
