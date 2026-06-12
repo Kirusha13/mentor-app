@@ -1,14 +1,21 @@
 from datetime import date, time
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 
 class RuleCreate(BaseModel):
-    weekday: int
+    weekday: int = Field(ge=0, le=6)
     start_time: time
     end_time: time
     effective_from: date | None = None
     effective_until: date | None = None
+
+    @model_validator(mode="after")
+    def check_effective_dates(self) -> "RuleCreate":
+        if self.effective_from is not None and self.effective_until is not None \
+                and self.effective_from > self.effective_until:
+            raise ValueError("effective_from must not be after effective_until")
+        return self
 
 
 class RuleOut(RuleCreate):

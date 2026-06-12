@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import TYPE_CHECKING, Literal
 from zoneinfo import ZoneInfo
 
@@ -153,12 +153,16 @@ async def load_windows(
             AvailabilityOverride.date <= date_to,
         )
     )).scalars().all()
+    dt_start = datetime.combine(date_from - timedelta(days=1), time.min, tzinfo=timezone.utc)
+    dt_end = datetime.combine(date_to + timedelta(days=1), time.max, tzinfo=timezone.utc)
     busy_rows = (await db.execute(
         select(Lesson)
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
         .where(
             TutorStudent.tutor_id == tutor_id,
             Lesson.conduct_status.in_(("scheduled", "reschedule_pending")),
+            Lesson.starts_at < dt_end,
+            Lesson.ends_at > dt_start,
         )
     )).scalars().all()
 

@@ -50,14 +50,14 @@ def _validate_no_overlap(windows: list[tuple[time, time]]) -> None:
 
 
 async def _post_save_checks(
-    db: AsyncSession, tutor: Tutor, dates: list[date]
+    db: AsyncSession, tutor: Tutor, date_from: date, date_to: date
 ) -> AvailabilitySaveResult:
     """После правки доступности: конфликты с занятиями + авто-отклонение заявок вне окон."""
-    if not dates:
+    if date_from > date_to:
         return AvailabilitySaveResult(conflicts=[], rejected_bookings=0)
     tz = _tutor_tz(tutor)
     now = datetime.now(timezone.utc)
-    windows = await load_windows(db, tutor.id, min(dates), max(dates), tz, now)
+    windows = await load_windows(db, tutor.id, date_from, date_to, tz, now)
 
     def in_windows(starts_at: datetime, ends_at: datetime) -> bool:
         s_loc = starts_at.astimezone(tz)
@@ -70,7 +70,6 @@ async def _post_save_checks(
             for w in windows
         )
 
-    day_set = set(dates)
     affected = (await db.execute(
         select(Lesson, TutorStudent)
         .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
@@ -81,17 +80,26 @@ async def _post_save_checks(
         )
     )).all()
 
+    # Fix 1: batch-load students to avoid N+1
+    student_ids = {link.student_id for _, link in affected}
+    student_map: dict[int, Student] = {}
+    if student_ids:
+        student_rows = (await db.execute(
+            select(Student).where(Student.id.in_(student_ids))
+        )).scalars().all()
+        student_map = {s.id: s for s in student_rows}
+
     conflicts: list[dict] = []
     rejected = 0
     for lesson, link in affected:
-        if lesson.starts_at.astimezone(tz).date() not in day_set:
+        if not (date_from <= lesson.starts_at.astimezone(tz).date() <= date_to):
             continue
         if in_windows(lesson.starts_at, lesson.ends_at):
             continue
         if lesson.conduct_status == ConductStatus.booking_pending:
             lesson.conduct_status = ConductStatus.booking_rejected
             rejected += 1
-            student = await db.get(Student, link.student_id)
+            student = student_map.get(link.student_id)
             if student and student.telegram_id:
                 local = lesson.starts_at.astimezone(tz)
                 await send_to_user(
@@ -100,7 +108,7 @@ async def _post_save_checks(
                     "Вы можете выбрать другое свободное время.",
                 )
         else:  # scheduled — не трогаем, только сообщаем
-            student = await db.get(Student, link.student_id)
+            student = student_map.get(link.student_id)
             conflicts.append({
                 "lesson_id": lesson.id,
                 "starts_at": lesson.starts_at.isoformat(),
@@ -146,8 +154,7 @@ async def replace_rules(
             effective_until=r.effective_until,
         ))
     await db.flush()
-    horizon = [date.today() + timedelta(days=i) for i in range(HORIZON_DAYS)]
-    return await _post_save_checks(db, tutor, horizon)
+    return await _post_save_checks(db, tutor, date.today(), date.today() + timedelta(days=HORIZON_DAYS - 1))
 
 
 @router.get(
@@ -205,6 +212,11 @@ async def save_day(
     db: AsyncSession = Depends(get_db),
     tutor: Tutor = Depends(get_current_tutor),
 ):
+    if payload.closed and payload.windows:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "closed=true несовместимо с непустым списком окон",
+        )
     _validate_no_overlap([(w.start_time, w.end_time) for w in payload.windows])
     await db.execute(delete(AvailabilityOverride).where(
         AvailabilityOverride.tutor_id == tutor.id,
@@ -223,7 +235,7 @@ async def save_day(
             ))
     # closed=false и пустой windows = вернуть день к правилам (overrides удалены выше)
     await db.flush()
-    return await _post_save_checks(db, tutor, [day])
+    return await _post_save_checks(db, tutor, day, day)
 
 
 @router.get(
@@ -237,6 +249,11 @@ async def get_windows(
     db: AsyncSession = Depends(get_db),
     tutor: Tutor = Depends(get_current_tutor),
 ):
+    if date_to < date_from or (date_to - date_from).days > 90:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Диапазон не должен превышать 90 дней",
+        )
     windows = await load_windows(
         db, tutor.id, date_from, date_to, _tutor_tz(tutor), datetime.now(timezone.utc)
     )
