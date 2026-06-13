@@ -132,6 +132,7 @@ export function SeriesBlock({ linkId }: Props) {
       await load();
     } catch (err) {
       alert(getApiErrorMessage(err, 'Не удалось удалить серию'));
+    } finally {
       setBusyId(null);
     }
   };
