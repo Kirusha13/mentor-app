@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from sqlalchemy import select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
@@ -30,7 +30,8 @@ from app.core.vk_auth import (
 from app.api.v1.router import api_router
 from app.models.availability import AvailabilityOverride, OverrideKind
 from app.models.tutor import Tutor
-from app.models.lesson import ConductStatus, Lesson
+from app.models.assignment import Assignment
+from app.models.lesson import ConductStatus, HomeworkStatus, Lesson
 from app.models.student import Student
 from app.models.subscription import Subscription
 from app.models.tutor_student import TutorStudent
@@ -42,6 +43,7 @@ from app.services.availability_service import load_windows
 
 
 APP_TIMEZONE = ZoneInfo("Europe/Moscow")
+WEB_APP_URL = "https://mentor-app-kappa-nine.vercel.app"
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +105,8 @@ async def auto_conduct_lessons():
         just_conducted = []
         for lesson in result.scalars().all():
             apply_conduct_status_transition(lesson, lesson.tutor_student, ConductStatus.conducted)
+            if lesson.homework_status is None:
+                lesson.homework_status = HomeworkStatus.pending
             if lesson.tutor_student is not None:
                 just_conducted.append((lesson.tutor_student.student_id, lesson.starts_at))
 
@@ -259,6 +263,35 @@ async def send_week_summaries():
         await db.commit()
 
 
+async def send_homework_digests():
+    """Раз в день: репетиторам с непустой очередью решений по ДЗ — дайджест в Telegram.
+
+    Намеренно НЕ вызывается из стартового блока lifespan (только по крону): дедупа нет,
+    иначе при каждом перезапуске сервера репетитору уходил бы лишний дайджест.
+    """
+    async with AsyncSessionLocal() as db:
+        tutors = (await db.execute(
+            select(Tutor).where(Tutor.telegram_id.is_not(None))
+        )).scalars().all()
+        for tutor in tutors:
+            count = (await db.execute(
+                select(func.count())
+                .select_from(Lesson)
+                .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+                .where(
+                    TutorStudent.tutor_id == tutor.id,
+                    Lesson.conduct_status == ConductStatus.conducted,
+                    Lesson.homework_status == HomeworkStatus.pending,
+                    ~exists().where(Assignment.lesson_id == Lesson.id),
+                )
+            )).scalar_one()
+            if count:
+                await send_to_user(
+                    tutor.telegram_id,
+                    f"{count} занятий без решения по ДЗ. Разобрать → {WEB_APP_URL}/assignments",
+                )
+
+
 async def materialize_all_series():
     async with AsyncSessionLocal() as db:
         created = await materialize_series(db)
@@ -337,6 +370,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(materialize_all_series, "cron", hour=0, minute=15)
     scheduler.add_job(process_reminders, "cron", minute=20)
     scheduler.add_job(send_week_summaries, "cron", day_of_week="sun,mon", minute=30)
+    scheduler.add_job(send_homework_digests, "cron", hour=0, minute=25)
     scheduler.start()
     await start_bot()
     yield
