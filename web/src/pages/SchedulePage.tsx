@@ -882,6 +882,23 @@ export default function SchedulePage() {
     );
   };
 
+  // Клиентское зеркало серверной проверки накладок (lessons.py:_ensure_lesson_has_no_overlap):
+  // предупреждаем до отправки, сервер остаётся источником правды (409).
+  const creationConflict = useMemo(() => {
+    if (!lessonDate || !startTime || !endTime) return false;
+    const ns = new Date(buildLocalIso(lessonDate, startTime)).getTime();
+    const ne = new Date(buildLocalIso(lessonDate, endTime)).getTime();
+    if (Number.isNaN(ns) || Number.isNaN(ne) || ne <= ns) return false;
+    return lessons.some(
+      (lesson) =>
+        (lesson.conduct_status === 'scheduled' ||
+          lesson.conduct_status === 'booking_pending' ||
+          lesson.conduct_status === 'reschedule_pending') &&
+        new Date(lesson.starts_at).getTime() < ne &&
+        new Date(lesson.ends_at).getTime() > ns
+    );
+  }, [lessonDate, startTime, endTime, lessons]);
+
   const handleCreateLesson = async () => {
     if (!lessonDate || !startTime || !endTime || !selectedTutorStudentId || !cost) {
       alert('Заполни все поля для создания занятия');
@@ -1813,8 +1830,14 @@ export default function SchedulePage() {
                 </select>
               </label>
 
+              {creationConflict && (
+                <div style={{ padding: '10px 14px', borderRadius: 12, background: '#FFF2F1', border: '1px solid #F5C6C2', color: '#B42318', fontWeight: 700, fontSize: 14 }}>
+                  На это время уже есть занятие или бронь. Выбери другое время.
+                </div>
+              )}
+
               <div className="modal-actions">
-                <button className="modal-primary" onClick={handleCreateLesson} disabled={saving || !tutorStudentOptions.length}>
+                <button className="modal-primary" onClick={handleCreateLesson} disabled={saving || !tutorStudentOptions.length || creationConflict}>
                   {saving ? 'Сохраняем...' : 'Создать занятие'}
                 </button>
               </div>
