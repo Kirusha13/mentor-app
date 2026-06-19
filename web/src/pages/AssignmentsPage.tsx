@@ -15,6 +15,13 @@ import { getSubjects, type Subject } from '../api/subjects';
 import { getTopics, type TheoryTopic } from '../api/topics';
 import { getTutorLevels, type TutorLevel } from '../api/tutorLevels';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
+import {
+  getHomeworkQueue,
+  getHomeworkStats,
+  skipHomework,
+  type HomeworkQueueItem,
+  type HomeworkStats,
+} from '../api/homework';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
 import { formatFileSize, getMediaUrl, isImageSource } from '../utils/media';
 
@@ -141,6 +148,9 @@ function isDateInRange(value: string, start: string, end: string) {
 
 export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [homeworkQueue, setHomeworkQueue] = useState<HomeworkQueueItem[]>([]);
+  const [homeworkStats, setHomeworkStats] = useState<HomeworkStats | null>(null);
+  const [pendingLessonId, setPendingLessonId] = useState<number | null>(null);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -296,21 +306,33 @@ export default function AssignmentsPage() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [assignmentData, tutorStudentData, studentData, subjectData, topicData, levelData] =
-          await Promise.all([
-            getAssignments(),
-            getTutorStudents(),
-            getStudents(),
-            getSubjects(),
-            getTopics(),
-            getTutorLevels(),
-          ]);
+        const [
+          assignmentData,
+          tutorStudentData,
+          studentData,
+          subjectData,
+          topicData,
+          levelData,
+          homeworkData,
+          statsData,
+        ] = await Promise.all([
+          getAssignments(),
+          getTutorStudents(),
+          getStudents(),
+          getSubjects(),
+          getTopics(),
+          getTutorLevels(),
+          getHomeworkQueue(),
+          getHomeworkStats(),
+        ]);
         setAssignments(assignmentData);
         setTutorStudents(tutorStudentData);
         setStudents(studentData);
         setSubjects(subjectData);
         setTopics(topicData);
         setTutorLevels(levelData);
+        setHomeworkQueue(homeworkData);
+        setHomeworkStats(statsData);
       } catch (error) {
         console.error('Ошибка загрузки заданий:', error);
         alert('Не удалось загрузить задания');
@@ -405,6 +427,29 @@ export default function AssignmentsPage() {
     }
   };
 
+  const openAssignForLesson = (item: HomeworkQueueItem) => {
+    setPendingLessonId(item.lesson_id);
+    setNewTutorStudentId(String(item.tutor_student_id));
+    if (item.topic_id) setNewTopicId(String(item.topic_id));
+    setCreateModalOpen(true);
+  };
+
+  const handleSkipHomework = async (lessonId: number) => {
+    try {
+      await skipHomework(lessonId);
+      setHomeworkQueue((prev) => prev.filter((item) => item.lesson_id !== lessonId));
+      setHomeworkStats(await getHomeworkStats());
+    } catch (error) {
+      console.error('Ошибка отметки «без ДЗ»:', error);
+      alert('Не удалось отметить «без ДЗ»');
+    }
+  };
+
+  const closeCreateModal = () => {
+    setCreateModalOpen(false);
+    setPendingLessonId(null);
+  };
+
   const handleCreate = async () => {
     if (!newTutorStudentId || !newDescription.trim() || !newDeadline) {
       return alert('Заполни ученика, описание и дедлайн');
@@ -421,16 +466,21 @@ export default function AssignmentsPage() {
         description: newDescription.trim(),
         deadline: new Date(newDeadline).toISOString(),
         topic_id: newTopicId ? Number(newTopicId) : undefined,
+        lesson_id: pendingLessonId ?? undefined,
         attachments,
       });
       setAssignments((prev) => [created, ...prev].sort((a, b) => a.deadline.localeCompare(b.deadline)));
+      if (pendingLessonId !== null) {
+        setHomeworkQueue((prev) => prev.filter((item) => item.lesson_id !== pendingLessonId));
+        getHomeworkStats().then(setHomeworkStats).catch(() => {});
+      }
       setNewTitle('');
       setNewDescription('');
       setNewLinkLabel('');
       setNewLinkUrl('');
       setAttachedLinks([]);
       setAttachedFiles([]);
-      setCreateModalOpen(false);
+      closeCreateModal();
       alert('Задание создано');
     } catch (error) {
       console.error('Ошибка создания задания:', error);
@@ -662,8 +712,10 @@ export default function AssignmentsPage() {
     );
   };
 
+  const showHomework = (!!homeworkStats && homeworkStats.total > 0) || homeworkQueue.length > 0;
+
   return (
-    <div className="assignments-page-shell">
+    <div className={`assignments-page-shell${showHomework ? ' has-homework' : ''}`}>
       <style>
         {`
           .assignments-page-shell {
@@ -673,6 +725,15 @@ export default function AssignmentsPage() {
             height: 100%;
             min-height: 0;
             overflow: hidden;
+          }
+
+          .assignments-page-shell.has-homework {
+            grid-template-rows: auto auto auto auto minmax(0, 1fr);
+          }
+
+          .homework-nudge {
+            display: grid;
+            gap: 12px;
           }
 
           .assignments-controls {
@@ -1116,6 +1177,37 @@ export default function AssignmentsPage() {
       </style>
       <h1 className="page-heading">Задания</h1>
 
+      {showHomework && (
+        <div className="homework-nudge">
+          {homeworkStats && homeworkStats.total > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', padding: '10px 14px', borderRadius: 14, background: '#EFF9FF', color: '#0b6aa2', fontWeight: 800 }}>
+              ДЗ задано после {homeworkStats.assigned} из {homeworkStats.total} занятий ({Math.round(homeworkStats.rate * 100)}%) за 30 дней
+              <span style={{ color: '#69758a', fontWeight: 600 }}>· цель 50% · висит: {homeworkStats.pending}</span>
+            </div>
+          )}
+
+          {homeworkQueue.length > 0 && (
+            <section style={{ border: '1px solid #FFE0B2', borderRadius: 18, padding: 14, background: '#FFF8EE' }}>
+              <h3 style={{ margin: '0 0 10px', color: '#B26A00' }}>Требуют решения по ДЗ ({homeworkQueue.length})</h3>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {homeworkQueue.map((item) => (
+                  <div key={item.lesson_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 12, background: '#fff', border: '1px solid #F0E2CC' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, color: '#1f2a3b' }}>{item.student_name}</div>
+                      <div style={{ fontSize: 13, color: '#566173' }}>{formatDateTime(item.starts_at)}{item.topic_id ? ` · ${getTopicTitle(item.topic_id)}` : ''}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <button type="button" className="modal-primary" onClick={() => openAssignForLesson(item)}>Задать ДЗ</button>
+                      <button type="button" className="modal-secondary" onClick={() => handleSkipHomework(item.lesson_id)}>Без ДЗ</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
       <section className="assignments-controls">
         <label className="assignments-search-wrap">
           <span className="assignments-search-icon">⌕</span>
@@ -1172,14 +1264,14 @@ export default function AssignmentsPage() {
       </section>
 
       {createModalOpen && (
-        <div onClick={() => setCreateModalOpen(false)} className="modal-overlay">
+        <div onClick={closeCreateModal} className="modal-overlay">
           <div onClick={(event) => event.stopPropagation()} className="app-modal wide">
           <div className="modal-header">
             <div>
               <h3 className="modal-title">Создать задание</h3>
               <p className="modal-subtitle">Выбери ученика, задай дедлайн и прикрепи материалы для выполнения.</p>
             </div>
-            <button title="Закрыть" type="button" onClick={() => setCreateModalOpen(false)} className="modal-close">×</button>
+            <button title="Закрыть" type="button" onClick={closeCreateModal} className="modal-close">×</button>
           </div>
 
           {relationOptions.length === 0 ? (

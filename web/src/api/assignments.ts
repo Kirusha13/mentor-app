@@ -32,6 +32,7 @@ export interface Assignment {
   student_files: string[] | null;
   tutor_student_id: number;
   topic_id: number | null;
+  lesson_id: number | null;
   created_at: string;
   updated_at?: string;
 }
@@ -47,6 +48,7 @@ export interface CreateAssignmentPayload {
   description: string;
   deadline: string;
   topic_id?: number;
+  lesson_id?: number;
   attachments?: AssignmentAttachments | null;
 }
 
