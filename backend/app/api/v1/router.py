@@ -5,6 +5,7 @@ from app.api.v1.endpoints import (
     auth,
     availability,
     contacts,
+    homework,
     lessons,
     materials,
     series,
@@ -32,6 +33,7 @@ api_router.include_router(series.router, prefix="/series", tags=["series"])
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
 api_router.include_router(lessons.router, prefix="/lessons", tags=["lessons"])
 api_router.include_router(assignments.router, prefix="/assignments", tags=["assignments"])
+api_router.include_router(homework.router, prefix="/homework", tags=["homework"])
 api_router.include_router(theory_topics.router, prefix="/theory-topics", tags=["theory-topics"])
 api_router.include_router(tutor_levels.router, prefix="/tutor-levels", tags=["tutor-levels"])
 api_router.include_router(materials.router, prefix="/materials", tags=["materials"])
