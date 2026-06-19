@@ -342,14 +342,6 @@ function CalendarEventCard({
   );
 }
 
-function overlaps(first: Lesson, second: Lesson) {
-  return (
-    toLessonDateStr(first) === toLessonDateStr(second) &&
-    lessonStartMinutes(first) < lessonEndMinutes(second) &&
-    lessonEndMinutes(first) > lessonStartMinutes(second)
-  );
-}
-
 function monthGrid(date: Date) {
   const monthStart = startOfMonth(date);
   const monthEnd = endOfMonth(date);
