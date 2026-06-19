@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getLessons } from '../api/lessons';
+import { getHomeworkQueue } from '../api/homework';
 import { getTutorProfile } from '../api/tutor';
 import { getTutorStudents } from '../api/tutorStudents';
 import { useAuth } from '../context/AuthContext';
@@ -155,6 +156,7 @@ export default function Layout({ children }: LayoutProps) {
   const [tutorSubtitle, setTutorSubtitle] = useState('Личный кабинет');
   const [lessonRequestCount, setLessonRequestCount] = useState(0);
   const [pendingStudentCount, setPendingStudentCount] = useState(0);
+  const [homeworkCount, setHomeworkCount] = useState(0);
   const initials = useMemo(() => getInitials(tutorLabel), [tutorLabel]);
   const isProfileActive = location.pathname.startsWith('/profile');
 
@@ -186,7 +188,11 @@ export default function Layout({ children }: LayoutProps) {
 
     const loadRequestCount = async () => {
       try {
-        const [lessons, tutorStudents] = await Promise.all([getLessons(), getTutorStudents()]);
+        const [lessons, tutorStudents, homeworkQueue] = await Promise.all([
+          getLessons(),
+          getTutorStudents(),
+          getHomeworkQueue(),
+        ]);
         if (!cancelled) {
           const lessonCount = lessons.filter(
             (l) =>
@@ -197,6 +203,7 @@ export default function Layout({ children }: LayoutProps) {
           const studentCount = tutorStudents.filter((ts) => ts.status === 'pending').length;
           setLessonRequestCount(lessonCount);
           setPendingStudentCount(studentCount);
+          setHomeworkCount(homeworkQueue.length);
         }
       } catch {
         // не критично — бейджи просто не покажутся
@@ -412,6 +419,27 @@ export default function Layout({ children }: LayoutProps) {
                         }}
                       >
                         {pendingStudentCount}
+                      </span>
+                    )}
+                    {item.to === '/assignments' && homeworkCount > 0 && (
+                      <span
+                        style={{
+                          marginLeft: 'auto',
+                          background: '#e53e3e',
+                          color: '#fff',
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 800,
+                          minWidth: 18,
+                          height: 18,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '0 5px',
+                          lineHeight: 1,
+                        }}
+                      >
+                        {homeworkCount}
                       </span>
                     )}
                   </NavLink>
