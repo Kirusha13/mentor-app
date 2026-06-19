@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_tutor
 from app.core.database import get_db
-from app.models.lesson import ConductStatus, Lesson, PaymentStatus
+from app.models.lesson import ConductStatus, HomeworkStatus, Lesson, PaymentStatus
 from app.models.student import Student
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
@@ -220,6 +220,9 @@ async def update_lesson(
     for field, value in payload.items():
         if field == "conduct_status":
             apply_conduct_status_transition(lesson, tutor_student, value)
+            # Ручное проведение тоже открывает решение по ДЗ (как auto_conduct).
+            if lesson.conduct_status == ConductStatus.conducted and lesson.homework_status is None:
+                lesson.homework_status = HomeworkStatus.pending
             continue
         setattr(lesson, field, value)
 
