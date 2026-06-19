@@ -26,6 +26,11 @@ class PaymentStatus(str, enum.Enum):
     paid = "paid"
 
 
+class HomeworkStatus(str, enum.Enum):
+    pending = "pending"
+    skipped = "skipped"
+
+
 class Lesson(TimestampMixin, Base):
     __tablename__ = "lessons"
     __table_args__ = (
@@ -53,6 +58,9 @@ class Lesson(TimestampMixin, Base):
     reminder_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     subscription_covered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     attendance_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    homework_status: Mapped[HomeworkStatus | None] = mapped_column(
+        SAEnum(HomeworkStatus, name="homework_status_enum"), nullable=True
+    )
     reminder72_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     series_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("lesson_series.id", ondelete="SET NULL"), nullable=True

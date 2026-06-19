@@ -40,5 +40,8 @@ class Assignment(TimestampMixin, Base):
     topic_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("theory_topics.id", ondelete="SET NULL"), nullable=True
     )
+    lesson_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("lessons.id", ondelete="SET NULL"), nullable=True
+    )
 
     tutor_student: Mapped["TutorStudent"] = relationship(back_populates="assignments")

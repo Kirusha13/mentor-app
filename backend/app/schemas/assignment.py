@@ -19,6 +19,7 @@ class AssignmentOut(BaseModel):
     tutor_student_id: int
     topic_id: int | None
     topic_title: str | None = None
+    lesson_id: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -31,6 +32,7 @@ class AssignmentCreate(BaseModel):
     deadline: datetime
     title: str | None = None
     topic_id: int | None = None
+    lesson_id: int | None = None
     attachments: dict | None = None
 
 
