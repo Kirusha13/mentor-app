@@ -17,10 +17,8 @@ import { getTutorLevels, type TutorLevel } from '../api/tutorLevels';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import {
   getHomeworkQueue,
-  getHomeworkStats,
   skipHomework,
   type HomeworkQueueItem,
-  type HomeworkStats,
 } from '../api/homework';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
 import { formatFileSize, getMediaUrl, isImageSource } from '../utils/media';
@@ -149,7 +147,6 @@ function isDateInRange(value: string, start: string, end: string) {
 export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [homeworkQueue, setHomeworkQueue] = useState<HomeworkQueueItem[]>([]);
-  const [homeworkStats, setHomeworkStats] = useState<HomeworkStats | null>(null);
   const [pendingLessonId, setPendingLessonId] = useState<number | null>(null);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -314,7 +311,6 @@ export default function AssignmentsPage() {
           topicData,
           levelData,
           homeworkData,
-          statsData,
         ] = await Promise.all([
           getAssignments(),
           getTutorStudents(),
@@ -323,7 +319,6 @@ export default function AssignmentsPage() {
           getTopics(),
           getTutorLevels(),
           getHomeworkQueue(),
-          getHomeworkStats(),
         ]);
         setAssignments(assignmentData);
         setTutorStudents(tutorStudentData);
@@ -332,7 +327,6 @@ export default function AssignmentsPage() {
         setTopics(topicData);
         setTutorLevels(levelData);
         setHomeworkQueue(homeworkData);
-        setHomeworkStats(statsData);
       } catch (error) {
         console.error('Ошибка загрузки заданий:', error);
         alert('Не удалось загрузить задания');
@@ -438,7 +432,6 @@ export default function AssignmentsPage() {
     try {
       await skipHomework(lessonId);
       setHomeworkQueue((prev) => prev.filter((item) => item.lesson_id !== lessonId));
-      setHomeworkStats(await getHomeworkStats());
     } catch (error) {
       console.error('Ошибка отметки «без ДЗ»:', error);
       alert('Не удалось отметить «без ДЗ»');
@@ -472,7 +465,6 @@ export default function AssignmentsPage() {
       setAssignments((prev) => [created, ...prev].sort((a, b) => a.deadline.localeCompare(b.deadline)));
       if (pendingLessonId !== null) {
         setHomeworkQueue((prev) => prev.filter((item) => item.lesson_id !== pendingLessonId));
-        getHomeworkStats().then(setHomeworkStats).catch(() => {});
       }
       setNewTitle('');
       setNewDescription('');
@@ -712,7 +704,7 @@ export default function AssignmentsPage() {
     );
   };
 
-  const showHomework = (!!homeworkStats && homeworkStats.total > 0) || homeworkQueue.length > 0;
+  const showHomework = homeworkQueue.length > 0;
 
   return (
     <div className={`assignments-page-shell${showHomework ? ' has-homework' : ''}`}>
@@ -1179,13 +1171,6 @@ export default function AssignmentsPage() {
 
       {showHomework && (
         <div className="homework-nudge">
-          {homeworkStats && homeworkStats.total > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', padding: '10px 14px', borderRadius: 14, background: '#EFF9FF', color: '#0b6aa2', fontWeight: 800 }}>
-              ДЗ задано после {homeworkStats.assigned} из {homeworkStats.total} занятий ({Math.round(homeworkStats.rate * 100)}%) за 30 дней
-              <span style={{ color: '#69758a', fontWeight: 600 }}>· цель 50% · висит: {homeworkStats.pending}</span>
-            </div>
-          )}
-
           {homeworkQueue.length > 0 && (
             <section style={{ border: '1px solid #FFE0B2', borderRadius: 18, padding: 14, background: '#FFF8EE' }}>
               <h3 style={{ margin: '0 0 10px', color: '#B26A00' }}>Требуют решения по ДЗ ({homeworkQueue.length})</h3>
