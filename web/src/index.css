@@ -690,3 +690,7 @@ body:has(.portfolio-report-modal) main > div {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.field-invalid {
+  border-color: #e53e3e !important;
+}
