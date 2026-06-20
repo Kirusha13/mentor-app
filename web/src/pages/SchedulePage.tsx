@@ -23,6 +23,7 @@ import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { getApiErrorCode, getApiErrorMessage } from '../utils/apiError';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
 import { useToast } from '../components/Toast';
+import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
 import {
   lessonDate as toLessonDateStr,
   lessonDateRu,
@@ -434,6 +435,7 @@ function layoutTimelineLessons(items: Lesson[], startHour: number, slotHeights: 
 
 export default function SchedulePage() {
   const toast = useToast();
+  const { errors, validateField, validateAll, clearError, reset } = useFieldErrors();
   const [mode, setMode] = useState<CalendarMode>('week');
   const [anchorDate, setAnchorDate] = useState(() => atMidnight(new Date()));
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -901,11 +903,17 @@ export default function SchedulePage() {
     );
   }, [lessonDate, startTime, endTime, lessons]);
 
+  const createLessonRules: FieldRules = {
+    selectedTutorStudentId: () => (selectedTutorStudentId ? null : 'Выбери ученика и предмет'),
+    lessonDate: () => (lessonDate ? null : 'Укажи дату'),
+    startTime: () => (startTime ? null : 'Укажи время начала'),
+    endTime: () =>
+      !endTime ? 'Укажи время окончания' : endTime <= startTime ? 'Время конца должно быть позже начала' : null,
+    cost: () => (Number(cost) > 0 ? null : 'Стоимость должна быть больше нуля'),
+  };
+
   const handleCreateLesson = async () => {
-    if (!lessonDate || !startTime || !endTime || !selectedTutorStudentId || !cost) {
-      toast.error('Заполни все поля для создания занятия');
-      return;
-    }
+    if (!validateAll(createLessonRules)) return;
 
     try {
       setSaving(true);
@@ -1082,11 +1090,17 @@ export default function SchedulePage() {
     }
   };
 
+  const editLessonRules: FieldRules = {
+    editLessonDate: () => (editLessonDate ? null : 'Укажи дату'),
+    editStartTime: () => (editStartTime ? null : 'Укажи время начала'),
+    editEndTime: () =>
+      !editEndTime ? 'Укажи время окончания' : editEndTime <= editStartTime ? 'Время конца должно быть позже начала' : null,
+    editCost: () => (isWindow(selectedLesson as Lesson) ? null : Number(editCost) > 0 ? null : 'Стоимость должна быть больше нуля'),
+  };
+
   const handleLessonDetailsSave = async () => {
-    if (!selectedLesson || !editLessonDate || !editStartTime || !editEndTime || (!isWindow(selectedLesson) && !editCost)) {
-      toast.error(isWindow(selectedLesson as Lesson) ? 'Заполни дату и время' : 'Заполни дату, время и стоимость');
-      return;
-    }
+    if (!selectedLesson) return;
+    if (!validateAll(editLessonRules)) return;
 
     try {
       const updated = await updateLesson(selectedLesson.id, {
@@ -1104,16 +1118,17 @@ export default function SchedulePage() {
     }
   };
 
-  const handleLessonReschedule = async () => {
-    if (!selectedLesson || !rescheduleDate || !rescheduleStartTime || !rescheduleEndTime) {
-      toast.error('Заполни новую дату и время переноса');
-      return;
-    }
+  const rescheduleRules: FieldRules = {
+    rescheduleDate: () => (rescheduleDate ? null : 'Укажи новую дату'),
+    rescheduleStartTime: () => (rescheduleStartTime ? null : 'Укажи время начала'),
+    rescheduleEndTime: () =>
+      !rescheduleEndTime ? 'Укажи время окончания'
+        : rescheduleEndTime <= rescheduleStartTime ? 'Время конца должно быть позже начала' : null,
+  };
 
-    if (rescheduleEndTime <= rescheduleStartTime) {
-      toast.error('Время окончания должно быть позже времени начала');
-      return;
-    }
+  const handleLessonReschedule = async () => {
+    if (!selectedLesson) return;
+    if (!validateAll(rescheduleRules)) return;
 
     try {
       const movedLesson = await rescheduleLesson(selectedLesson.id, {
@@ -1540,7 +1555,7 @@ export default function SchedulePage() {
             )}
           </button>
 
-          <button type="button" title="Добавить занятие" onClick={() => setIsCreateLessonOpen(true)} className="add-trigger">
+          <button type="button" title="Добавить занятие" onClick={() => { reset(); setIsCreateLessonOpen(true); }} className="add-trigger">
             +
           </button>
         </div>
@@ -1764,7 +1779,7 @@ export default function SchedulePage() {
 
       {isCreateLessonOpen && (
         <div
-          onClick={() => setIsCreateLessonOpen(false)}
+          onClick={() => { reset(); setIsCreateLessonOpen(false); }}
           className="modal-overlay"
         >
           <div
@@ -1776,20 +1791,24 @@ export default function SchedulePage() {
                 <h3 className="modal-title">Создать занятие</h3>
                 <p className="modal-subtitle">Заполни ученика, дату, время и тему занятия. Стоимость посчитается автоматически.</p>
               </div>
-              <button type="button" title="Закрыть" onClick={() => setIsCreateLessonOpen(false)} className="modal-close">×</button>
+              <button type="button" title="Закрыть" onClick={() => { reset(); setIsCreateLessonOpen(false); }} className="modal-close">×</button>
             </div>
 
             <div className="modal-form-grid">
               <label className="modal-field">
                 Ученик и предмет
                 <select
+                  className={errors.selectedTutorStudentId ? 'field-invalid' : undefined}
                   value={selectedTutorStudentId}
                   onChange={(event) => {
                     const nextId = event.target.value;
                     const nextOption = tutorStudentOptions.find((item) => String(item.id) === nextId);
                     setSelectedTutorStudentId(nextId);
                     setCost(nextOption?.rate ? String(nextOption.rate) : '');
+                    clearError('selectedTutorStudentId');
+                    clearError('cost');
                   }}
+                  onBlur={() => validateField('selectedTutorStudentId', createLessonRules)}
                 >
                   {tutorStudentOptions.length === 0 ? (
                     <option value="">Нет активных связок</option>
@@ -1801,24 +1820,47 @@ export default function SchedulePage() {
                     ))
                   )}
                 </select>
+                <FieldError message={errors.selectedTutorStudentId} />
               </label>
               <label className="modal-field">
                 Дата
-                <input type="date" value={lessonDate} onChange={(event) => setLessonDate(event.target.value)} />
+                <input
+                  type="date"
+                  className={errors.lessonDate ? 'field-invalid' : undefined}
+                  value={lessonDate}
+                  onChange={(event) => { setLessonDate(event.target.value); clearError('lessonDate'); }}
+                  onBlur={() => validateField('lessonDate', createLessonRules)}
+                />
+                <FieldError message={errors.lessonDate} />
               </label>
               <div className="modal-row">
                 <label className="modal-field">
                   Время начала
-                  <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+                  <input
+                    type="time"
+                    className={errors.startTime ? 'field-invalid' : undefined}
+                    value={startTime}
+                    onChange={(event) => { setStartTime(event.target.value); clearError('startTime'); clearError('endTime'); }}
+                    onBlur={() => validateField('startTime', createLessonRules)}
+                  />
+                  <FieldError message={errors.startTime} />
                 </label>
                 <label className="modal-field">
                   Время окончания
-                  <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+                  <input
+                    type="time"
+                    className={errors.endTime ? 'field-invalid' : undefined}
+                    value={endTime}
+                    onChange={(event) => { setEndTime(event.target.value); clearError('endTime'); }}
+                    onBlur={() => validateField('endTime', createLessonRules)}
+                  />
+                  <FieldError message={errors.endTime} />
                 </label>
               </div>
               <label className="modal-field">
                 Стоимость
-                <input type="number" value={cost} readOnly placeholder="Стоимость" style={{ background: '#f8fafc', color: '#435066' }} />
+                <input type="number" value={cost} readOnly placeholder="Стоимость" className={errors.cost ? 'field-invalid' : undefined} style={{ background: '#f8fafc', color: '#435066' }} />
+                <FieldError message={errors.cost} />
               </label>
               <label className="modal-field">
                 Тема занятия
@@ -2040,6 +2082,7 @@ export default function SchedulePage() {
                       type="button"
                       title={isEditingLesson ? 'Скрыть редактирование' : 'Редактировать занятие'}
                       onClick={() => {
+                        reset();
                         setIsEditingLesson((prev) => !prev);
                         setIsReschedulingLesson(false);
                       }}
@@ -2072,6 +2115,7 @@ export default function SchedulePage() {
                       <button
                         title={isReschedulingLesson ? 'Скрыть перенос' : 'Перенести занятие'}
                         onClick={() => {
+                          reset();
                           setIsReschedulingLesson((prev) => !prev);
                           setIsEditingLesson(false);
                         }}
@@ -2152,12 +2196,24 @@ export default function SchedulePage() {
                       {selectedWindow ? 'Редактирование свободного слота' : 'Редактирование занятия'}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12 }}>
-                      <input type="date" value={editLessonDate} onChange={(event) => setEditLessonDate(event.target.value)} />
+                      <div>
+                        <input type="date" className={errors.editLessonDate ? 'field-invalid' : undefined} value={editLessonDate} onChange={(event) => { setEditLessonDate(event.target.value); clearError('editLessonDate'); }} onBlur={() => validateField('editLessonDate', editLessonRules)} style={{ width: '100%' }} />
+                        <FieldError message={errors.editLessonDate} />
+                      </div>
                       {!selectedWindow && (
-                        <input type="number" value={editCost} onChange={(event) => setEditCost(event.target.value)} placeholder="Стоимость" />
+                        <div>
+                          <input type="number" className={errors.editCost ? 'field-invalid' : undefined} value={editCost} onChange={(event) => { setEditCost(event.target.value); clearError('editCost'); }} onBlur={() => validateField('editCost', editLessonRules)} placeholder="Стоимость" style={{ width: '100%' }} />
+                          <FieldError message={errors.editCost} />
+                        </div>
                       )}
-                      <input type="time" value={editStartTime} onChange={(event) => setEditStartTime(event.target.value)} />
-                      <input type="time" value={editEndTime} onChange={(event) => setEditEndTime(event.target.value)} />
+                      <div>
+                        <input type="time" className={errors.editStartTime ? 'field-invalid' : undefined} value={editStartTime} onChange={(event) => { setEditStartTime(event.target.value); clearError('editStartTime'); clearError('editEndTime'); }} onBlur={() => validateField('editStartTime', editLessonRules)} style={{ width: '100%' }} />
+                        <FieldError message={errors.editStartTime} />
+                      </div>
+                      <div>
+                        <input type="time" className={errors.editEndTime ? 'field-invalid' : undefined} value={editEndTime} onChange={(event) => { setEditEndTime(event.target.value); clearError('editEndTime'); }} onBlur={() => validateField('editEndTime', editLessonRules)} style={{ width: '100%' }} />
+                        <FieldError message={errors.editEndTime} />
+                      </div>
                     </div>
                     {!selectedWindow && (
                       <select
@@ -2197,10 +2253,19 @@ export default function SchedulePage() {
                   <div style={{ marginBottom: 20 }}>
                     <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>Перенос занятия</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12 }}>
-                      <input type="date" value={rescheduleDate} onChange={(event) => setRescheduleDate(event.target.value)} />
+                      <div>
+                        <input type="date" className={errors.rescheduleDate ? 'field-invalid' : undefined} value={rescheduleDate} onChange={(event) => { setRescheduleDate(event.target.value); clearError('rescheduleDate'); }} onBlur={() => validateField('rescheduleDate', rescheduleRules)} style={{ width: '100%' }} />
+                        <FieldError message={errors.rescheduleDate} />
+                      </div>
                       <div />
-                      <input type="time" value={rescheduleStartTime} onChange={(event) => setRescheduleStartTime(event.target.value)} />
-                      <input type="time" value={rescheduleEndTime} onChange={(event) => setRescheduleEndTime(event.target.value)} />
+                      <div>
+                        <input type="time" className={errors.rescheduleStartTime ? 'field-invalid' : undefined} value={rescheduleStartTime} onChange={(event) => { setRescheduleStartTime(event.target.value); clearError('rescheduleStartTime'); clearError('rescheduleEndTime'); }} onBlur={() => validateField('rescheduleStartTime', rescheduleRules)} style={{ width: '100%' }} />
+                        <FieldError message={errors.rescheduleStartTime} />
+                      </div>
+                      <div>
+                        <input type="time" className={errors.rescheduleEndTime ? 'field-invalid' : undefined} value={rescheduleEndTime} onChange={(event) => { setRescheduleEndTime(event.target.value); clearError('rescheduleEndTime'); }} onBlur={() => validateField('rescheduleEndTime', rescheduleRules)} style={{ width: '100%' }} />
+                        <FieldError message={errors.rescheduleEndTime} />
+                      </div>
                     </div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <button type="button" onClick={handleLessonReschedule} className="modal-purple">
