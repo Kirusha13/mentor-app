@@ -8,6 +8,7 @@ import {
 } from '../api/tutorLevels';
 import { getApiErrorMessage } from '../utils/apiError';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -24,6 +25,7 @@ const mutedTextStyle = {
 
 export default function LevelsPage() {
   const toast = useToast();
+  const confirm = useConfirm();
   const [levels, setLevels] = useState<TutorLevel[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -118,7 +120,7 @@ export default function LevelsPage() {
   };
 
   const handleDelete = async (level: TutorLevel) => {
-    if (!window.confirm(`Удалить уровень «${level.name}»? Связи с темами и учениками будут очищены.`)) {
+    if (!(await confirm(`Удалить уровень «${level.name}»? Связи с темами и учениками будут очищены.`))) {
       return;
     }
 

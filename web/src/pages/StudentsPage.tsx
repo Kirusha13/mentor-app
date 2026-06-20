@@ -18,6 +18,7 @@ import {
 import { getApiErrorMessage } from '../utils/apiError';
 import { SeriesBlock } from '../components/SeriesBlock';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 interface StudentGroupData {
   student: Student;
@@ -67,6 +68,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export default function StudentsPage() {
   const toast = useToast();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [students, setStudents] = useState<Student[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
@@ -250,7 +252,7 @@ export default function StudentsPage() {
 
   const handleDeleteTutorStudent = async () => {
     if (!selectedCard) return;
-    const confirmed = window.confirm(`\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0441\u0432\u044f\u0437\u044c \u0441 \u0443\u0447\u0435\u043d\u0438\u043a\u043e\u043c "${selectedCard.student.full_name}"? \u0423\u0447\u0435\u043d\u0438\u043a \u043e\u0441\u0442\u0430\u043d\u0435\u0442\u0441\u044f \u0432 \u0441\u0438\u0441\u0442\u0435\u043c\u0435, \u043d\u043e \u0438\u0441\u0447\u0435\u0437\u043d\u0435\u0442 \u0438\u0437 \u0442\u0432\u043e\u0435\u0433\u043e \u0441\u043f\u0438\u0441\u043a\u0430 \u043f\u043e \u044d\u0442\u043e\u043c\u0443 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0443.`);
+    const confirmed = await confirm(`\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0441\u0432\u044f\u0437\u044c \u0441 \u0443\u0447\u0435\u043d\u0438\u043a\u043e\u043c "${selectedCard.student.full_name}"? \u0423\u0447\u0435\u043d\u0438\u043a \u043e\u0441\u0442\u0430\u043d\u0435\u0442\u0441\u044f \u0432 \u0441\u0438\u0441\u0442\u0435\u043c\u0435, \u043d\u043e \u0438\u0441\u0447\u0435\u0437\u043d\u0435\u0442 \u0438\u0437 \u0442\u0432\u043e\u0435\u0433\u043e \u0441\u043f\u0438\u0441\u043a\u0430 \u043f\u043e \u044d\u0442\u043e\u043c\u0443 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0443.`);
     if (!confirmed) return;
     try {
       await deleteTutorStudent(selectedCard.tutorStudent.id);

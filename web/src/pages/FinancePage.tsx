@@ -19,6 +19,7 @@ import { lessonDate } from '../utils/lessonTime';
 import { SubscriptionCard } from '../components/subscriptions/SubscriptionCard';
 import { SubscriptionModal, type RelationOption as SubModalRelation, type SubscriptionModalSubmit } from '../components/subscriptions/SubscriptionModal';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -243,6 +244,7 @@ function chartTooltipStyle(visible: boolean) {
 
 export default function FinancePage() {
   const toast = useToast();
+  const confirm = useConfirm();
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 720px)');
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -810,7 +812,7 @@ export default function FinancePage() {
   };
 
   const handleSubDelete = async (linkId: number, sub: Subscription) => {
-    if (!window.confirm('Удалить этот абонемент?')) return;
+    if (!await confirm('Удалить этот абонемент?')) return;
     setSavingAbonement(true);
     try {
       await deleteSubscription(sub.id);

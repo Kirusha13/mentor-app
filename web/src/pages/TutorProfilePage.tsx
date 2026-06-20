@@ -16,6 +16,7 @@ import {
 } from '../api/tutorLevels';
 import { getApiErrorMessage } from '../utils/apiError';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
 
@@ -78,6 +79,7 @@ function fieldCard(label: string, value: string) {
 
 export default function TutorProfilePage() {
   const toast = useToast();
+  const confirm = useConfirm();
   const [profile, setProfile] = useState<TutorProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -321,7 +323,7 @@ const handleProfileSave = async () => {
   };
 
   const handleSubjectDelete = async (subjectId: number, subjectName: string) => {
-    const confirmed = window.confirm(`Удалить предмет "${subjectName}"?`);
+    const confirmed = await confirm(`Удалить предмет "${subjectName}"?`);
     if (!confirmed) return;
 
     try {
@@ -402,7 +404,7 @@ const handleProfileSave = async () => {
   };
 
   const handleLevelDelete = async (level: TutorLevel) => {
-    if (!window.confirm(`Удалить уровень «${level.name}»? Связи с темами и учениками будут очищены.`)) {
+    if (!(await confirm(`Удалить уровень «${level.name}»? Связи с темами и учениками будут очищены.`))) {
       return;
     }
 

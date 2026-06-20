@@ -2,6 +2,7 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { getLessons } from '../api/lessons';
 import { getHomeworkQueue } from '../api/homework';
+import { useConfirm } from './ConfirmDialog';
 import { getTutorProfile } from '../api/tutor';
 import { getTutorStudents } from '../api/tutorStudents';
 import { useAuth } from '../context/AuthContext';
@@ -148,6 +149,7 @@ const sidebarButtonBase = {
 
 export default function Layout({ children }: LayoutProps) {
   const { logout } = useAuth();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const location = useLocation();
   const isTablet = useMediaQuery('(max-width: 1100px)');
@@ -160,8 +162,8 @@ export default function Layout({ children }: LayoutProps) {
   const initials = useMemo(() => getInitials(tutorLabel), [tutorLabel]);
   const isProfileActive = location.pathname.startsWith('/profile');
 
-  const handleLogout = () => {
-    const confirmed = window.confirm('Вы действительно хотите выйти из кабинета?');
+  const handleLogout = async () => {
+    const confirmed = await confirm('Вы действительно хотите выйти из кабинета?');
     if (!confirmed) return;
 
     logout();

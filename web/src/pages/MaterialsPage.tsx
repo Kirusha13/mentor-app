@@ -21,6 +21,7 @@ import {
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { getApiErrorMessage } from '../utils/apiError';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -104,6 +105,7 @@ function getDomainHint(url: string): string {
 
 export default function MaterialsPage() {
   const toast = useToast();
+  const confirm = useConfirm();
   const [searchParams] = useSearchParams();
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 720px)');
@@ -401,7 +403,7 @@ export default function MaterialsPage() {
       message += `\n\nВместе с ней удалятся ${materialCount} материал(ов).`;
     }
 
-    if (!window.confirm(message)) {
+    if (!await confirm(message)) {
       return;
     }
 
@@ -474,7 +476,7 @@ export default function MaterialsPage() {
   };
 
   const handleDeleteMaterial = async (material: Material) => {
-    if (!window.confirm('Удалить материал?')) {
+    if (!await confirm('Удалить материал?')) {
       return;
     }
 

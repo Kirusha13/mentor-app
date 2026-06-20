@@ -21,6 +21,7 @@ import {
   type HomeworkQueueItem,
 } from '../api/homework';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
 import { formatFileSize, getMediaUrl, isImageSource } from '../utils/media';
 
@@ -147,6 +148,7 @@ function isDateInRange(value: string, start: string, end: string) {
 
 export default function AssignmentsPage() {
   const toast = useToast();
+  const confirm = useConfirm();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [homeworkQueue, setHomeworkQueue] = useState<HomeworkQueueItem[]>([]);
   const [pendingLessonId, setPendingLessonId] = useState<number | null>(null);
@@ -524,7 +526,7 @@ export default function AssignmentsPage() {
 
   const handleDeleteAssignment = async (assignment: Assignment) => {
     const title = assignment.title || 'задание без заголовка';
-    if (!window.confirm(`Удалить ДЗ «${title}»?`)) {
+    if (!(await confirm(`Удалить ДЗ «${title}»?`))) {
       return;
     }
 

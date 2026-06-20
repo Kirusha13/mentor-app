@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { backdateCheck } from '../../api/subscriptions';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { useToast } from '../Toast';
+import { useConfirm } from '../ConfirmDialog';
 
 export interface RelationOption {
   id: number;
@@ -33,6 +34,7 @@ export function SubscriptionModal({
   mode, relations, lockedRelationId = null, initial, editingId = null, onClose, onSubmit,
 }: Props) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [linkId, setLinkId] = useState<string>(
     lockedRelationId != null ? String(lockedRelationId) : (relations[0] ? String(relations[0].id) : '')
   );
@@ -58,9 +60,9 @@ export function SubscriptionModal({
       if (startDate < todayISO()) {
         const res = await backdateCheck(lid, startDate);
         const n = res.covered_paid_lessons.length;
-        if (n > 0 && !window.confirm(
+        if (n > 0 && !(await confirm(
           `Дата в прошлом: ${n} уже оплаченных занятий попадут под абонемент. Продолжить?`
-        )) { setSaving(false); return; }
+        ))) { setSaving(false); return; }
       }
       await onSubmit({ mode, editingId, linkId: lid, hours: h, price: p, startDate });
     } catch (error) {

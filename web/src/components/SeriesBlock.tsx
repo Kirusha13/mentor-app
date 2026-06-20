@@ -8,6 +8,7 @@ import {
 } from '../api/series';
 import { getApiErrorMessage } from '../utils/apiError';
 import { useToast } from './Toast';
+import { useConfirm } from './ConfirmDialog';
 
 const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
@@ -49,6 +50,7 @@ interface Props {
 
 export function SeriesBlock({ linkId }: Props) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [series, setSeries] = useState<LessonSeries[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +109,7 @@ export function SeriesBlock({ linkId }: Props) {
 
   const handleToggleActive = async (item: LessonSeries) => {
     if (item.is_active) {
-      const ok = window.confirm(
+      const ok = await confirm(
         'Поставить серию на паузу? Будущие незанятые занятия серии будут удалены.'
       );
       if (!ok) return;
@@ -124,7 +126,7 @@ export function SeriesBlock({ linkId }: Props) {
   };
 
   const handleDelete = async (item: LessonSeries) => {
-    const ok = window.confirm(
+    const ok = await confirm(
       'Удалить серию? Будущие нетронутые занятия будут удалены, история останется.'
     );
     if (!ok) return;
