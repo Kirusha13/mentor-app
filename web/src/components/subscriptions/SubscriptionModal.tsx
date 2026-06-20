@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { backdateCheck } from '../../api/subscriptions';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { useToast } from '../Toast';
 
 export interface RelationOption {
   id: number;
@@ -31,6 +32,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 export function SubscriptionModal({
   mode, relations, lockedRelationId = null, initial, editingId = null, onClose, onSubmit,
 }: Props) {
+  const toast = useToast();
   const [linkId, setLinkId] = useState<string>(
     lockedRelationId != null ? String(lockedRelationId) : (relations[0] ? String(relations[0].id) : '')
   );
@@ -46,10 +48,10 @@ export function SubscriptionModal({
     const lid = Number(linkId);
     const h = Number(hours);
     const p = Number(price);
-    if (!lid) { alert('Выберите ученика и предмет.'); return; }
-    if (!Number.isFinite(h) || h <= 0) { alert('Часы должны быть числом больше нуля.'); return; }
-    if (!Number.isFinite(p) || p < 0) { alert('Стоимость не может быть отрицательной.'); return; }
-    if (!startDate) { alert('Укажите дату начала действия.'); return; }
+    if (!lid) { toast.error('Выберите ученика и предмет.'); return; }
+    if (!Number.isFinite(h) || h <= 0) { toast.error('Часы должны быть числом больше нуля.'); return; }
+    if (!Number.isFinite(p) || p < 0) { toast.error('Стоимость не может быть отрицательной.'); return; }
+    if (!startDate) { toast.error('Укажите дату начала действия.'); return; }
 
     try {
       setSaving(true);
@@ -62,7 +64,7 @@ export function SubscriptionModal({
       }
       await onSubmit({ mode, editingId, linkId: lid, hours: h, price: p, startDate });
     } catch (error) {
-      alert(getApiErrorMessage(error, 'Не удалось сохранить абонемент.'));
+      toast.error(getApiErrorMessage(error, 'Не удалось сохранить абонемент.'));
     } finally {
       setSaving(false);
     }

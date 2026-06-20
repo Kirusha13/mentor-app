@@ -18,6 +18,7 @@ import {
 } from '../api/tutorStudents';
 import { getApiErrorMessage } from '../utils/apiError';
 import { lessonDateRu, lessonStartTime, lessonEndTime } from '../utils/lessonTime';
+import { useToast } from '../components/Toast';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -39,6 +40,7 @@ function requestTitle(lesson: Lesson) {
 }
 
 export default function RequestsPage() {
+  const toast = useToast();
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -63,7 +65,7 @@ export default function RequestsPage() {
         setSubjects(subjectData);
       } catch (error) {
         console.error('Ошибка загрузки запросов:', error);
-        alert(getApiErrorMessage(error, 'Не удалось загрузить запросы'));
+        toast.error(getApiErrorMessage(error, 'Не удалось загрузить запросы'));
       } finally {
         setLoading(false);
       }
@@ -144,7 +146,7 @@ export default function RequestsPage() {
       );
     } catch (error) {
       console.error('Ошибка обработки запроса:', error);
-      alert(getApiErrorMessage(error, 'Не удалось обработать запрос'));
+      toast.error(getApiErrorMessage(error, 'Не удалось обработать запрос'));
     } finally {
       setProcessingId(null);
     }
@@ -162,7 +164,7 @@ export default function RequestsPage() {
       }
     } catch (error) {
       console.error('Ошибка обработки запроса:', error);
-      alert(getApiErrorMessage(error, 'Не удалось обработать запрос'));
+      toast.error(getApiErrorMessage(error, 'Не удалось обработать запрос'));
     } finally {
       setProcessingConnectionId(null);
     }

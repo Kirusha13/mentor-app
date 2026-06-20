@@ -7,6 +7,7 @@ import {
   updateSeries,
 } from '../api/series';
 import { getApiErrorMessage } from '../utils/apiError';
+import { useToast } from './Toast';
 
 const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
@@ -47,6 +48,7 @@ interface Props {
 }
 
 export function SeriesBlock({ linkId }: Props) {
+  const toast = useToast();
   const [series, setSeries] = useState<LessonSeries[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,11 +78,11 @@ export function SeriesBlock({ linkId }: Props) {
   const handleSubmit = async () => {
     const duration = Number(form.duration_minutes);
     if (!duration || duration <= 0) {
-      alert('Длительность должна быть больше нуля');
+      toast.error('Длительность должна быть больше нуля');
       return;
     }
     if (!form.starts_on) {
-      alert('Укажи дату начала серии');
+      toast.error('Укажи дату начала серии');
       return;
     }
     try {
@@ -97,7 +99,7 @@ export function SeriesBlock({ linkId }: Props) {
       setShowForm(false);
       await load();
     } catch (err) {
-      alert(getApiErrorMessage(err, 'Не удалось создать серию'));
+      toast.error(getApiErrorMessage(err, 'Не удалось создать серию'));
     } finally {
       setSubmitting(false);
     }
@@ -115,7 +117,7 @@ export function SeriesBlock({ linkId }: Props) {
       await updateSeries(item.id, { is_active: !item.is_active });
       await load();
     } catch (err) {
-      alert(getApiErrorMessage(err, 'Не удалось обновить серию'));
+      toast.error(getApiErrorMessage(err, 'Не удалось обновить серию'));
     } finally {
       setBusyId(null);
     }
@@ -131,7 +133,7 @@ export function SeriesBlock({ linkId }: Props) {
       await deleteSeries(item.id);
       await load();
     } catch (err) {
-      alert(getApiErrorMessage(err, 'Не удалось удалить серию'));
+      toast.error(getApiErrorMessage(err, 'Не удалось удалить серию'));
     } finally {
       setBusyId(null);
     }

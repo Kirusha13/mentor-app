@@ -17,6 +17,7 @@ import {
 } from '../api/tutorStudents';
 import { getApiErrorMessage } from '../utils/apiError';
 import { SeriesBlock } from '../components/SeriesBlock';
+import { useToast } from '../components/Toast';
 
 interface StudentGroupData {
   student: Student;
@@ -65,6 +66,7 @@ const mutedTextStyle = { color: '#687486', fontSize: 14 } as const;
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function StudentsPage() {
+  const toast = useToast();
   const navigate = useNavigate();
   const [students, setStudents] = useState<Student[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
@@ -116,7 +118,7 @@ export default function StudentsPage() {
         setContactsByStudent(Object.fromEntries(contactsEntries));
       } catch (error) {
         console.error('Students load error:', error);
-        alert('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0441\u043f\u0438\u0441\u043e\u043a \u0443\u0447\u0435\u043d\u0438\u043a\u043e\u0432');
+        toast.error('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0441\u043f\u0438\u0441\u043e\u043a \u0443\u0447\u0435\u043d\u0438\u043a\u043e\u0432');
       } finally { setLoading(false); }
     };
     void loadData();
@@ -197,7 +199,7 @@ export default function StudentsPage() {
       }
     } catch (error) {
       console.error('Ошибка обработки запроса:', error);
-      alert(getApiErrorMessage(error, 'Не удалось обработать запрос'));
+      toast.error(getApiErrorMessage(error, 'Не удалось обработать запрос'));
     } finally {
       setProcessingConnectionId(null);
     }
@@ -212,7 +214,7 @@ export default function StudentsPage() {
 
   const handleCreateStudent = async () => {
     if (!newStudentName.trim() || !newStudentTelegramId.trim() || !newStudentSubjectId || !newStudentRate.trim()) {
-      alert('\u0417\u0430\u043f\u043e\u043b\u043d\u0438 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f \u0434\u043b\u044f \u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f \u0443\u0447\u0435\u043d\u0438\u043a\u0430');
+      toast.error('\u0417\u0430\u043f\u043e\u043b\u043d\u0438 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f \u0434\u043b\u044f \u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f \u0443\u0447\u0435\u043d\u0438\u043a\u0430');
       return;
     }
     try {
@@ -224,25 +226,25 @@ export default function StudentsPage() {
       setContactsByStudent((prev) => ({ ...prev, [createdStudent.id]: [] }));
       setNewStudentName(''); setNewStudentTelegramId(''); setNewStudentGrade(''); setNewStudentPhone(''); setNewStudentRate(''); setNewStudentStartedAt(today());
       setCreateModalOpen(false);
-      alert('\u0423\u0447\u0435\u043d\u0438\u043a \u0441\u043e\u0437\u0434\u0430\u043d \u0438 \u043f\u0440\u0438\u0432\u044f\u0437\u0430\u043d \u043a \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0443');
+      toast.success('\u0423\u0447\u0435\u043d\u0438\u043a \u0441\u043e\u0437\u0434\u0430\u043d \u0438 \u043f\u0440\u0438\u0432\u044f\u0437\u0430\u043d \u043a \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0443');
     } catch (error) {
       console.error('Create student error:', error);
-      alert(getApiErrorMessage(error, '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0443\u0447\u0435\u043d\u0438\u043a\u0430'));
+      toast.error(getApiErrorMessage(error, '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0443\u0447\u0435\u043d\u0438\u043a\u0430'));
     } finally { setCreatingStudent(false); }
   };
 
   const handleSaveTutorStudent = async () => {
     if (!selectedCard) return;
     const rate = Number(detailRate);
-    if (!Number.isFinite(rate) || rate <= 0) { alert('\u0421\u0442\u0430\u0432\u043a\u0430 \u0434\u043e\u043b\u0436\u043d\u0430 \u0431\u044b\u0442\u044c \u0447\u0438\u0441\u043b\u043e\u043c \u0431\u043e\u043b\u044c\u0448\u0435 \u043d\u0443\u043b\u044f'); return; }
+    if (!Number.isFinite(rate) || rate <= 0) { toast.error('\u0421\u0442\u0430\u0432\u043a\u0430 \u0434\u043e\u043b\u0436\u043d\u0430 \u0431\u044b\u0442\u044c \u0447\u0438\u0441\u043b\u043e\u043c \u0431\u043e\u043b\u044c\u0448\u0435 \u043d\u0443\u043b\u044f'); return; }
     try {
       setSavingTutorStudent(true);
       const updatedTutorStudent = await updateTutorStudent(selectedCard.tutorStudent.id, { hourly_rate: rate, status: detailStatus, level_ids: detailLevelIds });
       setTutorStudents((prev) => prev.map((item) => item.id === updatedTutorStudent.id ? updatedTutorStudent : item));
-      alert('\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u0443\u0447\u0435\u043d\u0438\u043a\u0430 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b');
+      toast.success('\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u0443\u0447\u0435\u043d\u0438\u043a\u0430 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b');
     } catch (error) {
       console.error('Update student error:', error);
-      alert(getApiErrorMessage(error, '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f'));
+      toast.error(getApiErrorMessage(error, '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f'));
     } finally { setSavingTutorStudent(false); }
   };
 
@@ -255,10 +257,10 @@ export default function StudentsPage() {
       setTutorStudents((prev) => prev.filter((item) => item.id !== selectedCard.tutorStudent.id));
       setDetailsModalOpen(false);
       setSelectedTutorStudentId(null);
-      alert('\u0421\u0432\u044f\u0437\u044c \u0441 \u0443\u0447\u0435\u043d\u0438\u043a\u043e\u043c \u0443\u0434\u0430\u043b\u0435\u043d\u0430');
+      toast.success('\u0421\u0432\u044f\u0437\u044c \u0441 \u0443\u0447\u0435\u043d\u0438\u043a\u043e\u043c \u0443\u0434\u0430\u043b\u0435\u043d\u0430');
     } catch (error) {
       console.error('Delete tutor-student error:', error);
-      alert(getApiErrorMessage(error, '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0441\u0432\u044f\u0437\u044c. \u0415\u0441\u043b\u0438 \u043f\u043e \u043d\u0435\u0439 \u0443\u0436\u0435 \u0435\u0441\u0442\u044c \u0437\u0430\u043d\u044f\u0442\u0438\u044f \u0438\u043b\u0438 \u0437\u0430\u0434\u0430\u043d\u0438\u044f, \u0438\u0441\u0442\u043e\u0440\u0438\u044e \u043d\u0443\u0436\u043d\u043e \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c.'));
+      toast.error(getApiErrorMessage(error, '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0441\u0432\u044f\u0437\u044c. \u0415\u0441\u043b\u0438 \u043f\u043e \u043d\u0435\u0439 \u0443\u0436\u0435 \u0435\u0441\u0442\u044c \u0437\u0430\u043d\u044f\u0442\u0438\u044f \u0438\u043b\u0438 \u0437\u0430\u0434\u0430\u043d\u0438\u044f, \u0438\u0441\u0442\u043e\u0440\u0438\u044e \u043d\u0443\u0436\u043d\u043e \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c.'));
     }
   };
 

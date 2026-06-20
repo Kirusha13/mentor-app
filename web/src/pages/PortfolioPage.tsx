@@ -10,6 +10,7 @@ import { getTopics, type TheoryTopic } from '../api/topics';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { lessonDate } from '../utils/lessonTime';
 import { getMediaUrl } from '../utils/media';
+import { useToast } from '../components/Toast';
 
 const COLORS = {
   primary: '#2AABEE',
@@ -580,6 +581,7 @@ function AttendanceCalendar({
 }
 
 export default function PortfolioPage() {
+  const toast = useToast();
   const [searchParams] = useSearchParams();
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -619,7 +621,7 @@ export default function PortfolioPage() {
         setTopics(topicData);
       } catch (error) {
         console.error('Ошибка загрузки портфолио:', error);
-        alert('Не удалось загрузить раздел портфолио');
+        toast.error('Не удалось загрузить раздел портфолио');
       } finally {
         setLoading(false);
       }
@@ -891,7 +893,7 @@ export default function PortfolioPage() {
       const safeName = selectedStudent.full_name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'student';
       pdf.save(`progress-report-${safeName}-${selectedMonth}.pdf`);
     } catch {
-      alert('Не удалось сохранить PDF. Попробуйте ещё раз.');
+      toast.error('Не удалось сохранить PDF. Попробуйте ещё раз.');
     } finally {
       setPdfSaving(false);
     }
@@ -899,7 +901,7 @@ export default function PortfolioPage() {
 
   const handleOpenReport = () => {
     if (!selectedSubjectFilter) {
-      alert('Выберите предмет для отчёта. PDF формируется только по конкретному предмету.');
+      toast.error('Выберите предмет для отчёта. PDF формируется только по конкретному предмету.');
       return;
     }
 

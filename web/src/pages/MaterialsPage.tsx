@@ -20,6 +20,7 @@ import {
 } from '../api/topics';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { getApiErrorMessage } from '../utils/apiError';
+import { useToast } from '../components/Toast';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -102,6 +103,7 @@ function getDomainHint(url: string): string {
 }
 
 export default function MaterialsPage() {
+  const toast = useToast();
   const [searchParams] = useSearchParams();
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 720px)');
@@ -151,7 +153,7 @@ export default function MaterialsPage() {
         setTutorLevels(levelData);
       } catch (error) {
         console.error('Ошибка загрузки материалов:', error);
-        alert('Не удалось загрузить раздел материалов');
+        toast.error('Не удалось загрузить раздел материалов');
       } finally {
         setLoading(false);
       }
@@ -293,7 +295,7 @@ export default function MaterialsPage() {
 
   const openCreateChildTopic = () => {
     if (!selectedTopic) {
-      alert('Сначала выбери тему, чтобы создать подтему.');
+      toast.error('Сначала выбери тему, чтобы создать подтему.');
       return;
     }
 
@@ -317,7 +319,7 @@ export default function MaterialsPage() {
 
   const openCreateMaterial = () => {
     if (!selectedTopic) {
-      alert('Сначала выбери тему, чтобы добавить материал.');
+      toast.error('Сначала выбери тему, чтобы добавить материал.');
       return;
     }
 
@@ -340,12 +342,12 @@ export default function MaterialsPage() {
 
   const handleSaveTopic = async () => {
     if (!selectedSubject) {
-      alert('Сначала выбери предмет.');
+      toast.error('Сначала выбери предмет.');
       return;
     }
 
     if (!topicTitle.trim()) {
-      alert('Укажи название темы.');
+      toast.error('Укажи название темы.');
       return;
     }
 
@@ -376,7 +378,7 @@ export default function MaterialsPage() {
       setTopicModal(null);
     } catch (error) {
       console.error('Ошибка сохранения темы:', error);
-      alert(getApiErrorMessage(error, 'Не удалось сохранить тему.'));
+      toast.error(getApiErrorMessage(error, 'Не удалось сохранить тему.'));
     } finally {
       setSaving(false);
     }
@@ -414,13 +416,13 @@ export default function MaterialsPage() {
       setSelectedTopicId('');
     } catch (error) {
       console.error('Ошибка удаления темы:', error);
-      alert(getApiErrorMessage(error, 'Не удалось удалить тему.'));
+      toast.error(getApiErrorMessage(error, 'Не удалось удалить тему.'));
     }
   };
 
   const handleSaveMaterial = async () => {
     if (!selectedTopic) {
-      alert('Сначала выбери тему.');
+      toast.error('Сначала выбери тему.');
       return;
     }
 
@@ -429,17 +431,17 @@ export default function MaterialsPage() {
     const usesText = materialFormat === 'text';
 
     if (!materialTitle.trim()) {
-      alert('Укажи название материала.');
+      toast.error('Укажи название материала.');
       return;
     }
 
     if (usesText && !trimmedText) {
-      alert('Для текстового материала укажи содержание.');
+      toast.error('Для текстового материала укажи содержание.');
       return;
     }
 
     if (!usesText && !trimmedUrl) {
-      alert('Для этого формата укажи ссылку.');
+      toast.error('Для этого формата укажи ссылку.');
       return;
     }
 
@@ -465,7 +467,7 @@ export default function MaterialsPage() {
       setMaterialModal(null);
     } catch (error) {
       console.error('Ошибка сохранения материала:', error);
-      alert(getApiErrorMessage(error, 'Не удалось сохранить материал.'));
+      toast.error(getApiErrorMessage(error, 'Не удалось сохранить материал.'));
     } finally {
       setSaving(false);
     }
@@ -481,7 +483,7 @@ export default function MaterialsPage() {
       setMaterials((prev) => prev.filter((item) => item.id !== material.id));
     } catch (error) {
       console.error('Ошибка удаления материала:', error);
-      alert(getApiErrorMessage(error, 'Не удалось удалить материал.'));
+      toast.error(getApiErrorMessage(error, 'Не удалось удалить материал.'));
     }
   };
 

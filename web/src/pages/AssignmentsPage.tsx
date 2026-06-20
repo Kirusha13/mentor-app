@@ -20,6 +20,7 @@ import {
   skipHomework,
   type HomeworkQueueItem,
 } from '../api/homework';
+import { useToast } from '../components/Toast';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
 import { formatFileSize, getMediaUrl, isImageSource } from '../utils/media';
 
@@ -145,6 +146,7 @@ function isDateInRange(value: string, start: string, end: string) {
 }
 
 export default function AssignmentsPage() {
+  const toast = useToast();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [homeworkQueue, setHomeworkQueue] = useState<HomeworkQueueItem[]>([]);
   const [pendingLessonId, setPendingLessonId] = useState<number | null>(null);
@@ -329,7 +331,7 @@ export default function AssignmentsPage() {
         setHomeworkQueue(homeworkData);
       } catch (error) {
         console.error('Ошибка загрузки заданий:', error);
-        alert('Не удалось загрузить задания');
+        toast.error('Не удалось загрузить задания');
       } finally {
         setLoading(false);
       }
@@ -385,7 +387,7 @@ export default function AssignmentsPage() {
 
     const oversized = files.find((file) => file.size > MAX_ATTACHMENT_SIZE);
     if (oversized) {
-      alert(`Файл «${oversized.name}» слишком большой. Максимальный размер: ${formatFileSize(MAX_ATTACHMENT_SIZE)}.`);
+      toast.error(`Файл «${oversized.name}» слишком большой. Максимальный размер: ${formatFileSize(MAX_ATTACHMENT_SIZE)}.`);
       event.target.value = '';
       return;
     }
@@ -403,21 +405,21 @@ export default function AssignmentsPage() {
       event.target.value = '';
     } catch (error) {
       console.error('Ошибка подготовки файлов:', error);
-      alert('Не удалось прикрепить файл');
+      toast.error('Не удалось прикрепить файл');
     }
   };
 
   const handleAddLink = () => {
     const label = newLinkLabel.trim();
     const url = newLinkUrl.trim();
-    if (!url) return alert('Добавь ссылку');
+    if (!url) return toast.error('Добавь ссылку');
     try {
       const normalizedUrl = new URL(url).toString();
       setAttachedLinks((prev) => [...prev, { label: label || normalizedUrl, url: normalizedUrl }]);
       setNewLinkLabel('');
       setNewLinkUrl('');
     } catch {
-      alert('Ссылка должна начинаться с http:// или https://');
+      toast.error('Ссылка должна начинаться с http:// или https://');
     }
   };
 
@@ -434,7 +436,7 @@ export default function AssignmentsPage() {
       setHomeworkQueue((prev) => prev.filter((item) => item.lesson_id !== lessonId));
     } catch (error) {
       console.error('Ошибка отметки «без ДЗ»:', error);
-      alert('Не удалось отметить «без ДЗ»');
+      toast.error('Не удалось отметить «без ДЗ»');
     }
   };
 
@@ -445,7 +447,7 @@ export default function AssignmentsPage() {
 
   const handleCreate = async () => {
     if (!newTutorStudentId || !newDescription.trim() || !newDeadline) {
-      return alert('Заполни ученика, описание и дедлайн');
+      return toast.error('Заполни ученика, описание и дедлайн');
     }
     const attachments: AssignmentAttachments =
       attachedLinks.length || attachedFiles.length
@@ -473,10 +475,10 @@ export default function AssignmentsPage() {
       setAttachedLinks([]);
       setAttachedFiles([]);
       closeCreateModal();
-      alert('Задание создано');
+      toast.success('Задание создано');
     } catch (error) {
       console.error('Ошибка создания задания:', error);
-      alert('Не удалось создать задание');
+      toast.error('Не удалось создать задание');
     } finally {
       setCreating(false);
     }
@@ -492,7 +494,7 @@ export default function AssignmentsPage() {
       setSelectedAssignmentId(updated.id);
     } catch (error) {
       console.error('Ошибка обновления задания:', error);
-      alert('Не удалось обновить задание');
+      toast.error('Не удалось обновить задание');
     }
   };
 
@@ -514,7 +516,7 @@ export default function AssignmentsPage() {
       setSelectedAssignmentId(updated.id);
     } catch (error) {
       console.error('Ошибка сохранения комментария к оценке ДЗ:', error);
-      alert('Не удалось сохранить комментарий к оценке ДЗ');
+      toast.error('Не удалось сохранить комментарий к оценке ДЗ');
     } finally {
       setAssignmentCommentSaving(false);
     }
@@ -534,7 +536,7 @@ export default function AssignmentsPage() {
       }
     } catch (error) {
       console.error('Ошибка удаления задания:', error);
-      alert('Не удалось удалить задание');
+      toast.error('Не удалось удалить задание');
     }
   };
 

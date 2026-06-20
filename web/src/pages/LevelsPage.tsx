@@ -7,6 +7,7 @@ import {
   type TutorLevel,
 } from '../api/tutorLevels';
 import { getApiErrorMessage } from '../utils/apiError';
+import { useToast } from '../components/Toast';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -22,6 +23,7 @@ const mutedTextStyle = {
 } as const;
 
 export default function LevelsPage() {
+  const toast = useToast();
   const [levels, setLevels] = useState<TutorLevel[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -54,7 +56,7 @@ export default function LevelsPage() {
         setLevels(await getTutorLevels());
       } catch (error) {
         console.error('Ошибка загрузки уровней:', error);
-        alert('Не удалось загрузить уровни обучения');
+        toast.error('Не удалось загрузить уровни обучения');
       } finally {
         setLoading(false);
       }
@@ -72,7 +74,7 @@ export default function LevelsPage() {
   const handleCreate = async () => {
     const name = newName.trim();
     if (!name) {
-      alert('Укажи название уровня');
+      toast.error('Укажи название уровня');
       return;
     }
 
@@ -86,7 +88,7 @@ export default function LevelsPage() {
       setNewName('');
     } catch (error) {
       console.error('Ошибка создания уровня:', error);
-      alert(getApiErrorMessage(error, 'Не удалось создать уровень'));
+      toast.error(getApiErrorMessage(error, 'Не удалось создать уровень'));
     } finally {
       setSaving(false);
     }
@@ -95,7 +97,7 @@ export default function LevelsPage() {
   const handleSave = async (level: TutorLevel) => {
     const name = editName.trim();
     if (!name) {
-      alert('Название уровня не может быть пустым');
+      toast.error('Название уровня не может быть пустым');
       return;
     }
 
@@ -109,7 +111,7 @@ export default function LevelsPage() {
       setEditingId(null);
     } catch (error) {
       console.error('Ошибка сохранения уровня:', error);
-      alert(getApiErrorMessage(error, 'Не удалось сохранить уровень'));
+      toast.error(getApiErrorMessage(error, 'Не удалось сохранить уровень'));
     } finally {
       setSaving(false);
     }
@@ -125,7 +127,7 @@ export default function LevelsPage() {
       setLevels((prev) => prev.filter((item) => item.id !== level.id));
     } catch (error) {
       console.error('Ошибка удаления уровня:', error);
-      alert(getApiErrorMessage(error, 'Не удалось удалить уровень'));
+      toast.error(getApiErrorMessage(error, 'Не удалось удалить уровень'));
     }
   };
 
@@ -137,7 +139,7 @@ export default function LevelsPage() {
       setLevels((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
     } catch (error) {
       console.error('Ошибка обновления избранного уровня:', error);
-      alert(getApiErrorMessage(error, 'Не удалось обновить избранное'));
+      toast.error(getApiErrorMessage(error, 'Не удалось обновить избранное'));
     }
   };
 

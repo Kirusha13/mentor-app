@@ -18,6 +18,7 @@ import { getApiErrorMessage } from '../utils/apiError';
 import { lessonDate } from '../utils/lessonTime';
 import { SubscriptionCard } from '../components/subscriptions/SubscriptionCard';
 import { SubscriptionModal, type RelationOption as SubModalRelation, type SubscriptionModalSubmit } from '../components/subscriptions/SubscriptionModal';
+import { useToast } from '../components/Toast';
 
 const panelStyle = {
   background: 'rgba(255,255,255,0.88)',
@@ -241,6 +242,7 @@ function chartTooltipStyle(visible: boolean) {
 }
 
 export default function FinancePage() {
+  const toast = useToast();
   const isTablet = useMediaQuery('(max-width: 1100px)');
   const isMobile = useMediaQuery('(max-width: 720px)');
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -284,7 +286,7 @@ export default function FinancePage() {
         setSubjects(subjectData);
       } catch (error) {
         console.error('Ошибка загрузки финансовых данных:', error);
-        alert('Не удалось загрузить данные для раздела финансов');
+        toast.error('Не удалось загрузить данные для раздела финансов');
       } finally {
         setLoading(false);
       }
@@ -770,7 +772,7 @@ export default function FinancePage() {
       setLessons((prev) => prev.map((lesson) => (lesson.id === updated.id ? updated : lesson)));
     } catch (error) {
       console.error('Ошибка подтверждения оплаты:', error);
-      alert(getApiErrorMessage(error, 'Не удалось обработать оплату.'));
+      toast.error(getApiErrorMessage(error, 'Не удалось обработать оплату.'));
     } finally {
       setProcessingPaymentId(null);
     }
@@ -783,7 +785,7 @@ export default function FinancePage() {
       setLessons((prev) => prev.map((lesson) => (lesson.id === updated.id ? updated : lesson)));
     } catch (error) {
       console.error('Ошибка отметки оплаты:', error);
-      alert(getApiErrorMessage(error, 'Не удалось отметить занятие оплаченным.'));
+      toast.error(getApiErrorMessage(error, 'Не удалось отметить занятие оплаченным.'));
     } finally {
       setProcessingPaymentId(null);
     }
@@ -815,7 +817,7 @@ export default function FinancePage() {
       await refreshPackagesForRelation(linkId);
       await refreshTutorStudents();
     } catch (error) {
-      alert(getApiErrorMessage(error, 'Не удалось удалить абонемент.'));
+      toast.error(getApiErrorMessage(error, 'Не удалось удалить абонемент.'));
     } finally {
       setSavingAbonement(false);
     }

@@ -1,10 +1,13 @@
 import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './components/Toast';
 import AppRouter from './router/AppRouter';
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppRouter />
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <AppRouter />
+      </AuthProvider>
+    </ToastProvider>
   );
 }

@@ -22,6 +22,7 @@ import { getTutorLevels, type TutorLevel } from '../api/tutorLevels';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { getApiErrorCode, getApiErrorMessage } from '../utils/apiError';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
+import { useToast } from '../components/Toast';
 import {
   lessonDate as toLessonDateStr,
   lessonDateRu,
@@ -432,6 +433,7 @@ function layoutTimelineLessons(items: Lesson[], startHour: number, slotHeights: 
 }
 
 export default function SchedulePage() {
+  const toast = useToast();
   const [mode, setMode] = useState<CalendarMode>('week');
   const [anchorDate, setAnchorDate] = useState(() => atMidnight(new Date()));
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -859,7 +861,7 @@ export default function SchedulePage() {
         setWindows(windowData);
       } catch (error) {
         console.error('Ошибка загрузки расписания:', error);
-        alert('Не удалось загрузить расписание');
+        toast.error('Не удалось загрузить расписание');
       } finally {
         setLoading(false);
       }
@@ -901,7 +903,7 @@ export default function SchedulePage() {
 
   const handleCreateLesson = async () => {
     if (!lessonDate || !startTime || !endTime || !selectedTutorStudentId || !cost) {
-      alert('Заполни все поля для создания занятия');
+      toast.error('Заполни все поля для создания занятия');
       return;
     }
 
@@ -922,10 +924,10 @@ export default function SchedulePage() {
       );
       setSelectedLessonId(created.id);
       setIsCreateLessonOpen(false);
-      alert('Занятие создано');
+      toast.success('Занятие создано');
     } catch (error) {
       console.error('Ошибка создания записи:', error);
-      alert(getApiErrorMessage(error, 'Не удалось создать занятие'));
+      toast.error(getApiErrorMessage(error, 'Не удалось создать занятие'));
     } finally {
       setSaving(false);
     }
@@ -974,7 +976,7 @@ export default function SchedulePage() {
       setDayEditorOverridden(true);
     } catch (error) {
       console.error('Ошибка сохранения дня:', error);
-      alert(getApiErrorMessage(error, 'Не удалось сохранить расписание дня'));
+      toast.error(getApiErrorMessage(error, 'Не удалось сохранить расписание дня'));
     } finally {
       setDayEditorSaving(false);
     }
@@ -999,11 +1001,11 @@ export default function SchedulePage() {
       const errorCode = getApiErrorCode(error);
 
       if (errorCode === 'SUBSCRIPTION_EXHAUSTED') {
-        alert('У ученика закончились занятия по абонементу. Обнови абонемент и повтори действие.');
+        toast.error('У ученика закончились занятия по абонементу. Обнови абонемент и повтори действие.');
         return;
       }
 
-      alert(getApiErrorMessage(error, 'Не удалось обновить занятие'));
+      toast.error(getApiErrorMessage(error, 'Не удалось обновить занятие'));
     }
   };
 
@@ -1014,7 +1016,7 @@ export default function SchedulePage() {
       setSelectedLessonId(updated.id);
     } catch (error) {
       console.error('Ошибка обработки запроса на запись:', error);
-      alert(
+      toast.error(
         getApiErrorMessage(
           error,
           approve ? 'Не удалось подтвердить запись ученика' : 'Не удалось отклонить запись ученика'
@@ -1030,7 +1032,7 @@ export default function SchedulePage() {
       setSelectedLessonId(updated.id);
     } catch (error) {
       console.error('Ошибка подтверждения оплаты:', error);
-      alert(
+      toast.error(
         getApiErrorMessage(
           error,
           confirm ? 'Не удалось подтвердить оплату' : 'Не удалось отклонить оплату'
@@ -1057,7 +1059,7 @@ export default function SchedulePage() {
       upsertLesson(updated);
     } catch (error) {
       console.error('Ошибка обработки запроса:', error);
-      alert(getApiErrorMessage(error, 'Не удалось обработать запрос'));
+      toast.error(getApiErrorMessage(error, 'Не удалось обработать запрос'));
     } finally {
       setProcessingRequestId(null);
     }
@@ -1071,7 +1073,7 @@ export default function SchedulePage() {
       setSelectedLessonId(null);
     } catch (error) {
       console.error('Ошибка удаления записи из расписания:', error);
-      alert(
+      toast.error(
         getApiErrorMessage(
           error,
           isWindow(lesson) ? 'Не удалось удалить свободный слот' : 'Не удалось отменить занятие'
@@ -1082,7 +1084,7 @@ export default function SchedulePage() {
 
   const handleLessonDetailsSave = async () => {
     if (!selectedLesson || !editLessonDate || !editStartTime || !editEndTime || (!isWindow(selectedLesson) && !editCost)) {
-      alert(isWindow(selectedLesson as Lesson) ? 'Заполни дату и время' : 'Заполни дату, время и стоимость');
+      toast.error(isWindow(selectedLesson as Lesson) ? 'Заполни дату и время' : 'Заполни дату, время и стоимость');
       return;
     }
 
@@ -1098,18 +1100,18 @@ export default function SchedulePage() {
       setIsEditingLesson(false);
     } catch (error) {
       console.error('Ошибка редактирования занятия:', error);
-      alert(getApiErrorMessage(error, isWindow(selectedLesson) ? 'Не удалось сохранить слот' : 'Не удалось сохранить изменения занятия'));
+      toast.error(getApiErrorMessage(error, isWindow(selectedLesson) ? 'Не удалось сохранить слот' : 'Не удалось сохранить изменения занятия'));
     }
   };
 
   const handleLessonReschedule = async () => {
     if (!selectedLesson || !rescheduleDate || !rescheduleStartTime || !rescheduleEndTime) {
-      alert('Заполни новую дату и время переноса');
+      toast.error('Заполни новую дату и время переноса');
       return;
     }
 
     if (rescheduleEndTime <= rescheduleStartTime) {
-      alert('Время окончания должно быть позже времени начала');
+      toast.error('Время окончания должно быть позже времени начала');
       return;
     }
 
@@ -1136,7 +1138,7 @@ export default function SchedulePage() {
       setIsReschedulingLesson(false);
     } catch (error) {
       console.error('Ошибка переноса занятия:', error);
-      alert(getApiErrorMessage(error, 'Не удалось перенести занятие'));
+      toast.error(getApiErrorMessage(error, 'Не удалось перенести занятие'));
     }
   };
 
@@ -1195,7 +1197,7 @@ export default function SchedulePage() {
       setSelectedLessonId(updated.id);
     } catch (error) {
       console.error('Ошибка сохранения комментариев к занятию:', error);
-      alert(getApiErrorMessage(error, 'Не удалось сохранить заметки к занятию'));
+      toast.error(getApiErrorMessage(error, 'Не удалось сохранить заметки к занятию'));
     } finally {
       setLessonCommentSaving(false);
     }

@@ -12,6 +12,7 @@ import {
 import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
+import { useToast } from '../components/Toast';
 
 interface ContactRecord {
   student: Student;
@@ -47,6 +48,7 @@ const emptyDraft = (): ContactDraft => ({
 });
 
 export default function ContactsPage() {
+  const toast = useToast();
   const [students, setStudents] = useState<Student[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -97,7 +99,7 @@ export default function ContactsPage() {
       setContactsByStudent(Object.fromEntries(contactEntries));
     } catch (error) {
       console.error('Ошибка загрузки контактной книжки:', error);
-      alert('Не удалось загрузить контактную книжку');
+      toast.error('Не удалось загрузить контактную книжку');
     } finally {
       setLoading(false);
     }
@@ -188,7 +190,7 @@ export default function ContactsPage() {
       }
     } catch (error) {
       console.error('Не удалось получить ссылку-приглашение:', error);
-      alert('Не удалось получить ссылку-приглашение');
+      toast.error('Не удалось получить ссылку-приглашение');
     } finally {
       setInviteLoading(false);
     }
@@ -196,12 +198,12 @@ export default function ContactsPage() {
 
   const handleCreateContact = async () => {
     if (!contactStudentId || !contactName.trim()) {
-      alert('Выбери ученика и укажи ФИО контактного лица');
+      toast.error('Выбери ученика и укажи ФИО контактного лица');
       return;
     }
 
     if (!contactPhone.trim() && !contactTelegramId.trim()) {
-      alert('Укажи номер телефона или Telegram ID');
+      toast.error('Укажи номер телефона или Telegram ID');
       return;
     }
 
@@ -226,10 +228,10 @@ export default function ContactsPage() {
 
       resetCreateForm();
       setCreateModalOpen(false);
-      alert('Контактное лицо добавлено');
+      toast.success('Контактное лицо добавлено');
     } catch (error) {
       console.error('Ошибка создания контактного лица:', error);
-      alert('Не удалось создать контактное лицо');
+      toast.error('Не удалось создать контактное лицо');
     } finally {
       setCreatingContact(false);
     }
@@ -248,12 +250,12 @@ export default function ContactsPage() {
 
   const handleSaveContact = async (record: ContactRecord) => {
     if (!editingDraft.full_name.trim()) {
-      alert('Укажи ФИО контактного лица');
+      toast.error('Укажи ФИО контактного лица');
       return;
     }
 
     if (!editingDraft.phone_number.trim() && !editingDraft.telegram_id.trim()) {
-      alert('Оставь телефон или Telegram ID');
+      toast.error('Оставь телефон или Telegram ID');
       return;
     }
 
@@ -277,7 +279,7 @@ export default function ContactsPage() {
       setEditingDraft(emptyDraft());
     } catch (error) {
       console.error('Ошибка обновления контактного лица:', error);
-      alert('Не удалось обновить контактное лицо');
+      toast.error('Не удалось обновить контактное лицо');
     } finally {
       setSavingContactId(null);
     }
@@ -299,7 +301,7 @@ export default function ContactsPage() {
       }
     } catch (error) {
       console.error('Ошибка отвязки контактного лица:', error);
-      alert('Не удалось отвязать контактное лицо');
+      toast.error('Не удалось отвязать контактное лицо');
     }
   };
 

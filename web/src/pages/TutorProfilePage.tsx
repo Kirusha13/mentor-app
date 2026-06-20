@@ -15,6 +15,7 @@ import {
   type TutorLevel,
 } from '../api/tutorLevels';
 import { getApiErrorMessage } from '../utils/apiError';
+import { useToast } from '../components/Toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
 
@@ -76,6 +77,7 @@ function fieldCard(label: string, value: string) {
 }
 
 export default function TutorProfilePage() {
+  const toast = useToast();
   const [profile, setProfile] = useState<TutorProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -122,7 +124,7 @@ export default function TutorProfilePage() {
       } catch (error) {
         if (!cancelled) {
           console.error('Ошибка загрузки профиля репетитора:', error);
-          alert(getApiErrorMessage(error, 'Не удалось загрузить личный кабинет.'));
+          toast.error(getApiErrorMessage(error, 'Не удалось загрузить личный кабинет.'));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -137,7 +139,7 @@ export default function TutorProfilePage() {
       } catch (error) {
         if (!cancelled) {
           console.error('Ошибка загрузки предметов:', error);
-          alert('Не удалось загрузить предметы');
+          toast.error('Не удалось загрузить предметы');
         }
       } finally {
         if (!cancelled) setSubjectsLoading(false);
@@ -152,7 +154,7 @@ export default function TutorProfilePage() {
       } catch (error) {
         if (!cancelled) {
           console.error('Ошибка загрузки уровней:', error);
-          alert(getApiErrorMessage(error, 'Не удалось загрузить уровни обучения'));
+          toast.error(getApiErrorMessage(error, 'Не удалось загрузить уровни обучения'));
         }
       } finally {
         if (!cancelled) setLevelsLoading(false);
@@ -232,7 +234,7 @@ export default function TutorProfilePage() {
 const handleProfileSave = async () => {
     if (!profile) return;
     if (!fullName.trim()) {
-      alert('Укажи имя репетитора.');
+      toast.error('Укажи имя репетитора.');
       return;
     }
 
@@ -250,7 +252,7 @@ const handleProfileSave = async () => {
       setEditing(false);
     } catch (error) {
       console.error('Ошибка сохранения профиля репетитора:', error);
-      alert(getApiErrorMessage(error, 'Не удалось сохранить изменения профиля.'));
+      toast.error(getApiErrorMessage(error, 'Не удалось сохранить изменения профиля.'));
     } finally {
       setSaving(false);
     }
@@ -259,7 +261,7 @@ const handleProfileSave = async () => {
   const handleSubjectCreate = async () => {
     const rate = Number(newSubjectRate);
     if (!newSubjectName.trim() || !Number.isFinite(rate) || rate <= 0) {
-      alert('Заполни название предмета и корректную ставку');
+      toast.error('Заполни название предмета и корректную ставку');
       return;
     }
 
@@ -274,10 +276,10 @@ const handleProfileSave = async () => {
       setNewSubjectName('');
       setNewSubjectRate('');
       setSubjectCreateModalOpen(false);
-      alert(`Предмет "${created.name}" создан`);
+      toast.success(`Предмет "${created.name}" создан`);
     } catch (error) {
       console.error('Ошибка создания предмета:', error);
-      alert('Не удалось создать предмет');
+      toast.error('Не удалось создать предмет');
     } finally {
       setCreatingSubject(false);
     }
@@ -298,7 +300,7 @@ const handleProfileSave = async () => {
   const handleSubjectSave = async (subjectId: number) => {
     const rate = Number(editSubjectRate);
     if (!editSubjectName.trim() || !Number.isFinite(rate) || rate <= 0) {
-      alert('Заполни название предмета и корректную ставку');
+      toast.error('Заполни название предмета и корректную ставку');
       return;
     }
 
@@ -314,7 +316,7 @@ const handleProfileSave = async () => {
       cancelSubjectEditing();
     } catch (error) {
       console.error('Ошибка обновления предмета:', error);
-      alert('Не удалось обновить предмет');
+      toast.error('Не удалось обновить предмет');
     }
   };
 
@@ -327,17 +329,17 @@ const handleProfileSave = async () => {
       setSubjects((prev) => prev.filter((subject) => subject.id !== subjectId));
     } catch (error) {
       console.error('Ошибка удаления предмета:', error);
-      alert('Не удалось удалить предмет');
+      toast.error('Не удалось удалить предмет');
     }
   };
 
   const handleCopyToken = async (token: string) => {
     try {
       await navigator.clipboard.writeText(token);
-      alert('Код приглашения скопирован');
+      toast.success('Код приглашения скопирован');
     } catch (error) {
       console.error('Ошибка копирования токена:', error);
-      alert('Не удалось скопировать код приглашения');
+      toast.error('Не удалось скопировать код приглашения');
     }
   };
 
@@ -356,7 +358,7 @@ const handleProfileSave = async () => {
   const handleLevelCreate = async () => {
     const name = newLevelName.trim();
     if (!name) {
-      alert('Укажи название уровня');
+      toast.error('Укажи название уровня');
       return;
     }
 
@@ -370,7 +372,7 @@ const handleProfileSave = async () => {
       setNewLevelName('');
     } catch (error) {
       console.error('Ошибка создания уровня:', error);
-      alert(getApiErrorMessage(error, 'Не удалось создать уровень'));
+      toast.error(getApiErrorMessage(error, 'Не удалось создать уровень'));
     } finally {
       setLevelsSaving(false);
     }
@@ -379,7 +381,7 @@ const handleProfileSave = async () => {
   const handleLevelSave = async (level: TutorLevel) => {
     const name = editLevelName.trim();
     if (!name) {
-      alert('Название уровня не может быть пустым');
+      toast.error('Название уровня не может быть пустым');
       return;
     }
 
@@ -393,7 +395,7 @@ const handleProfileSave = async () => {
       cancelLevelEditing();
     } catch (error) {
       console.error('Ошибка сохранения уровня:', error);
-      alert(getApiErrorMessage(error, 'Не удалось сохранить уровень'));
+      toast.error(getApiErrorMessage(error, 'Не удалось сохранить уровень'));
     } finally {
       setLevelsSaving(false);
     }
@@ -409,7 +411,7 @@ const handleProfileSave = async () => {
       setLevels((prev) => prev.filter((item) => item.id !== level.id));
     } catch (error) {
       console.error('Ошибка удаления уровня:', error);
-      alert(getApiErrorMessage(error, 'Не удалось удалить уровень'));
+      toast.error(getApiErrorMessage(error, 'Не удалось удалить уровень'));
     }
   };
 
@@ -421,7 +423,7 @@ const handleProfileSave = async () => {
       setLevels((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
     } catch (error) {
       console.error('Ошибка обновления избранного уровня:', error);
-      alert(getApiErrorMessage(error, 'Не удалось обновить избранное'));
+      toast.error(getApiErrorMessage(error, 'Не удалось обновить избранное'));
     }
   };
 
