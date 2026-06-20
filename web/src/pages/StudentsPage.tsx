@@ -18,6 +18,7 @@ import {
 import { getApiErrorMessage } from '../utils/apiError';
 import { SeriesBlock } from '../components/SeriesBlock';
 import { useToast } from '../components/Toast';
+import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
 import { useConfirm } from '../components/ConfirmDialog';
 
 interface StudentGroupData {
@@ -68,6 +69,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export default function StudentsPage() {
   const toast = useToast();
+  const { errors, validateField, validateAll, clearError, reset } = useFieldErrors();
   const confirm = useConfirm();
   const navigate = useNavigate();
   const [students, setStudents] = useState<Student[]>([]);
@@ -214,11 +216,15 @@ export default function StudentsPage() {
     setDetailLevelIds(selectedCard.tutorStudent.level_ids ?? []);
   }, [selectedCard]);
 
+  const createStudentRules: FieldRules = {
+    newStudentName: () => (newStudentName.trim() ? null : '\u0423\u043a\u0430\u0436\u0438 \u0424\u0418\u041e \u0443\u0447\u0435\u043d\u0438\u043a\u0430'),
+    newStudentTelegramId: () => (newStudentTelegramId.trim() ? null : '\u0423\u043a\u0430\u0436\u0438 Telegram ID'),
+    newStudentSubjectId: () => (newStudentSubjectId ? null : '\u0412\u044b\u0431\u0435\u0440\u0438 \u043f\u0440\u0435\u0434\u043c\u0435\u0442'),
+    newStudentRate: () => (Number(newStudentRate) > 0 ? null : '\u0421\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c \u0434\u043e\u043b\u0436\u043d\u0430 \u0431\u044b\u0442\u044c \u0431\u043e\u043b\u044c\u0448\u0435 \u043d\u0443\u043b\u044f'),
+  };
+
   const handleCreateStudent = async () => {
-    if (!newStudentName.trim() || !newStudentTelegramId.trim() || !newStudentSubjectId || !newStudentRate.trim()) {
-      toast.error('\u0417\u0430\u043f\u043e\u043b\u043d\u0438 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f \u0434\u043b\u044f \u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f \u0443\u0447\u0435\u043d\u0438\u043a\u0430');
-      return;
-    }
+    if (!validateAll(createStudentRules)) return;
     try {
       setCreatingStudent(true);
       const createdStudent = await createStudent({ full_name: newStudentName.trim(), telegram_id: Number(newStudentTelegramId), grade: newStudentGrade.trim() ? Number(newStudentGrade) : undefined, phone_number: newStudentPhone.trim() || undefined });
@@ -235,10 +241,14 @@ export default function StudentsPage() {
     } finally { setCreatingStudent(false); }
   };
 
+  const tutorStudentRules: FieldRules = {
+    detailRate: () => (Number.isFinite(Number(detailRate)) && Number(detailRate) > 0 ? null : '\u0421\u0442\u0430\u0432\u043a\u0430 \u0434\u043e\u043b\u0436\u043d\u0430 \u0431\u044b\u0442\u044c \u0447\u0438\u0441\u043b\u043e\u043c \u0431\u043e\u043b\u044c\u0448\u0435 \u043d\u0443\u043b\u044f'),
+  };
+
   const handleSaveTutorStudent = async () => {
     if (!selectedCard) return;
     const rate = Number(detailRate);
-    if (!Number.isFinite(rate) || rate <= 0) { toast.error('\u0421\u0442\u0430\u0432\u043a\u0430 \u0434\u043e\u043b\u0436\u043d\u0430 \u0431\u044b\u0442\u044c \u0447\u0438\u0441\u043b\u043e\u043c \u0431\u043e\u043b\u044c\u0448\u0435 \u043d\u0443\u043b\u044f'); return; }
+    if (!validateAll(tutorStudentRules)) return;
     try {
       setSavingTutorStudent(true);
       const updatedTutorStudent = await updateTutorStudent(selectedCard.tutorStudent.id, { hourly_rate: rate, status: detailStatus, level_ids: detailLevelIds });
@@ -331,7 +341,7 @@ export default function StudentsPage() {
     const palette = ['#2AABEE', '#4CAF50', '#9C27B0', '#1565C0', '#6A1B9A'];
     const accent = primary.subject?.color || palette[index % palette.length];
     return (
-      <button key={group.student.id} type="button" onClick={() => { setSelectedTutorStudentId(primary.tutorStudent.id); setDetailsModalOpen(true); }} style={{ display: 'grid', gridTemplateRows: 'auto auto 1fr auto', minHeight: 188, gap: 14, padding: 18, textAlign: 'left', borderRadius: 22, background: '#fff', color: '#1f2a3b', border: '1px solid rgba(24,33,47,0.08)', boxShadow: 'var(--shadow-soft)' }}>
+      <button key={group.student.id} type="button" onClick={() => { reset(); setSelectedTutorStudentId(primary.tutorStudent.id); setDetailsModalOpen(true); }} style={{ display: 'grid', gridTemplateRows: 'auto auto 1fr auto', minHeight: 188, gap: 14, padding: 18, textAlign: 'left', borderRadius: 22, background: '#fff', color: '#1f2a3b', border: '1px solid rgba(24,33,47,0.08)', boxShadow: 'var(--shadow-soft)' }}>
         <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
           <span style={{ width: 58, height: 58, borderRadius: 22, background: `${accent}16`, color: accent, display: 'inline-grid', placeItems: 'center', fontSize: 18, fontWeight: 900, flex: '0 0 auto' }}>
             {getStudentInitials(group.student.full_name) || 'У'}
@@ -379,7 +389,7 @@ export default function StudentsPage() {
               <button type="button" title="Плитка" onClick={() => setViewMode('grid')} className="icon-button ghost-button" style={{ background: viewMode === 'grid' ? '#2AABEE' : 'transparent', color: viewMode === 'grid' ? '#fff' : '#435066' }}>▦</button>
               <button type="button" title="Список" onClick={() => setViewMode('list')} className="icon-button ghost-button" style={{ background: viewMode === 'list' ? '#2AABEE' : 'transparent', color: viewMode === 'list' ? '#fff' : '#435066' }}>☰</button>
             </div>
-            <button type="button" title="Создать ученика" onClick={() => setCreateModalOpen(true)} className="add-trigger">+</button>
+            <button type="button" title="Создать ученика" onClick={() => { reset(); setCreateModalOpen(true); }} className="add-trigger">+</button>
       </section>
 
       <section className="metric-grid">
@@ -430,14 +440,14 @@ export default function StudentsPage() {
       </section>
 
       {createModalOpen && (
-        <div onClick={() => setCreateModalOpen(false)} className="modal-overlay">
+        <div onClick={() => { reset(); setCreateModalOpen(false); }} className="modal-overlay">
           <div onClick={(event) => event.stopPropagation()} className="app-modal">
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">Создать ученика</h3>
                 <p className="modal-subtitle">Новый ученик создаётся и сразу привязывается к выбранному предмету.</p>
               </div>
-              <button type="button" title="Закрыть" onClick={() => setCreateModalOpen(false)} className="modal-close">×</button>
+              <button type="button" title="Закрыть" onClick={() => { reset(); setCreateModalOpen(false); }} className="modal-close">×</button>
             </div>
             {subjects.length === 0 ? (
               <div style={{ padding: 16, borderRadius: 16, background: 'rgba(255,152,0,0.1)', color: '#FF9800' }}>
@@ -447,11 +457,13 @@ export default function StudentsPage() {
               <div className="modal-form-grid">
                 <label className="modal-field">
                   ФИО ученика
-                  <input value={newStudentName} onChange={(event) => setNewStudentName(event.target.value)} placeholder="ФИО ученика" />
+                  <input className={errors.newStudentName ? 'field-invalid' : undefined} value={newStudentName} onChange={(event) => { setNewStudentName(event.target.value); clearError('newStudentName'); }} onBlur={() => validateField('newStudentName', createStudentRules)} placeholder="ФИО ученика" />
+                  <FieldError message={errors.newStudentName} />
                 </label>
                 <label className="modal-field">
                   Telegram ID
-                  <input value={newStudentTelegramId} onChange={(event) => setNewStudentTelegramId(event.target.value)} placeholder="Telegram ID" type="number" />
+                  <input className={errors.newStudentTelegramId ? 'field-invalid' : undefined} value={newStudentTelegramId} onChange={(event) => { setNewStudentTelegramId(event.target.value); clearError('newStudentTelegramId'); }} onBlur={() => validateField('newStudentTelegramId', createStudentRules)} placeholder="Telegram ID" type="number" />
+                  <FieldError message={errors.newStudentTelegramId} />
                 </label>
                 <div className="modal-row">
                   <label className="modal-field">
@@ -465,18 +477,22 @@ export default function StudentsPage() {
                 </div>
                 <label className="modal-field">
                   Предмет
-                  <select value={newStudentSubjectId} onChange={(event) => {
+                  <select className={errors.newStudentSubjectId ? 'field-invalid' : undefined} value={newStudentSubjectId} onChange={(event) => {
                     const nextSubjectId = event.target.value;
                     const nextSubject = subjects.find((subject) => String(subject.id) === nextSubjectId);
                     setNewStudentSubjectId(nextSubjectId);
                     setNewStudentRate(nextSubject?.default_rate ? String(nextSubject.default_rate) : '');
-                  }}>
+                    clearError('newStudentSubjectId');
+                    clearError('newStudentRate');
+                  }} onBlur={() => validateField('newStudentSubjectId', createStudentRules)}>
                     {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
                   </select>
+                  <FieldError message={errors.newStudentSubjectId} />
                 </label>
                 <label className="modal-field">
                   Стоимость занятия
-                  <input value={newStudentRate} onChange={(event) => setNewStudentRate(event.target.value)} placeholder={t.rate} type="number" />
+                  <input className={errors.newStudentRate ? 'field-invalid' : undefined} value={newStudentRate} onChange={(event) => { setNewStudentRate(event.target.value); clearError('newStudentRate'); }} onBlur={() => validateField('newStudentRate', createStudentRules)} placeholder={t.rate} type="number" />
+                  <FieldError message={errors.newStudentRate} />
                 </label>
                 <div className="modal-actions">
                   <button type="button" onClick={handleCreateStudent} disabled={creatingStudent} className="modal-primary">
@@ -490,7 +506,7 @@ export default function StudentsPage() {
       )}
 
       {detailsModalOpen && selectedCard && (
-        <div onClick={() => setDetailsModalOpen(false)} className="modal-overlay">
+        <div onClick={() => { reset(); setDetailsModalOpen(false); }} className="modal-overlay">
           <div
             onClick={(event) => event.stopPropagation()}
             className="app-modal wide"
@@ -513,7 +529,7 @@ export default function StudentsPage() {
               <button
                 type="button"
                 title="Закрыть"
-                onClick={() => setDetailsModalOpen(false)}
+                onClick={() => { reset(); setDetailsModalOpen(false); }}
                 className="modal-close"
               >
                 ×
@@ -578,7 +594,8 @@ export default function StudentsPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8, marginBottom: 10 }}>
                     <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
                       {t.rate}
-                      <input type="number" value={detailRate} onChange={(event) => setDetailRate(event.target.value)} />
+                      <input type="number" className={errors.detailRate ? 'field-invalid' : undefined} value={detailRate} onChange={(event) => { setDetailRate(event.target.value); clearError('detailRate'); }} onBlur={() => validateField('detailRate', tutorStudentRules)} />
+                      <FieldError message={errors.detailRate} />
                     </label>
                     <label style={{ display: 'grid', gap: 6, color: '#556173', fontSize: 14 }}>
                       {t.status}

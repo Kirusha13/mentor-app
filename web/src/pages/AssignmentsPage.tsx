@@ -21,6 +21,7 @@ import {
   type HomeworkQueueItem,
 } from '../api/homework';
 import { useToast } from '../components/Toast';
+import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
 import { useConfirm } from '../components/ConfirmDialog';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
 import { formatFileSize, getMediaUrl, isImageSource } from '../utils/media';
@@ -148,6 +149,7 @@ function isDateInRange(value: string, start: string, end: string) {
 
 export default function AssignmentsPage() {
   const toast = useToast();
+  const { errors, validateField, validateAll, clearError, reset } = useFieldErrors();
   const confirm = useConfirm();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [homeworkQueue, setHomeworkQueue] = useState<HomeworkQueueItem[]>([]);
@@ -426,6 +428,7 @@ export default function AssignmentsPage() {
   };
 
   const openAssignForLesson = (item: HomeworkQueueItem) => {
+    reset();
     setPendingLessonId(item.lesson_id);
     setNewTutorStudentId(String(item.tutor_student_id));
     if (item.topic_id) setNewTopicId(String(item.topic_id));
@@ -443,14 +446,19 @@ export default function AssignmentsPage() {
   };
 
   const closeCreateModal = () => {
+    reset();
     setCreateModalOpen(false);
     setPendingLessonId(null);
   };
 
+  const createAssignmentRules: FieldRules = {
+    newTutorStudentId: () => (newTutorStudentId ? null : 'Выбери ученика и предмет'),
+    newDescription: () => (newDescription.trim() ? null : 'Укажи описание задания'),
+    newDeadline: () => (newDeadline ? null : 'Укажи дедлайн'),
+  };
+
   const handleCreate = async () => {
-    if (!newTutorStudentId || !newDescription.trim() || !newDeadline) {
-      return toast.error('Заполни ученика, описание и дедлайн');
-    }
+    if (!validateAll(createAssignmentRules)) return;
     const attachments: AssignmentAttachments =
       attachedLinks.length || attachedFiles.length
         ? { links: attachedLinks, files: attachedFiles }
@@ -1247,7 +1255,7 @@ export default function AssignmentsPage() {
           </label>
         </div>
 
-        <button type="button" onClick={() => setCreateModalOpen(true)} className="assignments-create-button">
+        <button type="button" onClick={() => { reset(); setCreateModalOpen(true); }} className="assignments-create-button">
           + Создать задание
         </button>
       </section>
@@ -1271,13 +1279,19 @@ export default function AssignmentsPage() {
             <div className="modal-form-grid">
               <label className="modal-field">
                 Ученик и предмет
-                <select value={newTutorStudentId} onChange={(event) => setNewTutorStudentId(event.target.value)}>
+                <select
+                  className={errors.newTutorStudentId ? 'field-invalid' : undefined}
+                  value={newTutorStudentId}
+                  onChange={(event) => { setNewTutorStudentId(event.target.value); clearError('newTutorStudentId'); }}
+                  onBlur={() => validateField('newTutorStudentId', createAssignmentRules)}
+                >
                   {relationOptions.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.label}
                     </option>
                   ))}
                 </select>
+                <FieldError message={errors.newTutorStudentId} />
               </label>
 
               <label className="modal-field">
@@ -1287,12 +1301,28 @@ export default function AssignmentsPage() {
 
               <label className="modal-field">
                 Описание задания
-                <textarea value={newDescription} onChange={(event) => setNewDescription(event.target.value)} placeholder="Что нужно сделать ученику" rows={5} style={{ resize: 'vertical' }} />
+                <textarea
+                  className={errors.newDescription ? 'field-invalid' : undefined}
+                  value={newDescription}
+                  onChange={(event) => { setNewDescription(event.target.value); clearError('newDescription'); }}
+                  onBlur={() => validateField('newDescription', createAssignmentRules)}
+                  placeholder="Что нужно сделать ученику"
+                  rows={5}
+                  style={{ resize: 'vertical' }}
+                />
+                <FieldError message={errors.newDescription} />
               </label>
 
               <label className="modal-field">
                 Дедлайн
-                <input type="datetime-local" value={newDeadline} onChange={(event) => setNewDeadline(event.target.value)} />
+                <input
+                  type="datetime-local"
+                  className={errors.newDeadline ? 'field-invalid' : undefined}
+                  value={newDeadline}
+                  onChange={(event) => { setNewDeadline(event.target.value); clearError('newDeadline'); }}
+                  onBlur={() => validateField('newDeadline', createAssignmentRules)}
+                />
+                <FieldError message={errors.newDeadline} />
               </label>
 
               <div className="modal-row">

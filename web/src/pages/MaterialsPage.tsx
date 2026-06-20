@@ -21,6 +21,7 @@ import {
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { getApiErrorMessage } from '../utils/apiError';
 import { useToast } from '../components/Toast';
+import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
 import { useConfirm } from '../components/ConfirmDialog';
 
 const panelStyle = {
@@ -105,6 +106,7 @@ function getDomainHint(url: string): string {
 
 export default function MaterialsPage() {
   const toast = useToast();
+  const { errors, validateField, validateAll, clearError, reset } = useFieldErrors();
   const confirm = useConfirm();
   const [searchParams] = useSearchParams();
   const isTablet = useMediaQuery('(max-width: 1100px)');
@@ -287,6 +289,7 @@ export default function MaterialsPage() {
   );
 
   const openCreateRootTopic = () => {
+    reset();
     setTopicModal({ mode: 'create-root', topic: null });
     setTopicTitle('');
     setTopicDescription('');
@@ -301,6 +304,7 @@ export default function MaterialsPage() {
       return;
     }
 
+    reset();
     setTopicModal({ mode: 'create-child', topic: selectedTopic });
     setTopicTitle('');
     setTopicDescription('');
@@ -311,6 +315,7 @@ export default function MaterialsPage() {
 
   const openEditTopic = () => {
     if (!selectedTopic) return;
+    reset();
     setTopicModal({ mode: 'edit', topic: selectedTopic });
     setTopicTitle(selectedTopic.title);
     setTopicDescription(selectedTopic.description ?? '');
@@ -325,6 +330,7 @@ export default function MaterialsPage() {
       return;
     }
 
+    reset();
     setMaterialModal({ mode: 'create', material: null });
     setMaterialFormat('text');
     setMaterialLevel('basic');
@@ -334,6 +340,7 @@ export default function MaterialsPage() {
   };
 
   const openEditMaterial = (material: Material) => {
+    reset();
     setMaterialModal({ mode: 'edit', material });
     setMaterialFormat(material.format);
     setMaterialLevel(material.level);
@@ -342,16 +349,17 @@ export default function MaterialsPage() {
     setMaterialTitle(material.title ?? '');
   };
 
+  const topicRules: FieldRules = {
+    topicName: () => (topicTitle.trim() ? null : 'Укажи название темы'),
+  };
+
   const handleSaveTopic = async () => {
     if (!selectedSubject) {
       toast.error('Сначала выбери предмет.');
       return;
     }
 
-    if (!topicTitle.trim()) {
-      toast.error('Укажи название темы.');
-      return;
-    }
+    if (!validateAll(topicRules)) return;
 
     try {
       setSaving(true);
@@ -422,6 +430,14 @@ export default function MaterialsPage() {
     }
   };
 
+  const materialRules: FieldRules = {
+    materialName: () => (materialTitle.trim() ? null : 'Укажи название материала'),
+    materialContent: () =>
+      materialFormat === 'text'
+        ? (materialText.trim() ? null : 'Для текстового материала укажи содержание')
+        : (materialUrl.trim() ? null : 'Для этого формата укажи ссылку'),
+  };
+
   const handleSaveMaterial = async () => {
     if (!selectedTopic) {
       toast.error('Сначала выбери тему.');
@@ -432,20 +448,7 @@ export default function MaterialsPage() {
     const trimmedUrl = materialUrl.trim();
     const usesText = materialFormat === 'text';
 
-    if (!materialTitle.trim()) {
-      toast.error('Укажи название материала.');
-      return;
-    }
-
-    if (usesText && !trimmedText) {
-      toast.error('Для текстового материала укажи содержание.');
-      return;
-    }
-
-    if (!usesText && !trimmedUrl) {
-      toast.error('Для этого формата укажи ссылку.');
-      return;
-    }
+    if (!validateAll(materialRules)) return;
 
     try {
       setSaving(true);
@@ -815,7 +818,7 @@ export default function MaterialsPage() {
       </section>
 
       {topicModal && (
-        <div onClick={() => setTopicModal(null)} className="modal-overlay">
+        <div onClick={() => { reset(); setTopicModal(null); }} className="modal-overlay">
           <div onClick={(event) => event.stopPropagation()} className="app-modal">
             <div className="modal-header">
               <div>
@@ -828,12 +831,13 @@ export default function MaterialsPage() {
                 </h3>
                 <p className="modal-subtitle">Опиши тему и выбери уровни, для которых она будет доступна.</p>
               </div>
-              <button type="button" title="Закрыть" onClick={() => setTopicModal(null)} className="modal-close">×</button>
+              <button type="button" title="Закрыть" onClick={() => { reset(); setTopicModal(null); }} className="modal-close">×</button>
             </div>
 
             <label className="modal-field">
               Название темы
-              <input value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} />
+              <input className={errors.topicName ? 'field-invalid' : undefined} value={topicTitle} onChange={(event) => { setTopicTitle(event.target.value); clearError('topicName'); }} onBlur={() => validateField('topicName', topicRules)} />
+              <FieldError message={errors.topicName} />
             </label>
 
             <label className="modal-field">
@@ -922,7 +926,7 @@ export default function MaterialsPage() {
       )}
 
       {materialModal && (
-        <div onClick={() => setMaterialModal(null)} className="modal-overlay">
+        <div onClick={() => { reset(); setMaterialModal(null); }} className="modal-overlay">
           <div onClick={(event) => event.stopPropagation()} className="app-modal">
             <div className="modal-header">
               <div>
@@ -931,16 +935,19 @@ export default function MaterialsPage() {
                 </h3>
                 <p className="modal-subtitle">Выбери формат, уровень и добавь содержимое материала.</p>
               </div>
-              <button type="button" title="Закрыть" onClick={() => setMaterialModal(null)} className="modal-close">×</button>
+              <button type="button" title="Закрыть" onClick={() => { reset(); setMaterialModal(null); }} className="modal-close">×</button>
             </div>
 
             <label className="modal-field">
               Название материала
               <input
+                className={errors.materialName ? 'field-invalid' : undefined}
                 value={materialTitle}
-                onChange={(event) => setMaterialTitle(event.target.value)}
+                onChange={(event) => { setMaterialTitle(event.target.value); clearError('materialName'); }}
+                onBlur={() => validateField('materialName', materialRules)}
                 placeholder="Например: Формула дискриминанта, Демоверсия ЕГЭ 2024"
               />
+              <FieldError message={errors.materialName} />
             </label>
 
             <div className="modal-row">
@@ -948,7 +955,7 @@ export default function MaterialsPage() {
                 Формат
                 <select
                   value={materialFormat}
-                  onChange={(event) => setMaterialFormat(event.target.value as MaterialFormat)}
+                  onChange={(event) => { setMaterialFormat(event.target.value as MaterialFormat); clearError('materialContent'); }}
                 >
                   {Object.entries(formatLabels).map(([value, label]) => (
                     <option key={value} value={value}>
@@ -977,20 +984,26 @@ export default function MaterialsPage() {
               <label className="modal-field">
                 Содержимое
                 <textarea
+                  className={errors.materialContent ? 'field-invalid' : undefined}
                   value={materialText}
-                  onChange={(event) => setMaterialText(event.target.value)}
+                  onChange={(event) => { setMaterialText(event.target.value); clearError('materialContent'); }}
+                  onBlur={() => validateField('materialContent', materialRules)}
                   rows={8}
                   placeholder="Добавь конспект, пояснение или теорию по теме"
                 />
+                <FieldError message={errors.materialContent} />
               </label>
             ) : (
               <label className="modal-field">
                 Ссылка
                 <input
+                  className={errors.materialContent ? 'field-invalid' : undefined}
                   value={materialUrl}
-                  onChange={(event) => setMaterialUrl(event.target.value)}
+                  onChange={(event) => { setMaterialUrl(event.target.value); clearError('materialContent'); }}
+                  onBlur={() => validateField('materialContent', materialRules)}
                   placeholder="https://..."
                 />
+                <FieldError message={errors.materialContent} />
               </label>
             )}
 

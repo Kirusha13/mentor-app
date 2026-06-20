@@ -8,6 +8,7 @@ import {
 } from '../api/tutorLevels';
 import { getApiErrorMessage } from '../utils/apiError';
 import { useToast } from '../components/Toast';
+import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
 import { useConfirm } from '../components/ConfirmDialog';
 
 const panelStyle = {
@@ -25,6 +26,7 @@ const mutedTextStyle = {
 
 export default function LevelsPage() {
   const toast = useToast();
+  const { errors, validateField, validateAll, clearError, reset } = useFieldErrors();
   const confirm = useConfirm();
   const [levels, setLevels] = useState<TutorLevel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,17 +70,22 @@ export default function LevelsPage() {
   }, []);
 
   const startEdit = (level: TutorLevel) => {
+    reset();
     setEditingId(level.id);
     setEditName(level.name);
     setEditIsFavourite(level.is_favourite);
   };
 
+  const levelCreateRules: FieldRules = {
+    newLevelName: () => (newName.trim() ? null : 'Укажи название уровня'),
+  };
+  const levelEditRules: FieldRules = {
+    editLevelName: () => (editName.trim() ? null : 'Название уровня не может быть пустым'),
+  };
+
   const handleCreate = async () => {
     const name = newName.trim();
-    if (!name) {
-      toast.error('Укажи название уровня');
-      return;
-    }
+    if (!validateAll(levelCreateRules)) return;
 
     try {
       setSaving(true);
@@ -98,10 +105,7 @@ export default function LevelsPage() {
 
   const handleSave = async (level: TutorLevel) => {
     const name = editName.trim();
-    if (!name) {
-      toast.error('Название уровня не может быть пустым');
-      return;
-    }
+    if (!validateAll(levelEditRules)) return;
 
     try {
       setSaving(true);
@@ -149,8 +153,11 @@ export default function LevelsPage() {
     <div style={{ display: 'grid', gap: 16 }}>
       <section style={{ ...panelStyle, display: 'grid', gap: 12 }}>
         <h3 style={{ fontSize: 20, marginBottom: 0 }}>Добавить уровень</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto', gap: 10, alignItems: 'center' }}>
-          <input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Например: 9 класс, ОГЭ, ЕГЭ база" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto', gap: 10, alignItems: 'start' }}>
+          <div>
+            <input className={errors.newLevelName ? 'field-invalid' : undefined} value={newName} onChange={(event) => { setNewName(event.target.value); clearError('newLevelName'); }} onBlur={() => validateField('newLevelName', levelCreateRules)} placeholder="Например: 9 класс, ОГЭ, ЕГЭ база" style={{ width: '100%' }} />
+            <FieldError message={errors.newLevelName} />
+          </div>
           <button type="button" onClick={handleCreate} disabled={saving}>
             Добавить
           </button>
@@ -190,7 +197,10 @@ export default function LevelsPage() {
                 >
                   {editing ? (
                     <>
-                      <input value={editName} onChange={(event) => setEditName(event.target.value)} />
+                      <div style={{ display: 'grid', gap: 4 }}>
+                        <input className={errors.editLevelName ? 'field-invalid' : undefined} value={editName} onChange={(event) => { setEditName(event.target.value); clearError('editLevelName'); }} onBlur={() => validateField('editLevelName', levelEditRules)} />
+                        <FieldError message={errors.editLevelName} />
+                      </div>
                       <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#435066', fontSize: 14, whiteSpace: 'nowrap' }}>
                         <input type="checkbox" checked={editIsFavourite} onChange={(event) => setEditIsFavourite(event.target.checked)} />
                         Избранное

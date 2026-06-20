@@ -8,6 +8,7 @@ import {
 } from '../api/series';
 import { getApiErrorMessage } from '../utils/apiError';
 import { useToast } from './Toast';
+import { useFieldErrors, FieldError, type FieldRules } from './formValidation';
 import { useConfirm } from './ConfirmDialog';
 
 const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -50,6 +51,7 @@ interface Props {
 
 export function SeriesBlock({ linkId }: Props) {
   const toast = useToast();
+  const { errors, validateField, validateAll, clearError } = useFieldErrors();
   const confirm = useConfirm();
   const [series, setSeries] = useState<LessonSeries[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,16 +79,14 @@ export function SeriesBlock({ linkId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkId]);
 
+  const seriesRules: FieldRules = {
+    duration_minutes: () => (Number(form.duration_minutes) > 0 ? null : 'Длительность должна быть больше нуля'),
+    starts_on: () => (form.starts_on ? null : 'Укажи дату начала серии'),
+  };
+
   const handleSubmit = async () => {
     const duration = Number(form.duration_minutes);
-    if (!duration || duration <= 0) {
-      toast.error('Длительность должна быть больше нуля');
-      return;
-    }
-    if (!form.starts_on) {
-      toast.error('Укажи дату начала серии');
-      return;
-    }
+    if (!validateAll(seriesRules)) return;
     try {
       setSubmitting(true);
       await createSeries({
@@ -286,9 +286,12 @@ export function SeriesBlock({ linkId }: Props) {
             <input
               type="number"
               min={1}
+              className={errors.duration_minutes ? 'field-invalid' : undefined}
               value={form.duration_minutes}
-              onChange={(e) => setForm((f) => ({ ...f, duration_minutes: e.target.value }))}
+              onChange={(e) => { setForm((f) => ({ ...f, duration_minutes: e.target.value })); clearError('duration_minutes'); }}
+              onBlur={() => validateField('duration_minutes', seriesRules)}
             />
+            <FieldError message={errors.duration_minutes} />
           </label>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -296,9 +299,12 @@ export function SeriesBlock({ linkId }: Props) {
               Дата начала
               <input
                 type="date"
+                className={errors.starts_on ? 'field-invalid' : undefined}
                 value={form.starts_on}
-                onChange={(e) => setForm((f) => ({ ...f, starts_on: e.target.value }))}
+                onChange={(e) => { setForm((f) => ({ ...f, starts_on: e.target.value })); clearError('starts_on'); }}
+                onBlur={() => validateField('starts_on', seriesRules)}
               />
+              <FieldError message={errors.starts_on} />
             </label>
             <label style={{ display: 'grid', gap: 4, color: '#556173', fontSize: 13 }}>
               Дата конца (опц.)

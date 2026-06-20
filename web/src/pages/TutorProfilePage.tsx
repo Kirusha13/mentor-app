@@ -16,6 +16,7 @@ import {
 } from '../api/tutorLevels';
 import { getApiErrorMessage } from '../utils/apiError';
 import { useToast } from '../components/Toast';
+import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
 import { useConfirm } from '../components/ConfirmDialog';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
@@ -79,6 +80,7 @@ function fieldCard(label: string, value: string) {
 
 export default function TutorProfilePage() {
   const toast = useToast();
+  const { errors, validateField, validateAll, clearError, reset } = useFieldErrors();
   const confirm = useConfirm();
   const [profile, setProfile] = useState<TutorProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -233,12 +235,13 @@ export default function TutorProfilePage() {
     setEditing(false);
   };
 
-const handleProfileSave = async () => {
+const profileRules: FieldRules = {
+    fullName: () => (fullName.trim() ? null : 'Укажи имя репетитора'),
+  };
+
+  const handleProfileSave = async () => {
     if (!profile) return;
-    if (!fullName.trim()) {
-      toast.error('Укажи имя репетитора.');
-      return;
-    }
+    if (!validateAll(profileRules)) return;
 
     try {
       setSaving(true);
@@ -260,12 +263,14 @@ const handleProfileSave = async () => {
     }
   };
 
+  const subjectCreateRules: FieldRules = {
+    newSubjectName: () => (newSubjectName.trim() ? null : 'Укажи название предмета'),
+    newSubjectRate: () => (Number(newSubjectRate) > 0 ? null : 'Ставка должна быть больше нуля'),
+  };
+
   const handleSubjectCreate = async () => {
+    if (!validateAll(subjectCreateRules)) return;
     const rate = Number(newSubjectRate);
-    if (!newSubjectName.trim() || !Number.isFinite(rate) || rate <= 0) {
-      toast.error('Заполни название предмета и корректную ставку');
-      return;
-    }
 
     try {
       setCreatingSubject(true);
@@ -299,12 +304,14 @@ const handleProfileSave = async () => {
     setEditSubjectRate('');
   };
 
+  const subjectSaveRules: FieldRules = {
+    editSubjectName: () => (editSubjectName.trim() ? null : 'Укажи название предмета'),
+    editSubjectRate: () => (Number(editSubjectRate) > 0 ? null : 'Ставка должна быть больше нуля'),
+  };
+
   const handleSubjectSave = async (subjectId: number) => {
+    if (!validateAll(subjectSaveRules)) return;
     const rate = Number(editSubjectRate);
-    if (!editSubjectName.trim() || !Number.isFinite(rate) || rate <= 0) {
-      toast.error('Заполни название предмета и корректную ставку');
-      return;
-    }
 
     try {
       const updated = await updateSubject(subjectId, {
@@ -357,12 +364,16 @@ const handleProfileSave = async () => {
     setEditLevelIsFavourite(false);
   };
 
+  const levelCreateRules: FieldRules = {
+    newLevelName: () => (newLevelName.trim() ? null : 'Укажи название уровня'),
+  };
+  const levelSaveRules: FieldRules = {
+    editLevelName: () => (editLevelName.trim() ? null : 'Название уровня не может быть пустым'),
+  };
+
   const handleLevelCreate = async () => {
     const name = newLevelName.trim();
-    if (!name) {
-      toast.error('Укажи название уровня');
-      return;
-    }
+    if (!validateAll(levelCreateRules)) return;
 
     try {
       setLevelsSaving(true);
@@ -382,10 +393,7 @@ const handleProfileSave = async () => {
 
   const handleLevelSave = async (level: TutorLevel) => {
     const name = editLevelName.trim();
-    if (!name) {
-      toast.error('Название уровня не может быть пустым');
-      return;
-    }
+    if (!validateAll(levelSaveRules)) return;
 
     try {
       setLevelsSaving(true);
@@ -570,7 +578,7 @@ const handleProfileSave = async () => {
             <button
               type="button"
               title="Открыть уровни обучения"
-              onClick={() => setLevelsModalOpen(true)}
+              onClick={() => { reset(); setLevelsModalOpen(true); }}
               style={{
                 background: '#fff',
                 color: '#1f2a3b',
@@ -610,7 +618,8 @@ const handleProfileSave = async () => {
           <div style={{ display: 'grid', gap: 10 }}>
             <label style={{ display: 'grid', gap: 5 }}>
               <span style={mutedTextStyle}>Полное имя</span>
-              <input value={fullName} onChange={(event) => setFullName(event.target.value)} />
+              <input className={errors.fullName ? 'field-invalid' : undefined} value={fullName} onChange={(event) => { setFullName(event.target.value); clearError('fullName'); }} onBlur={() => validateField('fullName', profileRules)} />
+              <FieldError message={errors.fullName} />
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <label style={{ display: 'grid', gap: 5 }}>
@@ -681,7 +690,7 @@ const handleProfileSave = async () => {
             <button
               title="Создать предмет"
               type="button"
-              onClick={() => setSubjectCreateModalOpen(true)}
+              onClick={() => { reset(); setSubjectCreateModalOpen(true); }}
               className="add-trigger"
             >
               +
@@ -731,16 +740,22 @@ const handleProfileSave = async () => {
                       {isEditing ? (
                         <div style={{ display: 'grid', gap: 10 }}>
                           <input
+                            className={errors.editSubjectName ? 'field-invalid' : undefined}
                             value={editSubjectName}
-                            onChange={(event) => setEditSubjectName(event.target.value)}
+                            onChange={(event) => { setEditSubjectName(event.target.value); clearError('editSubjectName'); }}
+                            onBlur={() => validateField('editSubjectName', subjectSaveRules)}
                             placeholder="Название предмета"
                           />
+                          <FieldError message={errors.editSubjectName} />
                           <input
+                            className={errors.editSubjectRate ? 'field-invalid' : undefined}
                             value={editSubjectRate}
-                            onChange={(event) => setEditSubjectRate(event.target.value)}
+                            onChange={(event) => { setEditSubjectRate(event.target.value); clearError('editSubjectRate'); }}
+                            onBlur={() => validateField('editSubjectRate', subjectSaveRules)}
                             placeholder="Ставка"
                             type="number"
                           />
+                          <FieldError message={errors.editSubjectRate} />
                         </div>
                       ) : (
                         <>
@@ -827,17 +842,23 @@ const handleProfileSave = async () => {
                 <h3 className="modal-title">Уровни обучения</h3>
                 <p className="modal-subtitle">Добавляй уровни и отмечай избранные для быстрого выбора в темах и карточках учеников.</p>
               </div>
-              <button title="Закрыть" type="button" onClick={() => setLevelsModalOpen(false)} className="modal-close">×</button>
+              <button title="Закрыть" type="button" onClick={() => { reset(); setLevelsModalOpen(false); }} className="modal-close">×</button>
             </div>
 
             <section className="modal-section">
               <div className="modal-section-title">Добавить уровень</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto', gap: 10, alignItems: 'center' }}>
-                <input
-                  value={newLevelName}
-                  onChange={(event) => setNewLevelName(event.target.value)}
-                  placeholder="Например: 9 класс, ОГЭ, ЕГЭ база"
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto', gap: 10, alignItems: 'start' }}>
+                <div>
+                  <input
+                    className={errors.newLevelName ? 'field-invalid' : undefined}
+                    value={newLevelName}
+                    onChange={(event) => { setNewLevelName(event.target.value); clearError('newLevelName'); }}
+                    onBlur={() => validateField('newLevelName', levelCreateRules)}
+                    placeholder="Например: 9 класс, ОГЭ, ЕГЭ база"
+                    style={{ width: '100%' }}
+                  />
+                  <FieldError message={errors.newLevelName} />
+                </div>
                 <button type="button" onClick={handleLevelCreate} disabled={levelsSaving}>
                   Добавить
                 </button>
@@ -883,7 +904,10 @@ const handleProfileSave = async () => {
                       >
                         {isEditingLevel ? (
                           <>
-                            <input value={editLevelName} onChange={(event) => setEditLevelName(event.target.value)} />
+                            <div style={{ display: 'grid', gap: 4 }}>
+                              <input className={errors.editLevelName ? 'field-invalid' : undefined} value={editLevelName} onChange={(event) => { setEditLevelName(event.target.value); clearError('editLevelName'); }} onBlur={() => validateField('editLevelName', levelSaveRules)} />
+                              <FieldError message={errors.editLevelName} />
+                            </div>
                             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#435066', fontSize: 14, whiteSpace: 'nowrap' }}>
                               <input
                                 type="checkbox"
@@ -955,26 +979,32 @@ const handleProfileSave = async () => {
                 <h3 className="modal-title">Создать предмет</h3>
                 <p className="modal-subtitle">Добавь название и ставку по умолчанию.</p>
               </div>
-              <button title="Закрыть" type="button" onClick={() => setSubjectCreateModalOpen(false)} className="modal-close">×</button>
+              <button title="Закрыть" type="button" onClick={() => { reset(); setSubjectCreateModalOpen(false); }} className="modal-close">×</button>
             </div>
 
             <div className="modal-form-grid">
               <label className="modal-field">
                 Название предмета
                 <input
+                  className={errors.newSubjectName ? 'field-invalid' : undefined}
                   value={newSubjectName}
-                  onChange={(event) => setNewSubjectName(event.target.value)}
+                  onChange={(event) => { setNewSubjectName(event.target.value); clearError('newSubjectName'); }}
+                  onBlur={() => validateField('newSubjectName', subjectCreateRules)}
                   placeholder="Название предмета"
                 />
+                <FieldError message={errors.newSubjectName} />
               </label>
               <label className="modal-field">
                 Ставка по умолчанию
                 <input
+                  className={errors.newSubjectRate ? 'field-invalid' : undefined}
                   value={newSubjectRate}
-                  onChange={(event) => setNewSubjectRate(event.target.value)}
+                  onChange={(event) => { setNewSubjectRate(event.target.value); clearError('newSubjectRate'); }}
+                  onBlur={() => validateField('newSubjectRate', subjectCreateRules)}
                   placeholder="Ставка по умолчанию"
                   type="number"
                 />
+                <FieldError message={errors.newSubjectRate} />
               </label>
 
               <div className="modal-actions">

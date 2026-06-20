@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { backdateCheck } from '../../api/subscriptions';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { useToast } from '../Toast';
+import { useFieldErrors, FieldError, type FieldRules } from '../formValidation';
 import { useConfirm } from '../ConfirmDialog';
 
 export interface RelationOption {
@@ -34,6 +35,7 @@ export function SubscriptionModal({
   mode, relations, lockedRelationId = null, initial, editingId = null, onClose, onSubmit,
 }: Props) {
   const toast = useToast();
+  const { errors, validateField, validateAll, clearError } = useFieldErrors();
   const confirm = useConfirm();
   const [linkId, setLinkId] = useState<string>(
     lockedRelationId != null ? String(lockedRelationId) : (relations[0] ? String(relations[0].id) : '')
@@ -46,14 +48,18 @@ export function SubscriptionModal({
   const locked = lockedRelationId != null || mode === 'edit';
   const lockedLabel = relations.find((r) => String(r.id) === String(lockedRelationId ?? linkId))?.label ?? '';
 
+  const subscriptionRules: FieldRules = {
+    linkId: () => (Number(linkId) ? null : 'Выберите ученика и предмет'),
+    hours: () => (Number.isFinite(Number(hours)) && Number(hours) > 0 ? null : 'Часы должны быть числом больше нуля'),
+    price: () => (Number.isFinite(Number(price)) && Number(price) >= 0 ? null : 'Стоимость не может быть отрицательной'),
+    startDate: () => (startDate ? null : 'Укажите дату начала действия'),
+  };
+
   const handleSubmit = async () => {
     const lid = Number(linkId);
     const h = Number(hours);
     const p = Number(price);
-    if (!lid) { toast.error('Выберите ученика и предмет.'); return; }
-    if (!Number.isFinite(h) || h <= 0) { toast.error('Часы должны быть числом больше нуля.'); return; }
-    if (!Number.isFinite(p) || p < 0) { toast.error('Стоимость не может быть отрицательной.'); return; }
-    if (!startDate) { toast.error('Укажите дату начала действия.'); return; }
+    if (!validateAll(subscriptionRules)) return;
 
     try {
       setSaving(true);
@@ -91,26 +97,30 @@ export function SubscriptionModal({
             {locked ? (
               <input value={lockedLabel} disabled style={{ height: 40, borderRadius: 10, border: '1px solid #d8dee8', background: '#f6f8fc', padding: '0 12px', color: '#435066' }} />
             ) : (
-              <select value={linkId} onChange={(e) => setLinkId(e.target.value)} style={{ height: 40, borderRadius: 10, border: '1px solid #d8dee8', padding: '0 10px' }}>
+              <select className={errors.linkId ? 'field-invalid' : undefined} value={linkId} onChange={(e) => { setLinkId(e.target.value); clearError('linkId'); }} onBlur={() => validateField('linkId', subscriptionRules)} style={{ height: 40, borderRadius: 10, border: '1px solid #d8dee8', padding: '0 10px' }}>
                 {relations.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
               </select>
             )}
+            {!locked && <FieldError message={errors.linkId} />}
           </label>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <label style={{ display: 'grid', gap: 5, fontSize: 13, color: '#556173' }}>
               Часов
-              <input type="number" min="0.5" step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="15" style={{ height: 40, borderRadius: 10, border: '1px solid #d8dee8', padding: '0 12px' }} />
+              <input type="number" min="0.5" step="0.5" className={errors.hours ? 'field-invalid' : undefined} value={hours} onChange={(e) => { setHours(e.target.value); clearError('hours'); }} onBlur={() => validateField('hours', subscriptionRules)} placeholder="15" style={{ height: 40, borderRadius: 10, border: '1px solid #d8dee8', padding: '0 12px' }} />
+              <FieldError message={errors.hours} />
             </label>
             <label style={{ display: 'grid', gap: 5, fontSize: 13, color: '#556173' }}>
               Стоимость, ₽
-              <input type="number" min="0" step="50" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="5000" style={{ height: 40, borderRadius: 10, border: '1px solid #d8dee8', padding: '0 12px' }} />
+              <input type="number" min="0" step="50" className={errors.price ? 'field-invalid' : undefined} value={price} onChange={(e) => { setPrice(e.target.value); clearError('price'); }} onBlur={() => validateField('price', subscriptionRules)} placeholder="5000" style={{ height: 40, borderRadius: 10, border: '1px solid #d8dee8', padding: '0 12px' }} />
+              <FieldError message={errors.price} />
             </label>
           </div>
 
           <label style={{ display: 'grid', gap: 5, fontSize: 13, color: '#556173' }}>
             Начало действия
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ height: 40, borderRadius: 10, border: '1px solid #d8dee8', padding: '0 12px' }} />
+            <input type="date" className={errors.startDate ? 'field-invalid' : undefined} value={startDate} onChange={(e) => { setStartDate(e.target.value); clearError('startDate'); }} onBlur={() => validateField('startDate', subscriptionRules)} style={{ height: 40, borderRadius: 10, border: '1px solid #d8dee8', padding: '0 12px' }} />
+            <FieldError message={errors.startDate} />
           </label>
 
           <div style={{ fontSize: 12, color: '#8a95a8', background: '#f6f8fc', borderRadius: 10, padding: '10px 12px', lineHeight: 1.5 }}>
