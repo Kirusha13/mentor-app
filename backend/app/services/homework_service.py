@@ -30,3 +30,8 @@ def compute_homework_stats(rows: list[tuple[str | None, bool]]) -> HomeworkStats
 def is_in_queue(homework_status: str | None, has_assignment: bool) -> bool:
     """Занятие ждёт решения = статус pending и нет привязанного ДЗ (FK главнее)."""
     return homework_status == "pending" and not has_assignment
+
+
+def can_skip_homework(conduct_status: str) -> bool:
+    """Отметить «без ДЗ» можно только у проведённого занятия."""
+    return conduct_status == "conducted"

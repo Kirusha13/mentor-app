@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_tutor
 from app.core.database import get_db
 from app.models.assignment import Assignment, CompletionStatus
+from app.models.lesson import Lesson
 from app.models.student import Student
 from app.models.subject import Subject
 from app.models.tutor import Tutor
@@ -63,6 +64,15 @@ async def create_assignment(
     ts = ts_result.scalar_one_or_none()
     if ts is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связка репетитор-ученик не найдена")
+
+    if data.lesson_id is not None:
+        lesson_owned = await db.execute(
+            select(Lesson.id)
+            .join(TutorStudent, TutorStudent.id == Lesson.tutor_student_id)
+            .where(Lesson.id == data.lesson_id, TutorStudent.tutor_id == tutor.id)
+        )
+        if lesson_owned.scalar_one_or_none() is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Занятие не найдено")
 
     assignment = Assignment(**data.model_dump())
     db.add(assignment)

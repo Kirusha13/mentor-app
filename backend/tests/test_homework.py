@@ -1,4 +1,9 @@
-from app.services.homework_service import HomeworkStats, compute_homework_stats, is_in_queue
+from app.services.homework_service import (
+    HomeworkStats,
+    can_skip_homework,
+    compute_homework_stats,
+    is_in_queue,
+)
 
 
 def test_compute_stats_mixes_states():
@@ -24,3 +29,11 @@ def test_in_queue_only_pending_without_assignment():
     assert is_in_queue("pending", has_assignment=True) is False   # ДЗ уже задано
     assert is_in_queue("skipped", has_assignment=False) is False  # решено «без ДЗ»
     assert is_in_queue(None, has_assignment=False) is False       # легаси
+
+
+def test_can_skip_homework_only_for_conducted():
+    assert can_skip_homework("conducted") is True
+    assert can_skip_homework("scheduled") is False
+    assert can_skip_homework("cancelled") is False
+    assert can_skip_homework("rescheduled") is False
+    assert can_skip_homework("booking_pending") is False

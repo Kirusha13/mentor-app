@@ -12,7 +12,7 @@ from app.models.lesson import ConductStatus, HomeworkStatus, Lesson
 from app.models.student import Student
 from app.models.tutor import Tutor
 from app.models.tutor_student import TutorStudent
-from app.services.homework_service import compute_homework_stats
+from app.services.homework_service import can_skip_homework, compute_homework_stats
 
 router = APIRouter()
 
@@ -75,6 +75,13 @@ async def skip_homework(
     )).scalar_one_or_none()
     if lesson is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Занятие не найдено")
+    if not can_skip_homework(lesson.conduct_status.value):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Нельзя отметить «без ДЗ» у непроведённого занятия",
+        )
+    if lesson.homework_status == HomeworkStatus.skipped:
+        return  # идемпотентно: уже отмечено «без ДЗ»
     lesson.homework_status = HomeworkStatus.skipped
     await db.commit()
 
