@@ -18,7 +18,7 @@ import {
 import { getApiErrorMessage } from '../utils/apiError';
 import { SeriesBlock } from '../components/SeriesBlock';
 import { useToast } from '../components/Toast';
-import { useFieldErrors, FieldError, personNameError, phoneError, gradeError, type FieldRules } from '../components/formValidation';
+import { useFieldErrors, FieldError, personNameError, phoneError, gradeError, telegramIdError, type FieldRules } from '../components/formValidation';
 import { useConfirm } from '../components/ConfirmDialog';
 
 interface StudentGroupData {
@@ -218,7 +218,7 @@ export default function StudentsPage() {
 
   const createStudentRules: FieldRules = {
     newStudentName: () => personNameError(newStudentName, '\u0424\u0418\u041e \u0443\u0447\u0435\u043d\u0438\u043a\u0430'),
-    newStudentTelegramId: () => (newStudentTelegramId.trim() ? null : '\u0423\u043a\u0430\u0436\u0438 Telegram ID'),
+    newStudentTelegramId: () => telegramIdError(newStudentTelegramId, true),
     newStudentGrade: () => gradeError(newStudentGrade),
     newStudentPhone: () => phoneError(newStudentPhone),
     newStudentSubjectId: () => (newStudentSubjectId ? null : '\u0412\u044b\u0431\u0435\u0440\u0438 \u043f\u0440\u0435\u0434\u043c\u0435\u0442'),

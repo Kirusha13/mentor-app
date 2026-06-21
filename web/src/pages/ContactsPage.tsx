@@ -13,7 +13,7 @@ import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { useToast } from '../components/Toast';
-import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
+import { useFieldErrors, FieldError, personNameError, phoneError, telegramIdError, type FieldRules } from '../components/formValidation';
 
 interface ContactRecord {
   student: Student;
@@ -200,7 +200,9 @@ export default function ContactsPage() {
 
   const contactCreateRules: FieldRules = {
     studentId: () => (contactStudentId ? null : 'Выбери ученика'),
-    fullName: () => (contactName.trim() ? null : 'Укажи ФИО контактного лица'),
+    fullName: () => personNameError(contactName, 'ФИО контактного лица'),
+    contactPhone: () => phoneError(contactPhone),
+    contactTelegram: () => telegramIdError(contactTelegramId, false),
     contact: () =>
       contactPhone.trim() || contactTelegramId.trim() ? null : 'Укажи телефон или Telegram ID',
   };
@@ -251,7 +253,9 @@ export default function ContactsPage() {
   };
 
   const contactEditRules: FieldRules = {
-    editFullName: () => (editingDraft.full_name.trim() ? null : 'Укажи ФИО контактного лица'),
+    editFullName: () => personNameError(editingDraft.full_name, 'ФИО контактного лица'),
+    editContactPhone: () => phoneError(editingDraft.phone_number),
+    editContactTelegram: () => telegramIdError(editingDraft.telegram_id, false),
     editContact: () =>
       editingDraft.phone_number.trim() || editingDraft.telegram_id.trim()
         ? null
@@ -520,19 +524,25 @@ export default function ContactsPage() {
                 <label className="modal-field">
                   Телефон
                   <input
+                    className={errors.contactPhone ? 'field-invalid' : undefined}
                     value={contactPhone}
-                    onChange={(e) => { setContactPhone(e.target.value); clearError('contact'); }}
+                    onChange={(e) => { setContactPhone(e.target.value); clearError('contactPhone'); clearError('contact'); }}
+                    onBlur={() => validateField('contactPhone', contactCreateRules)}
                     placeholder="Телефон"
                   />
+                  <FieldError message={errors.contactPhone} />
                 </label>
                 <label className="modal-field">
                   Telegram ID
                   <input
+                    className={errors.contactTelegram ? 'field-invalid' : undefined}
                     value={contactTelegramId}
-                    onChange={(e) => { setContactTelegramId(e.target.value); clearError('contact'); }}
+                    onChange={(e) => { setContactTelegramId(e.target.value); clearError('contactTelegram'); clearError('contact'); }}
+                    onBlur={() => validateField('contactTelegram', contactCreateRules)}
                     placeholder="Telegram ID"
                     type="number"
                   />
+                  <FieldError message={errors.contactTelegram} />
                   <FieldError message={errors.contact} />
                 </label>
                 <div className="modal-actions">
@@ -602,16 +612,22 @@ export default function ContactsPage() {
                   />
                   <FieldError message={errors.editFullName} />
                   <input
+                    className={errors.editContactPhone ? 'field-invalid' : undefined}
                     value={editingDraft.phone_number}
-                    onChange={(e) => { setEditingDraft((prev) => ({ ...prev, phone_number: e.target.value })); clearError('editContact'); }}
+                    onChange={(e) => { setEditingDraft((prev) => ({ ...prev, phone_number: e.target.value })); clearError('editContactPhone'); clearError('editContact'); }}
+                    onBlur={() => validateField('editContactPhone', contactEditRules)}
                     placeholder="Телефон"
                   />
+                  <FieldError message={errors.editContactPhone} />
                   <input
+                    className={errors.editContactTelegram ? 'field-invalid' : undefined}
                     value={editingDraft.telegram_id}
-                    onChange={(e) => { setEditingDraft((prev) => ({ ...prev, telegram_id: e.target.value })); clearError('editContact'); }}
+                    onChange={(e) => { setEditingDraft((prev) => ({ ...prev, telegram_id: e.target.value })); clearError('editContactTelegram'); clearError('editContact'); }}
+                    onBlur={() => validateField('editContactTelegram', contactEditRules)}
                     placeholder="Telegram ID"
                     type="number"
                   />
+                  <FieldError message={errors.editContactTelegram} />
                   <FieldError message={errors.editContact} />
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <button

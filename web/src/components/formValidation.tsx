@@ -54,13 +54,28 @@ export function personNameError(value: string, label: string): string | null {
   return null;
 }
 
-/** Телефон: необязателен; если задан — только цифры/+/пробелы/скобки/дефис и 5–20 цифр. */
+/**
+ * Телефон: необязателен; если задан — только цифры/+/пробелы/скобки/дефис,
+ * не длиннее 15 символов (колонка БД — varchar(15)) и минимум 5 цифр.
+ */
 export function phoneError(value: string): string | null {
   const v = value.trim();
   if (!v) return null;
   if (!PHONE_RE.test(v)) return 'Телефон: только цифры, +, пробелы, скобки и дефис';
-  const digits = v.replace(/\D/g, '');
-  if (digits.length < 5 || digits.length > 20) return 'Телефон должен содержать от 5 до 20 цифр';
+  if (v.length > 15) return 'Телефон не длиннее 15 символов';
+  if (v.replace(/\D/g, '').length < 5) return 'Слишком короткий телефон (минимум 5 цифр)';
+  return null;
+}
+
+/**
+ * Telegram ID: только цифры, не длиннее 15 знаков (укладывается в BigInteger).
+ * required=true — поле обязательно (ученик); false — часть пары (контакт).
+ */
+export function telegramIdError(value: string, required: boolean): string | null {
+  const v = value.trim();
+  if (!v) return required ? 'Укажи Telegram ID' : null;
+  if (!/^\d+$/.test(v)) return 'Telegram ID — только цифры';
+  if (v.length > 15) return 'Слишком длинный Telegram ID';
   return null;
 }
 
