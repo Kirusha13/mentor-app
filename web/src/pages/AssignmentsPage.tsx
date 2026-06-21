@@ -1299,12 +1299,12 @@ export default function AssignmentsPage() {
               </label>
 
               <label className="modal-field">
-                Заголовок задания
+                Краткий заголовок (необязательно)
                 <input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Например: Уравнения" />
               </label>
 
               <label className="modal-field">
-                Описание задания
+                Описание задания *
                 <textarea
                   className={errors.newDescription ? 'field-invalid' : undefined}
                   value={newDescription}
