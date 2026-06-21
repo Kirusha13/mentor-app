@@ -905,11 +905,19 @@ export default function SchedulePage() {
 
   const createLessonRules: FieldRules = {
     selectedTutorStudentId: () => (selectedTutorStudentId ? null : 'Выбери ученика и предмет'),
-    lessonDate: () => (lessonDate ? null : 'Укажи дату'),
+    lessonDate: () => {
+      if (!lessonDate) return 'Укажи дату';
+      if (lessonDate < formatDate(new Date())) return 'Дата уже прошла';
+      return null;
+    },
     startTime: () => {
       if (!startTime) return 'Укажи время начала';
-      if (lessonDate && new Date(buildLocalIso(lessonDate, startTime)).getTime() <= Date.now()) {
-        return 'Время занятия уже прошло';
+      // прошедший день ловится в правиле даты; здесь — только время сегодняшнего дня
+      if (
+        lessonDate === formatDate(new Date()) &&
+        new Date(buildLocalIso(lessonDate, startTime)).getTime() <= Date.now()
+      ) {
+        return 'Время уже прошло';
       }
       return null;
     },
