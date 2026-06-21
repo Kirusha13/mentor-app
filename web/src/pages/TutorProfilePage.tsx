@@ -622,7 +622,7 @@ const profileRules: FieldRules = {
               <input className={errors.fullName ? 'field-invalid' : undefined} value={fullName} onChange={(event) => { setFullName(event.target.value); clearError('fullName'); }} onBlur={() => validateField('fullName', profileRules)} />
               <FieldError message={errors.fullName} />
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'start' }}>
               <label style={{ display: 'grid', gap: 5 }}>
                 <span style={mutedTextStyle}>Телефон (СБП)</span>
                 <input

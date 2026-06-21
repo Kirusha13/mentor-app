@@ -513,6 +513,9 @@ body:has(.portfolio-report-modal) main > div {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  /* не растягивать ячейки по высоте: ошибка валидации в одном поле
+     не должна увеличивать высоту соседнего поля */
+  align-items: start;
 }
 
 .modal-section {

@@ -2195,7 +2195,7 @@ export default function SchedulePage() {
                     <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>
                       {selectedWindow ? 'Редактирование свободного слота' : 'Редактирование занятия'}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12, alignItems: 'start' }}>
                       <div>
                         <input type="date" className={errors.editLessonDate ? 'field-invalid' : undefined} value={editLessonDate} onChange={(event) => { setEditLessonDate(event.target.value); clearError('editLessonDate'); }} onBlur={() => validateField('editLessonDate', editLessonRules)} style={{ width: '100%' }} />
                         <FieldError message={errors.editLessonDate} />
@@ -2252,7 +2252,7 @@ export default function SchedulePage() {
                 {isReschedulingLesson && (
                   <div style={{ marginBottom: 20 }}>
                     <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>Перенос занятия</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12, alignItems: 'start' }}>
                       <div>
                         <input type="date" className={errors.rescheduleDate ? 'field-invalid' : undefined} value={rescheduleDate} onChange={(event) => { setRescheduleDate(event.target.value); clearError('rescheduleDate'); }} onBlur={() => validateField('rescheduleDate', rescheduleRules)} style={{ width: '100%' }} />
                         <FieldError message={errors.rescheduleDate} />
