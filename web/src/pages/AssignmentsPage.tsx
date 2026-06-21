@@ -454,7 +454,11 @@ export default function AssignmentsPage() {
   const createAssignmentRules: FieldRules = {
     newTutorStudentId: () => (newTutorStudentId ? null : 'Выбери ученика и предмет'),
     newDescription: () => (newDescription.trim() ? null : 'Укажи описание задания'),
-    newDeadline: () => (newDeadline ? null : 'Укажи дедлайн'),
+    newDeadline: () => {
+      if (!newDeadline) return 'Укажи дедлайн';
+      if (new Date(newDeadline).getTime() < Date.now()) return 'Дедлайн не может быть в прошлом';
+      return null;
+    },
   };
 
   const handleCreate = async () => {

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,6 +66,13 @@ async def create_assignment(
     ts = ts_result.scalar_one_or_none()
     if ts is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Связка репетитор-ученик не найдена")
+
+    deadline = data.deadline if data.deadline.tzinfo else data.deadline.replace(tzinfo=timezone.utc)
+    if deadline < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Дедлайн не может быть в прошлом",
+        )
 
     if data.lesson_id is not None:
         lesson_owned = await db.execute(

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class StudentOut(BaseModel):
@@ -21,13 +21,13 @@ class StudentOut(BaseModel):
 class StudentCreate(BaseModel):
     full_name: str
     telegram_id: int
-    grade: int | None = None
+    grade: int | None = Field(default=None, ge=1, le=13)
     phone_number: str | None = None
 
 
 class StudentUpdate(BaseModel):
     full_name: str | None = None
-    grade: int | None = None
+    grade: int | None = Field(default=None, ge=1, le=13)
     phone_number: str | None = None
     avatar_url: str | None = None
     timezone: str | None = None

@@ -520,7 +520,6 @@ export default function ContactsPage() {
                 <label className="modal-field">
                   Телефон
                   <input
-                    className={errors.contact ? 'field-invalid' : undefined}
                     value={contactPhone}
                     onChange={(e) => { setContactPhone(e.target.value); clearError('contact'); }}
                     placeholder="Телефон"
@@ -529,7 +528,6 @@ export default function ContactsPage() {
                 <label className="modal-field">
                   Telegram ID
                   <input
-                    className={errors.contact ? 'field-invalid' : undefined}
                     value={contactTelegramId}
                     onChange={(e) => { setContactTelegramId(e.target.value); clearError('contact'); }}
                     placeholder="Telegram ID"
@@ -604,13 +602,11 @@ export default function ContactsPage() {
                   />
                   <FieldError message={errors.editFullName} />
                   <input
-                    className={errors.editContact ? 'field-invalid' : undefined}
                     value={editingDraft.phone_number}
                     onChange={(e) => { setEditingDraft((prev) => ({ ...prev, phone_number: e.target.value })); clearError('editContact'); }}
                     placeholder="Телефон"
                   />
                   <input
-                    className={errors.editContact ? 'field-invalid' : undefined}
                     value={editingDraft.telegram_id}
                     onChange={(e) => { setEditingDraft((prev) => ({ ...prev, telegram_id: e.target.value })); clearError('editContact'); }}
                     placeholder="Telegram ID"

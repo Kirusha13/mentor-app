@@ -18,7 +18,7 @@ import {
 import { getApiErrorMessage } from '../utils/apiError';
 import { SeriesBlock } from '../components/SeriesBlock';
 import { useToast } from '../components/Toast';
-import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
+import { useFieldErrors, FieldError, personNameError, phoneError, gradeError, type FieldRules } from '../components/formValidation';
 import { useConfirm } from '../components/ConfirmDialog';
 
 interface StudentGroupData {
@@ -217,8 +217,10 @@ export default function StudentsPage() {
   }, [selectedCard]);
 
   const createStudentRules: FieldRules = {
-    newStudentName: () => (newStudentName.trim() ? null : '\u0423\u043a\u0430\u0436\u0438 \u0424\u0418\u041e \u0443\u0447\u0435\u043d\u0438\u043a\u0430'),
+    newStudentName: () => personNameError(newStudentName, '\u0424\u0418\u041e \u0443\u0447\u0435\u043d\u0438\u043a\u0430'),
     newStudentTelegramId: () => (newStudentTelegramId.trim() ? null : '\u0423\u043a\u0430\u0436\u0438 Telegram ID'),
+    newStudentGrade: () => gradeError(newStudentGrade),
+    newStudentPhone: () => phoneError(newStudentPhone),
     newStudentSubjectId: () => (newStudentSubjectId ? null : '\u0412\u044b\u0431\u0435\u0440\u0438 \u043f\u0440\u0435\u0434\u043c\u0435\u0442'),
     newStudentRate: () => (Number(newStudentRate) > 0 ? null : '\u0421\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c \u0434\u043e\u043b\u0436\u043d\u0430 \u0431\u044b\u0442\u044c \u0431\u043e\u043b\u044c\u0448\u0435 \u043d\u0443\u043b\u044f'),
   };
@@ -308,7 +310,9 @@ export default function StudentsPage() {
   const formatRelationStartDate = (value?: string | null) => {
     if (!value) return '—';
     const date = new Date(`${value}T00:00:00`);
-    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('ru-RU');
+    return Number.isNaN(date.getTime())
+      ? '—'
+      : date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
   const getNextLessonForGroup = (group: StudentGroupData) => {
@@ -468,11 +472,13 @@ export default function StudentsPage() {
                 <div className="modal-row">
                   <label className="modal-field">
                     Класс
-                    <input value={newStudentGrade} onChange={(event) => setNewStudentGrade(event.target.value)} placeholder={t.grade} type="number" />
+                    <input className={errors.newStudentGrade ? 'field-invalid' : undefined} value={newStudentGrade} onChange={(event) => { setNewStudentGrade(event.target.value); clearError('newStudentGrade'); }} onBlur={() => validateField('newStudentGrade', createStudentRules)} placeholder={t.grade} type="number" />
+                    <FieldError message={errors.newStudentGrade} />
                   </label>
                   <label className="modal-field">
                     Телефон
-                    <input value={newStudentPhone} onChange={(event) => setNewStudentPhone(event.target.value)} placeholder={t.phone} />
+                    <input className={errors.newStudentPhone ? 'field-invalid' : undefined} value={newStudentPhone} onChange={(event) => { setNewStudentPhone(event.target.value); clearError('newStudentPhone'); }} onBlur={() => validateField('newStudentPhone', createStudentRules)} placeholder={t.phone} />
+                    <FieldError message={errors.newStudentPhone} />
                   </label>
                 </div>
                 <label className="modal-field">

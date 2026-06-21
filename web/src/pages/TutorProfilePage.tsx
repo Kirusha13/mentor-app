@@ -16,7 +16,7 @@ import {
 } from '../api/tutorLevels';
 import { getApiErrorMessage } from '../utils/apiError';
 import { useToast } from '../components/Toast';
-import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
+import { useFieldErrors, FieldError, phoneError, type FieldRules } from '../components/formValidation';
 import { useConfirm } from '../components/ConfirmDialog';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
@@ -237,6 +237,7 @@ export default function TutorProfilePage() {
 
 const profileRules: FieldRules = {
     fullName: () => (fullName.trim() ? null : 'Укажи имя репетитора'),
+    phoneNumber: () => phoneError(phoneNumber),
   };
 
   const handleProfileSave = async () => {
@@ -625,10 +626,13 @@ const profileRules: FieldRules = {
               <label style={{ display: 'grid', gap: 5 }}>
                 <span style={mutedTextStyle}>Телефон (СБП)</span>
                 <input
+                  className={errors.phoneNumber ? 'field-invalid' : undefined}
                   value={phoneNumber}
-                  onChange={(event) => setPhoneNumber(event.target.value)}
+                  onChange={(event) => { setPhoneNumber(event.target.value); clearError('phoneNumber'); }}
+                  onBlur={() => validateField('phoneNumber', profileRules)}
                   placeholder="+7..."
                 />
+                <FieldError message={errors.phoneNumber} />
               </label>
               <label style={{ display: 'grid', gap: 5 }}>
                 <span style={mutedTextStyle}>Банк для СБП</span>

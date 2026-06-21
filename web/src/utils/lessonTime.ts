@@ -8,10 +8,15 @@ export function lessonDate(lesson: Pick<Lesson, 'starts_at'>): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-/** DD.MM.YYYY в локальной зоне пользователя */
+/** Человекочитаемая дата «25 июня 2026» в локальной зоне пользователя */
 export function lessonDateRu(lesson: Pick<Lesson, 'starts_at'>): string {
-  const date = new Date(lesson.starts_at);
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
+  return formatDateRuLong(new Date(lesson.starts_at));
+}
+
+/** «25 июня 2026» — день + месяц словами + год */
+export function formatDateRuLong(date: Date): string {
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 /** HH:MM:SS в локальной зоне пользователя */

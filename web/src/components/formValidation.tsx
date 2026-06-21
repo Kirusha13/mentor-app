@@ -41,6 +41,39 @@ export function useFieldErrors() {
   return { errors, validateField, validateAll, clearError, reset };
 }
 
+// --- Переиспользуемые правила валидации полей ---
+
+const PHONE_RE = /^[+()\d][\d\s()-]*$/;
+
+/** Имя/ФИО: непустое, минимум 2 символа, содержит буквы (не только цифры). */
+export function personNameError(value: string, label: string): string | null {
+  const v = value.trim();
+  if (!v) return `Укажи ${label}`;
+  if (v.length < 2) return `${label} — минимум 2 символа`;
+  if (!/\p{L}/u.test(v)) return `${label} должно содержать буквы, не только цифры`;
+  return null;
+}
+
+/** Телефон: необязателен; если задан — только цифры/+/пробелы/скобки/дефис и 5–20 цифр. */
+export function phoneError(value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  if (!PHONE_RE.test(v)) return 'Телефон: только цифры, +, пробелы, скобки и дефис';
+  const digits = v.replace(/\D/g, '');
+  if (digits.length < 5 || digits.length > 20) return 'Телефон должен содержать от 5 до 20 цифр';
+  return null;
+}
+
+/** Класс: необязателен; если задан — целое число от 1 до 13. */
+export function gradeError(value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  if (!/^\d{1,2}$/.test(v) || Number(v) < 1 || Number(v) > 13) {
+    return 'Класс должен быть числом от 1 до 13';
+  }
+  return null;
+}
+
 export function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return (
