@@ -906,7 +906,13 @@ export default function SchedulePage() {
   const createLessonRules: FieldRules = {
     selectedTutorStudentId: () => (selectedTutorStudentId ? null : 'Выбери ученика и предмет'),
     lessonDate: () => (lessonDate ? null : 'Укажи дату'),
-    startTime: () => (startTime ? null : 'Укажи время начала'),
+    startTime: () => {
+      if (!startTime) return 'Укажи время начала';
+      if (lessonDate && new Date(buildLocalIso(lessonDate, startTime)).getTime() <= Date.now()) {
+        return 'Время занятия уже прошло';
+      }
+      return null;
+    },
     endTime: () =>
       !endTime ? 'Укажи время окончания' : endTime <= startTime ? 'Время конца должно быть позже начала' : null,
     cost: () => (Number(cost) > 0 ? null : 'Стоимость должна быть больше нуля'),
@@ -1828,7 +1834,7 @@ export default function SchedulePage() {
                   type="date"
                   className={errors.lessonDate ? 'field-invalid' : undefined}
                   value={lessonDate}
-                  onChange={(event) => { setLessonDate(event.target.value); clearError('lessonDate'); }}
+                  onChange={(event) => { setLessonDate(event.target.value); clearError('lessonDate'); clearError('startTime'); }}
                   onBlur={() => validateField('lessonDate', createLessonRules)}
                 />
                 <FieldError message={errors.lessonDate} />
