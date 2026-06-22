@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeftRight, CalendarDays, Wallet } from 'lucide-react';
 import {
   approveBooking,
   approveReschedule,
@@ -1493,7 +1494,7 @@ export default function SchedulePage() {
             Сегодня
           </button>
           <div style={{ display: 'flex', gap: 9, alignItems: 'center', minWidth: 0, marginLeft: 4 }}>
-            <span style={{ color: '#536177', fontSize: 20 }}>▣</span>
+            <span style={{ color: '#536177', display: 'inline-flex' }}><CalendarDays size={18} /></span>
             <div style={{ fontWeight: 900, color: '#1f2a3b', fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {rangeLabel}
             </div>
@@ -1579,15 +1580,15 @@ export default function SchedulePage() {
 
       <section className="metric-grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 }}>
         <div className="metric-card" style={{ minHeight: 92, background: 'linear-gradient(135deg, rgba(42,171,238,0.10), rgba(255,255,255,0.96))', borderColor: 'rgba(42,171,238,0.18)' }}>
-          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.13)', color: '#2AABEE' }}>▣</span>
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.13)', color: '#2AABEE' }}><CalendarDays size={20} /></span>
           <div><div className="metric-value">{rangeBookedLessons.length} {pluralRu(rangeBookedLessons.length, ['занятие', 'занятия', 'занятий'])}</div><div className="metric-label">{mode === 'day' ? 'В выбранный день' : mode === 'month' ? 'В этом месяце' : 'На этой неделе'}</div></div>
         </div>
         <div className="metric-card" style={{ minHeight: 92, background: 'linear-gradient(135deg, rgba(42,171,238,0.12), rgba(255,250,244,0.98))', borderColor: 'rgba(42,171,238,0.18)' }}>
-          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.14)', color: '#2AABEE' }}>↔</span>
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.14)', color: '#2AABEE' }}><ArrowLeftRight size={20} /></span>
           <div><div className="metric-value">{rangeMovedLessons.length} {pluralRu(rangeMovedLessons.length, ['перенос', 'переноса', 'переносов'])}</div><div className="metric-label">В выбранном периоде</div></div>
         </div>
         <div className="metric-card" style={{ minHeight: 92, background: 'linear-gradient(135deg, rgba(47,125,99,0.12), rgba(247,255,251,0.98))', borderColor: 'rgba(47,125,99,0.18)' }}>
-          <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.14)', color: '#4CAF50' }}>₽</span>
+          <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.14)', color: '#4CAF50' }}><Wallet size={20} /></span>
           <div><div className="metric-label">Ожидаемый доход</div><div className="metric-value">{formatMoney(rangeExpectedIncome)}</div><div className="metric-label">По расписанию</div></div>
         </div>
         <label className="metric-card" style={{ minHeight: 92, cursor: 'pointer', background: 'rgba(255,255,255,0.9)' }}>

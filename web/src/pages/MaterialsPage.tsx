@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { ExternalLink, FileText, Image as ImageIcon, Pencil, Presentation, Trash2, Video } from 'lucide-react';
 import {
   createMaterial,
   deleteMaterial,
@@ -758,7 +759,7 @@ export default function MaterialsPage() {
                       }}
                     >
                       <span style={{ width: 40, height: 40, borderRadius: 11, background: `${color}18`, color, display: 'grid', placeItems: 'center', fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
-                        {material.format === 'video' ? '▶' : material.format === 'text' ? '▤' : material.format === 'image' ? '▧' : material.format === 'presentation' ? '▦' : '↗'}
+                        {material.format === 'video' ? <Video size={18} /> : material.format === 'text' ? <FileText size={18} /> : material.format === 'image' ? <ImageIcon size={18} /> : material.format === 'presentation' ? <Presentation size={18} /> : <ExternalLink size={18} />}
                       </span>
 
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -795,11 +796,11 @@ export default function MaterialsPage() {
                             className="icon-button ghost-button"
                             style={{ textDecoration: 'none', width: 30, height: 30, borderRadius: 999, background: '#EFF9FF', color: '#2AABEE', display: 'grid', placeItems: 'center', fontSize: 14 }}
                           >
-                            ↗
+                            <ExternalLink size={15} />
                           </a>
                         )}
-                        <button type="button" title="Редактировать" onClick={() => openEditMaterial(material)} className="icon-button icon-button-dark" style={{ width: 30, height: 30, borderRadius: 999 }}>✎</button>
-                        <button type="button" title="Удалить" onClick={() => handleDeleteMaterial(material)} className="icon-button icon-button-danger" style={{ width: 30, height: 30, borderRadius: 999 }}>🗑</button>
+                        <button type="button" title="Редактировать" onClick={() => openEditMaterial(material)} className="icon-button icon-button-dark" style={{ width: 30, height: 30, borderRadius: 999 }}><Pencil size={15} /></button>
+                        <button type="button" title="Удалить" onClick={() => handleDeleteMaterial(material)} className="icon-button icon-button-danger" style={{ width: 30, height: 30, borderRadius: 999 }}><Trash2 size={15} /></button>
                       </div>
                     </div>
 

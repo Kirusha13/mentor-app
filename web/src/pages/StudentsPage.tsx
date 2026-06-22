@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { LayoutGrid, List } from 'lucide-react';
 import { getStudentContacts, type StudentContact } from '../api/contacts';
 import { getLessons, type Lesson } from '../api/lessons';
 import { createStudent, getStudents, type Student } from '../api/students';
@@ -390,8 +391,8 @@ export default function StudentsPage() {
               <option value="grade">По классу</option>
             </select>
             <div style={{ display: 'inline-flex', gap: 6, padding: 4, borderRadius: 14, background: 'rgba(23,32,51,0.05)', border: '1px solid rgba(24,33,47,0.08)' }}>
-              <button type="button" title="Плитка" onClick={() => setViewMode('grid')} className="icon-button ghost-button" style={{ background: viewMode === 'grid' ? '#2AABEE' : 'transparent', color: viewMode === 'grid' ? '#fff' : '#435066' }}>▦</button>
-              <button type="button" title="Список" onClick={() => setViewMode('list')} className="icon-button ghost-button" style={{ background: viewMode === 'list' ? '#2AABEE' : 'transparent', color: viewMode === 'list' ? '#fff' : '#435066' }}>☰</button>
+              <button type="button" title="Плитка" onClick={() => setViewMode('grid')} className="icon-button ghost-button" style={{ background: viewMode === 'grid' ? '#2AABEE' : 'transparent', color: viewMode === 'grid' ? '#fff' : '#435066' }}><LayoutGrid size={16} /></button>
+              <button type="button" title="Список" onClick={() => setViewMode('list')} className="icon-button ghost-button" style={{ background: viewMode === 'list' ? '#2AABEE' : 'transparent', color: viewMode === 'list' ? '#fff' : '#435066' }}><List size={16} /></button>
             </div>
             <button type="button" title="Создать ученика" onClick={() => { reset(); setCreateModalOpen(true); }} className="add-trigger">+</button>
       </section>
