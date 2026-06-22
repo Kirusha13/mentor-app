@@ -385,7 +385,7 @@ export default function DashboardPage() {
   const currentAttention = attentionStudents[safeAttentionIndex];
 
   return (
-    <div style={{ display: 'grid', gap: 16, height: '100%', minHeight: 0, overflowY: 'auto', alignContent: 'start', scrollbarWidth: 'thin' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin' }}>
       {loadWarning ? (
         <div
           style={{
@@ -552,7 +552,7 @@ export default function DashboardPage() {
 
       </section>
 
-      <article style={{ ...panelStyle, padding: 18 }}>
+      <article style={{ ...panelStyle, padding: 18, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span
@@ -597,16 +597,19 @@ export default function DashboardPage() {
           <MiniMetric label="Подтвердить" value={pendingPayments.length} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(18px, 1fr))', gap: 8, alignItems: 'end', minHeight: 132 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(18px, 1fr))', gap: 8, flex: 1, minHeight: 132 }}>
           {weekIncomeRows.map((row) => (
-            <div key={row.key} title={`${row.label}: ${formatCurrency(row.value)}`} style={{ display: 'grid', gap: 6 }}>
-              <div
-                style={{
-                  height: `${Math.max(8, (row.value / maxWeekIncome) * 110)}px`,
-                  borderRadius: '12px 12px 6px 6px',
-                  background: row.value > 0 ? 'linear-gradient(180deg, #2AABEE 0%, #229ED9 100%)' : 'rgba(23,32,51,0.08)',
-                }}
-              />
+            <div key={row.key} title={`${row.label}: ${formatCurrency(row.value)}`} style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end' }}>
+                <div
+                  style={{
+                    width: '100%',
+                    height: `${Math.max(8, (row.value / maxWeekIncome) * 100)}%`,
+                    borderRadius: '12px 12px 6px 6px',
+                    background: row.value > 0 ? 'linear-gradient(180deg, #2AABEE 0%, #229ED9 100%)' : 'rgba(23,32,51,0.08)',
+                  }}
+                />
+              </div>
               <div style={{ color: '#687486', fontSize: 12, textAlign: 'center' }}>{row.label}</div>
             </div>
           ))}

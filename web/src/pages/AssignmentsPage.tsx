@@ -634,7 +634,7 @@ export default function AssignmentsPage() {
     () => [
       {
         key: 'created',
-        title: 'Ожидают у ученика',
+        title: 'Не начаты',
         value: assignmentColumns.find((column) => column.key === 'created')?.items.length ?? 0,
         icon: '□',
         color: '#2AABEE',
