@@ -633,9 +633,9 @@ export default function AssignmentsPage() {
   const kpiCards = useMemo(
     () => [
       {
-        key: 'total',
-        title: 'Всего заданий',
-        value: filteredAssignments.length,
+        key: 'created',
+        title: 'Ожидают у ученика',
+        value: assignmentColumns.find((column) => column.key === 'created')?.items.length ?? 0,
         icon: '□',
         color: '#2AABEE',
         soft: '#EFF9FF',

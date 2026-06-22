@@ -2,10 +2,8 @@
 import { useNavigate } from 'react-router-dom';
 import { getAssignments, type Assignment } from '../api/assignments';
 import { getLessons, type Lesson } from '../api/lessons';
-import { getMaterials, type Material } from '../api/materials';
 import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
-import { getTopics, type TheoryTopic } from '../api/topics';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { lessonDate, lessonStartTime } from '../utils/lessonTime';
@@ -194,10 +192,9 @@ export default function DashboardPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tutorStudents, setTutorStudents] = useState<TutorStudent[]>([]);
-  const [topics, setTopics] = useState<TheoryTopic[]>([]);
-  const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadWarning, setLoadWarning] = useState(false);
+  const [attentionIndex, setAttentionIndex] = useState(0);
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -210,8 +207,6 @@ export default function DashboardPage() {
         getStudents(),
         getSubjects(),
         getTutorStudents(),
-        getTopics(),
-        getMaterials(),
       ] as const);
 
       const lessonData = getSettledArray(results[0]);
@@ -219,16 +214,12 @@ export default function DashboardPage() {
       const studentData = getSettledArray(results[2]);
       const subjectData = getSettledArray(results[3]);
       const relationData = getSettledArray(results[4]);
-      const topicData = getSettledArray(results[5]);
-      const materialData = getSettledArray(results[6]);
 
       setLessons(lessonData);
       setAssignments(assignmentData);
       setStudents(studentData);
       setSubjects(subjectData);
       setTutorStudents(relationData);
-      setTopics(topicData);
-      setMaterials(materialData);
       setLoadWarning(results.some((result) => result.status === 'rejected'));
       setLoading(false);
     };
@@ -247,7 +238,6 @@ export default function DashboardPage() {
   );
   const studentMap = useMemo(() => new Map(students.map((item) => [item.id, item])), [students]);
   const subjectMap = useMemo(() => new Map(subjects.map((item) => [item.id, item])), [subjects]);
-  const topicMap = useMemo(() => new Map(topics.map((item) => [item.id, item])), [topics]);
 
   const activeLessons = useMemo(() => lessons.filter(isActiveLesson), [lessons]);
 
@@ -302,12 +292,6 @@ export default function DashboardPage() {
   });
   const maxWeekIncome = Math.max(...weekIncomeRows.map((row) => row.value), 1);
 
-  const pendingRequests = lessons.filter(
-    (lesson) =>
-      lesson.conduct_status === 'booking_pending' ||
-      lesson.conduct_status === 'reschedule_pending' ||
-      lesson.payment_status === 'payment_pending'
-  );
   const pendingPayments = lessons.filter((lesson) => lesson.payment_status === 'payment_pending');
 
   const overdueAssignments = assignments.filter((assignment) => {
@@ -336,22 +320,7 @@ export default function DashboardPage() {
       };
     });
 
-  const recentMaterials = materials
-    .slice()
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 5)
-    .map((material) => ({ material, topic: topicMap.get(material.topic_id) }));
-
-  const openMaterialTopic = (topic: TheoryTopic | undefined) => {
-    if (!topic) {
-      navigate('/materials');
-      return;
-    }
-
-    navigate(`/materials?subject_id=${topic.subject_id}&topic_id=${topic.id}`);
-  };
-
-  const selectedPortfolioStudent = useMemo(() => {
+  const attentionStudents = useMemo(() => {
     const activity = new Map<number, { lessons: Lesson[]; assignments: Assignment[] }>();
 
     tutorStudents.forEach((relation) => {
@@ -371,43 +340,49 @@ export default function DashboardPage() {
       activity.get(relation.student_id)?.assignments.push(assignment);
     });
 
+    const nowMs = Date.now();
+
     return [...activity.entries()]
       .map(([studentId, data]) => {
         const student = studentMap.get(studentId);
+        const overdueCount = data.assignments.filter((assignment) => {
+          if (assignment.completion_status === 'completed') return false;
+          const deadline = getAssignmentDeadline(assignment);
+          return assignment.completion_status === 'overdue' || Boolean(deadline && deadline < today);
+        }).length;
         const conducted = data.lessons.filter((lesson) => lesson.conduct_status === 'conducted');
-        const lessonGrades = conducted.map((lesson) => lesson.grade).filter((grade): grade is number => grade !== null);
-        const assignmentGrades = data.assignments
-          .map((assignment) => assignment.grade)
-          .filter((grade): grade is number => grade !== null);
-        const completedAssignments = data.assignments.filter(
-          (assignment) => assignment.completion_status === 'completed'
+        const grades = [
+          ...conducted.map((lesson) => lesson.grade),
+          ...data.assignments.map((assignment) => assignment.grade),
+        ].filter((grade): grade is number => grade !== null && grade !== undefined);
+        const avgGrade = grades.length
+          ? grades.reduce((sum, grade) => sum + grade, 0) / grades.length
+          : null;
+        const lastLessonMs = conducted.reduce(
+          (max, lesson) => Math.max(max, new Date(lesson.starts_at).getTime()),
+          0
         );
-        const lessonAverage = lessonGrades.length
-          ? lessonGrades.reduce((sum, grade) => sum + grade, 0) / lessonGrades.length
-          : null;
-        const assignmentAverage = assignmentGrades.length
-          ? assignmentGrades.reduce((sum, grade) => sum + grade, 0) / assignmentGrades.length
-          : null;
-        const homeworkPercent = data.assignments.length
-          ? (completedAssignments.length / data.assignments.length) * 100
-          : 0;
-        const gradePercent =
-          lessonAverage !== null || assignmentAverage !== null
-            ? (((lessonAverage ?? 0) + (assignmentAverage ?? 0)) / (lessonAverage !== null && assignmentAverage !== null ? 10 : 5)) *
-              100
-            : 0;
+        const daysSinceLast = lastLessonMs > 0 ? Math.floor((nowMs - lastLessonMs) / 86_400_000) : null;
+        const hasActivity = data.lessons.length > 0 || data.assignments.length > 0;
 
-        return {
-          student,
-          studentId,
-          progress: Math.round(Math.min(100, homeworkPercent * 0.45 + gradePercent * 0.55)),
-          lessonAverage,
-          assignmentAverage,
-        };
+        return { student, studentId, overdueCount, avgGrade, daysSinceLast, hasActivity };
       })
-      .filter((item) => item.student)
-      .sort((a, b) => b.progress - a.progress)[0];
-  }, [assignments, lessons, relationMap, studentMap, tutorStudents]);
+      .filter((item) => item.student && item.hasActivity)
+      .sort((a, b) => {
+        if (b.overdueCount !== a.overdueCount) return b.overdueCount - a.overdueCount;
+        const gradeA = a.avgGrade ?? Infinity;
+        const gradeB = b.avgGrade ?? Infinity;
+        if (gradeA !== gradeB) return gradeA - gradeB;
+        return (b.daysSinceLast ?? 0) - (a.daysSinceLast ?? 0);
+      })
+      .slice(0, 3);
+  }, [assignments, lessons, relationMap, studentMap, tutorStudents, today]);
+
+  const attentionCount = attentionStudents.length;
+  const safeAttentionIndex = attentionCount
+    ? ((attentionIndex % attentionCount) + attentionCount) % attentionCount
+    : 0;
+  const currentAttention = attentionStudents[safeAttentionIndex];
 
   return (
     <div style={{ display: 'grid', gap: 16, height: '100%', minHeight: 0, overflowY: 'auto', alignContent: 'start', scrollbarWidth: 'thin' }}>
@@ -517,162 +492,117 @@ export default function DashboardPage() {
         </ModuleCard>
 
         <ModuleCard
-          title="Материалы"
-          accent={moduleAccent.materials}
-          action="Открыть"
-          onAction={() => navigate('/materials')}
-        >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-            <MiniMetric label="Предметы" value={subjects.length} />
-            <MiniMetric label="Темы" value={topics.length} />
-            <MiniMetric label="Материалы" value={materials.length} />
-          </div>
-          <div style={{ display: 'grid', gap: 8 }}>
-            {recentMaterials.length === 0 ? (
-              <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Материалы пока не добавлены.</p>
-            ) : (
-              recentMaterials.map(({ material, topic }) => (
-                <button
-                  key={material.id}
-                  type="button"
-                  onClick={() => openMaterialTopic(topic)}
-                  title={topic ? `Открыть тему «${topic.title}»` : 'Открыть материалы'}
-                  style={{
-                    display: 'flex',
-                    gap: 8,
-                    alignItems: 'center',
-                    color: '#1f2a3b',
-                    background: 'rgba(23,32,51,0.04)',
-                    border: '1px solid rgba(24,33,47,0.06)',
-                    borderRadius: 12,
-                    boxShadow: 'none',
-                    padding: '8px 10px',
-                    textAlign: 'left',
-                    minWidth: 0,
-                  }}
-                >
-                  <span style={{ width: 10, height: 10, borderRadius: 3, background: moduleAccent.materials }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {topic?.title ?? material.content_text ?? material.content_url ?? 'Материал'}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </ModuleCard>
-
-        <ModuleCard
-          title="Финансы"
-          accent={moduleAccent.finance}
-          action="Подробнее"
-          onAction={() => navigate('/finance')}
-        >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-            <MiniMetric label="Сегодня" value={formatCurrency(todayPaid)} />
-            <MiniMetric label="Прогноз дня" value={formatCurrency(todayForecast)} />
-            <MiniMetric label="Неделя" value={formatCurrency(weekPaid)} />
-            <MiniMetric label="Прогноз недели" value={formatCurrency(weekForecast)} />
-            <MiniMetric label="Подтвердить" value={pendingPayments.length} />
-          </div>
-        </ModuleCard>
-
-        <ModuleCard
-          title="Портфолио прогресса"
+          title="Требуют внимания"
           accent={moduleAccent.portfolio}
           action="Портфолио"
           onAction={() =>
             navigate(
-              selectedPortfolioStudent?.studentId
-                ? `/portfolio?student_id=${selectedPortfolioStudent.studentId}`
+              currentAttention?.studentId
+                ? `/portfolio?student_id=${currentAttention.studentId}`
                 : '/students'
             )
           }
         >
-          {selectedPortfolioStudent?.student ? (
+          {currentAttention?.student ? (
             <div style={{ display: 'grid', gap: 12 }}>
-              <div>
-                <strong style={{ color: '#1f2a3b', fontSize: 17 }}>{selectedPortfolioStudent.student.full_name}</strong>
-                <div style={mutedTextStyle}>Лучший заполненный профиль прогресса</div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 92px', gap: 12, alignItems: 'center' }}>
-                <div style={{ height: 10, borderRadius: 999, background: 'rgba(23,32,51,0.08)', overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      width: `${selectedPortfolioStudent.progress}%`,
-                      height: '100%',
-                      borderRadius: 999,
-                      background: moduleAccent.portfolio,
-                    }}
-                  />
-                </div>
-                <strong style={{ color: moduleAccent.portfolio, fontSize: 26, textAlign: 'right' }}>
-                  {selectedPortfolioStudent.progress}%
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <strong style={{ color: '#1f2a3b', fontSize: 17, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {currentAttention.student.full_name}
                 </strong>
+                {attentionCount > 1 ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      title="Предыдущий"
+                      onClick={() => setAttentionIndex((index) => index - 1)}
+                      style={{ width: 26, height: 26, display: 'grid', placeItems: 'center', borderRadius: 8, background: 'rgba(23,32,51,0.06)', color: '#243041', boxShadow: 'none', fontSize: 12, padding: 0 }}
+                    >
+                      ◀
+                    </button>
+                    <span style={{ ...mutedTextStyle, fontSize: 12, minWidth: 30, textAlign: 'center' }}>
+                      {safeAttentionIndex + 1}/{attentionCount}
+                    </span>
+                    <button
+                      type="button"
+                      title="Следующий"
+                      onClick={() => setAttentionIndex((index) => index + 1)}
+                      style={{ width: 26, height: 26, display: 'grid', placeItems: 'center', borderRadius: 8, background: 'rgba(23,32,51,0.06)', color: '#243041', boxShadow: 'none', fontSize: 12, padding: 0 }}
+                    >
+                      ▶
+                    </button>
+                  </div>
+                ) : null}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                <MiniMetric label="Просрочено" value={currentAttention.overdueCount} />
                 <MiniMetric
-                  label="Занятия"
-                  value={selectedPortfolioStudent.lessonAverage?.toFixed(1) ?? '—'}
+                  label="Ср. балл"
+                  value={currentAttention.avgGrade !== null ? currentAttention.avgGrade.toFixed(1) : '—'}
                 />
                 <MiniMetric
-                  label="ДЗ"
-                  value={selectedPortfolioStudent.assignmentAverage?.toFixed(1) ?? '—'}
+                  label="Не был"
+                  value={currentAttention.daysSinceLast !== null ? `${currentAttention.daysSinceLast} дн` : '—'}
                 />
               </div>
             </div>
           ) : (
-            <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Данных для портфолио пока нет.</p>
+            <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Нет учеников, требующих внимания.</p>
           )}
         </ModuleCard>
 
-        <ModuleCard
-          title="Уведомления"
-          accent={moduleAccent.notifications}
-          action="Все"
-          onAction={() => navigate('/requests')}
-        >
-          <div style={{ display: 'grid', gap: 10 }}>
-            {[
-              { label: 'Запросы на запись и перенос', value: pendingRequests.length },
-              { label: 'Оплаты ждут подтверждения', value: pendingPayments.length },
-              { label: 'Просроченные задания', value: overdueAssignments.length },
-              { label: 'Занятия сегодня', value: todayLessons.length },
-            ].map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => navigate(item.label.includes('задания') ? '/assignments' : item.label.includes('Занятия') ? '/schedule' : '/requests')}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0, 1fr) auto',
-                  gap: 10,
-                  textAlign: 'left',
-                  padding: 11,
-                  borderRadius: 14,
-                  background: item.value > 0 ? 'rgba(42,171,238,0.08)' : 'rgba(23,32,51,0.04)',
-                  color: '#1f2a3b',
-                  boxShadow: 'none',
-                }}
-              >
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-              </button>
-            ))}
-          </div>
-        </ModuleCard>
       </section>
 
-      <article style={{ ...panelStyle, padding: 14 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-          <h3 style={{ fontSize: 18, marginBottom: 0 }}>Динамика дохода за неделю</h3>
-          <strong>{formatCurrency(weekPaid)}</strong>
+      <article style={{ ...panelStyle, padding: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 12,
+                background: `${moduleAccent.finance}16`,
+                border: `1px solid ${moduleAccent.finance}26`,
+                display: 'grid',
+                placeItems: 'center',
+              }}
+            >
+              <span style={{ width: 12, height: 12, borderRadius: 4, background: moduleAccent.finance }} />
+            </span>
+            <div>
+              <h3 style={{ fontSize: 18, marginBottom: 2 }}>Финансы за неделю</h3>
+              <div style={{ ...mutedTextStyle, fontSize: 13 }}>Получено: {formatCurrency(weekPaid)}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/finance')}
+            style={{ padding: '8px 12px', borderRadius: 12, background: 'rgba(23,32,51,0.06)', color: '#243041', boxShadow: 'none', fontSize: 12 }}
+          >
+            Подробнее
+          </button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(18px, 1fr))', gap: 8, alignItems: 'end', minHeight: 92 }}>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isTablet ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)',
+            gap: 8,
+            marginBottom: 18,
+          }}
+        >
+          <MiniMetric label="Сегодня" value={formatCurrency(todayPaid)} />
+          <MiniMetric label="Прогноз дня" value={formatCurrency(todayForecast)} />
+          <MiniMetric label="Неделя" value={formatCurrency(weekPaid)} />
+          <MiniMetric label="Прогноз недели" value={formatCurrency(weekForecast)} />
+          <MiniMetric label="Подтвердить" value={pendingPayments.length} />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(18px, 1fr))', gap: 8, alignItems: 'end', minHeight: 132 }}>
           {weekIncomeRows.map((row) => (
             <div key={row.key} title={`${row.label}: ${formatCurrency(row.value)}`} style={{ display: 'grid', gap: 6 }}>
               <div
                 style={{
-                  height: `${Math.max(8, (row.value / maxWeekIncome) * 74)}px`,
+                  height: `${Math.max(8, (row.value / maxWeekIncome) * 110)}px`,
                   borderRadius: '12px 12px 6px 6px',
                   background: row.value > 0 ? 'linear-gradient(180deg, #2AABEE 0%, #229ED9 100%)' : 'rgba(23,32,51,0.08)',
                 }}

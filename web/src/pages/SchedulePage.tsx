@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   approveBooking,
   approveReschedule,
@@ -434,6 +435,7 @@ function layoutTimelineLessons(items: Lesson[], startHour: number, slotHeights: 
 }
 
 export default function SchedulePage() {
+  const navigate = useNavigate();
   const toast = useToast();
   const { errors, validateField, validateAll, clearError, reset } = useFieldErrors();
   const [mode, setMode] = useState<CalendarMode>('week');
@@ -1917,12 +1919,29 @@ export default function SchedulePage() {
                 <p className="modal-subtitle">
                   {dayEditorDate}
                   {dayEditorOverridden && (
-                    <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 999, background: 'rgba(42,171,238,0.12)', color: '#2AABEE', fontSize: 11, fontWeight: 700 }}>изменено</span>
+                    <span
+                      title="Этот день отличается от вашего обычного расписания — окна заданы вручную"
+                      style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 999, background: 'rgba(42,171,238,0.12)', color: '#2AABEE', fontSize: 11, fontWeight: 700, cursor: 'help' }}
+                    >
+                      Не по расписанию
+                    </span>
                   )}
                 </p>
               </div>
               <button type="button" title="Закрыть" onClick={() => setIsDayEditorOpen(false)} className="modal-close">×</button>
             </div>
+
+            <p style={{ margin: '0 0 4px', fontSize: 13, color: '#687486', lineHeight: 1.45 }}>
+              Изменения применятся только к этой дате. Чтобы изменить обычное расписание по этому дню недели,{' '}
+              <button
+                type="button"
+                onClick={() => { setIsDayEditorOpen(false); navigate('/availability'); }}
+                style={{ padding: 0, background: 'none', border: 'none', boxShadow: 'none', color: '#2AABEE', fontWeight: 700, fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                откройте «Доступность»
+              </button>
+              .
+            </p>
 
             {dayEditorResult && (
               <div style={{ padding: '10px 14px', borderRadius: 12, background: dayEditorResult.conflicts.length > 0 ? 'rgba(237,137,54,0.1)' : 'rgba(72,187,120,0.1)', border: `1px solid ${dayEditorResult.conflicts.length > 0 ? 'rgba(237,137,54,0.3)' : 'rgba(72,187,120,0.3)'}`, color: dayEditorResult.conflicts.length > 0 ? '#c05621' : '#276749', fontSize: 13, marginBottom: 4 }}>
