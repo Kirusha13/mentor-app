@@ -131,12 +131,14 @@ function MiniMetric({ label, value }: { label: string; value: string | number })
 
 function ModuleCard({
   title,
+  meta,
   accent,
   children,
   action,
   onAction,
 }: {
   title: string;
+  meta?: string;
   accent: string;
   children: React.ReactNode;
   action?: string;
@@ -159,7 +161,10 @@ function ModuleCard({
           >
             <span style={{ width: 12, height: 12, borderRadius: 4, background: accent }} />
           </span>
-          <h3 style={{ fontSize: 18, marginBottom: 0 }}>{title}</h3>
+          <div>
+            <h3 style={{ fontSize: 18, marginBottom: meta ? 2 : 0 }}>{title}</h3>
+            {meta ? <div style={{ ...mutedTextStyle, fontSize: 12 }}>{meta}</div> : null}
+          </div>
         </div>
         {action && onAction ? (
           <button
@@ -411,17 +416,12 @@ export default function DashboardPage() {
       >
         <ModuleCard
           title="Расписание"
+          meta={`Сегодня, ${new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now)}`}
           accent={moduleAccent.schedule}
           action="Открыть"
           onAction={() => navigate('/schedule')}
         >
           <div style={{ display: 'grid', gap: 9 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <strong style={{ color: '#1f2a3b' }}>Сегодня</strong>
-              <span style={mutedTextStyle}>
-                {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now)}
-              </span>
-            </div>
             {loading ? (
               <p style={{ ...mutedTextStyle, marginBottom: 0 }}>Загрузка...</p>
             ) : todayLessons.length === 0 ? (
@@ -540,7 +540,7 @@ export default function DashboardPage() {
                   value={currentAttention.avgGrade !== null ? currentAttention.avgGrade.toFixed(1) : '—'}
                 />
                 <MiniMetric
-                  label="Не был"
+                  label="Без занятий"
                   value={currentAttention.daysSinceLast !== null ? `${currentAttention.daysSinceLast} дн` : '—'}
                 />
               </div>
@@ -568,10 +568,7 @@ export default function DashboardPage() {
             >
               <span style={{ width: 12, height: 12, borderRadius: 4, background: moduleAccent.finance }} />
             </span>
-            <div>
-              <h3 style={{ fontSize: 18, marginBottom: 2 }}>Финансы за неделю</h3>
-              <div style={{ ...mutedTextStyle, fontSize: 13 }}>Получено: {formatCurrency(weekPaid)}</div>
-            </div>
+            <h3 style={{ fontSize: 18, marginBottom: 0 }}>Финансы за неделю</h3>
           </div>
           <button
             type="button"
