@@ -1,4 +1,5 @@
 ﻿import type { CSSProperties } from 'react';
+import { BarChart3, Calendar, CalendarDays, Inbox, TrendingUp, Wallet } from 'lucide-react';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
@@ -10,19 +11,19 @@ const CALLBACK_URL = `${CALLBACK_ORIGIN}/auth/callback`;
 
 const featureCards = [
   {
-    icon: '▣',
+    icon: <Calendar size={26} />,
     color: '#2AABEE',
     title: 'Расписание',
     text: 'Занятия, свободные слоты, переносы и отмены в одном календаре.',
   },
   {
-    icon: '₽',
+    icon: <Wallet size={26} />,
     color: '#2AABEE',
     title: 'Финансы',
     text: 'Оплаты, долги, абонементы и прогноз дохода без ручных таблиц.',
   },
   {
-    icon: '↗',
+    icon: <TrendingUp size={26} />,
     color: '#4CAF50',
     title: 'Портфолио',
     text: 'Темы, оценки, динамика и понятный отчёт о прогрессе ученика.',
@@ -30,9 +31,9 @@ const featureCards = [
 ];
 
 const insideItems = [
-  { icon: '▣', title: 'Сегодня', text: 'занятия и дедлайны' },
-  { icon: '≡', title: 'Запросы', text: 'запись, переносы, оплаты' },
-  { icon: '▥', title: 'Прогресс', text: 'сильные стороны и зоны роста' },
+  { icon: <CalendarDays size={18} />, title: 'Сегодня', text: 'занятия и дедлайны' },
+  { icon: <Inbox size={18} />, title: 'Запросы', text: 'запись, переносы, оплаты' },
+  { icon: <BarChart3 size={18} />, title: 'Прогресс', text: 'сильные стороны и зоны роста' },
 ];
 
 const featureCardStyle: CSSProperties = {
