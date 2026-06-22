@@ -132,6 +132,7 @@ function MiniMetric({ label, value }: { label: string; value: string | number })
 function ModuleCard({
   title,
   meta,
+  icon,
   accent,
   children,
   action,
@@ -139,6 +140,7 @@ function ModuleCard({
 }: {
   title: string;
   meta?: string;
+  icon?: string;
   accent: string;
   children: React.ReactNode;
   action?: string;
@@ -157,9 +159,11 @@ function ModuleCard({
               border: `1px solid ${accent}26`,
               display: 'grid',
               placeItems: 'center',
+              fontSize: 17,
+              lineHeight: 1,
             }}
           >
-            <span style={{ width: 12, height: 12, borderRadius: 4, background: accent }} />
+            {icon ?? <span style={{ width: 12, height: 12, borderRadius: 4, background: accent }} />}
           </span>
           <div>
             <h3 style={{ fontSize: 18, marginBottom: meta ? 2 : 0 }}>{title}</h3>
@@ -412,10 +416,13 @@ export default function DashboardPage() {
           display: 'grid',
           gridTemplateColumns: isTablet ? '1fr' : '1fr 1fr 1fr',
           gap: 16,
+          flex: isTablet ? '0 0 auto' : 1,
+          minHeight: 0,
         }}
       >
         <ModuleCard
           title="Расписание"
+          icon="📅"
           meta={`Сегодня, ${new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now)}`}
           accent={moduleAccent.schedule}
           action="Открыть"
@@ -461,6 +468,7 @@ export default function DashboardPage() {
 
         <ModuleCard
           title="Домашние задания"
+          icon="📝"
           accent={moduleAccent.assignments}
           action="Все ДЗ"
           onAction={() => navigate('/assignments')}
@@ -493,6 +501,7 @@ export default function DashboardPage() {
 
         <ModuleCard
           title="Требуют внимания"
+          icon="⚠️"
           accent={moduleAccent.portfolio}
           action="Портфолио"
           onAction={() =>
@@ -552,7 +561,7 @@ export default function DashboardPage() {
 
       </section>
 
-      <article style={{ ...panelStyle, padding: 18, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <article style={{ ...panelStyle, padding: 18, display: 'flex', flexDirection: 'column', flex: isTablet ? '0 0 auto' : 1, minHeight: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span
@@ -564,9 +573,11 @@ export default function DashboardPage() {
                 border: `1px solid ${moduleAccent.finance}26`,
                 display: 'grid',
                 placeItems: 'center',
+                fontSize: 17,
+                lineHeight: 1,
               }}
             >
-              <span style={{ width: 12, height: 12, borderRadius: 4, background: moduleAccent.finance }} />
+              📊
             </span>
             <h3 style={{ fontSize: 18, marginBottom: 0 }}>Финансы за неделю</h3>
           </div>
