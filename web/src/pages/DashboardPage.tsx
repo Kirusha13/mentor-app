@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, BarChart3, Calendar, ClipboardList } from 'lucide-react';
 import { getAssignments, type Assignment } from '../api/assignments';
 import { getLessons, type Lesson } from '../api/lessons';
 import { getStudents, type Student } from '../api/students';
@@ -140,7 +141,7 @@ function ModuleCard({
 }: {
   title: string;
   meta?: string;
-  icon?: string;
+  icon?: React.ReactNode;
   accent: string;
   children: React.ReactNode;
   action?: string;
@@ -422,7 +423,7 @@ export default function DashboardPage() {
       >
         <ModuleCard
           title="Расписание"
-          icon="📅"
+          icon={<Calendar size={18} color={moduleAccent.schedule} />}
           meta={`Сегодня, ${new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now)}`}
           accent={moduleAccent.schedule}
           action="Открыть"
@@ -468,7 +469,7 @@ export default function DashboardPage() {
 
         <ModuleCard
           title="Домашние задания"
-          icon="📝"
+          icon={<ClipboardList size={18} color={moduleAccent.assignments} />}
           accent={moduleAccent.assignments}
           action="Все ДЗ"
           onAction={() => navigate('/assignments')}
@@ -501,7 +502,7 @@ export default function DashboardPage() {
 
         <ModuleCard
           title="Требуют внимания"
-          icon="⚠️"
+          icon={<AlertTriangle size={18} color={moduleAccent.portfolio} />}
           accent={moduleAccent.portfolio}
           action="Портфолио"
           onAction={() =>
@@ -573,11 +574,9 @@ export default function DashboardPage() {
                 border: `1px solid ${moduleAccent.finance}26`,
                 display: 'grid',
                 placeItems: 'center',
-                fontSize: 17,
-                lineHeight: 1,
               }}
             >
-              📊
+              <BarChart3 size={18} color={moduleAccent.finance} />
             </span>
             <h3 style={{ fontSize: 18, marginBottom: 0 }}>Финансы за неделю</h3>
           </div>
