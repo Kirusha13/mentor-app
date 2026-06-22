@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { CalendarCheck, CheckCircle2, Star, UserCheck } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getAssignments, type Assignment } from '../api/assignments';
@@ -923,7 +924,7 @@ export default function PortfolioPage() {
       delta: formatCountDelta(currentStats.conductedLessons.length, previousStats.conductedLessons.length),
       color: COLORS.primary,
       background: '#EFF9FF',
-      icon: '□',
+      icon: <CalendarCheck size={20} />,
     },
     {
       label: 'Посещаемость',
@@ -931,7 +932,7 @@ export default function PortfolioPage() {
       delta: formatDelta(currentStats.attendancePercent, previousStats.attendancePercent, '%'),
       color: COLORS.warning,
       background: '#FFF8EE',
-      icon: '◷',
+      icon: <UserCheck size={20} />,
     },
     {
       label: 'Выполнение ДЗ',
@@ -939,7 +940,7 @@ export default function PortfolioPage() {
       delta: formatDelta(currentStats.homeworkPercent, previousStats.homeworkPercent, '%'),
       color: COLORS.purple,
       background: '#F9F0FF',
-      icon: '✓',
+      icon: <CheckCircle2 size={20} />,
     },
     {
       label: 'Средний балл ДЗ',
@@ -947,7 +948,7 @@ export default function PortfolioPage() {
       delta: formatDelta(currentStats.averageAssignmentGrade, previousStats.averageAssignmentGrade),
       color: COLORS.success,
       background: '#F1FBF2',
-      icon: '▥',
+      icon: <Star size={20} />,
     },
   ];
 
