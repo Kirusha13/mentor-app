@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, CheckCircle2, Clock, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { confirmPayment, getLessons, updateLesson, type Lesson } from '../api/lessons';
 import {
   createSubscription,
@@ -909,7 +910,7 @@ export default function FinancePage() {
               fontWeight: 900,
             }}
           >
-            <span aria-hidden="true">▣</span>
+            <CalendarDays size={16} aria-hidden="true" />
             {formatFinancePeriodLabel(dateFrom, dateTo)}
           </div>
         </div>
@@ -942,7 +943,7 @@ export default function FinancePage() {
 
       <section className="metric-grid" style={{ gridTemplateColumns: isTablet ? undefined : 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
         <article className="metric-card" style={{ minHeight: 84, padding: '14px 16px', borderColor: 'rgba(42,171,238,0.16)', background: 'linear-gradient(135deg, rgba(42,171,238,0.08), rgba(255,255,255,0.92))' }}>
-          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>▣</span>
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}><Wallet size={20} /></span>
           <div>
             <div className="metric-label">Ожидаемый доход</div>
             <div className="metric-value">{loading ? '—' : formatCurrency(forecastIncome)}</div>
@@ -952,7 +953,7 @@ export default function FinancePage() {
           </div>
         </article>
         <article className="metric-card" style={{ minHeight: 84, padding: '14px 16px', borderColor: 'rgba(47,125,90,0.16)', background: 'linear-gradient(135deg, rgba(47,125,90,0.08), rgba(255,255,255,0.92))' }}>
-          <span className="metric-icon" style={{ background: 'rgba(47,125,90,0.12)', color: '#4CAF50' }}>✓</span>
+          <span className="metric-icon" style={{ background: 'rgba(47,125,90,0.12)', color: '#4CAF50' }}><CheckCircle2 size={20} /></span>
           <div>
             <div className="metric-label">Оплачено</div>
             <div className="metric-value">{loading ? '—' : formatCurrency(forecastPaidIncome)}</div>
@@ -962,7 +963,7 @@ export default function FinancePage() {
           </div>
         </article>
         <article className="metric-card" style={{ minHeight: 84, padding: '14px 16px', borderColor: 'rgba(240,138,36,0.18)', background: 'linear-gradient(135deg, rgba(240,138,36,0.1), rgba(255,255,255,0.92))' }}>
-          <span className="metric-icon" style={{ background: 'rgba(255,152,0,0.14)', color: '#FF9800' }}>◷</span>
+          <span className="metric-icon" style={{ background: 'rgba(255,152,0,0.14)', color: '#FF9800' }}><Clock size={20} /></span>
           <div>
             <div className="metric-label">На проверке</div>
             <div className="metric-value">{loading ? '—' : formatCurrency(visiblePendingConfirmation)}</div>
@@ -972,7 +973,7 @@ export default function FinancePage() {
           </div>
         </article>
         <article className="metric-card" style={{ minHeight: 84, padding: '14px 16px', borderColor: 'rgba(42,171,238,0.16)', background: 'linear-gradient(135deg, rgba(42,171,238,0.08), rgba(255,255,255,0.92))' }}>
-          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>□</span>
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}><CalendarDays size={20} /></span>
           <div>
             <div className="metric-label">Запланировано</div>
             <div className="metric-value">{loading ? '—' : formatCurrency(forecastPlannedIncome)}</div>
@@ -1643,7 +1644,7 @@ export default function FinancePage() {
                     fontWeight: 800,
                   }}
                 >
-                  {averageWeekDelta >= 0 ? '↗' : '↘'} В {lastAverageWeek.fullLabel} средняя неделя{' '}
+                  {averageWeekDelta >= 0 ? <TrendingUp size={15} style={{ verticalAlign: 'text-bottom' }} /> : <TrendingDown size={15} style={{ verticalAlign: 'text-bottom' }} />} В {lastAverageWeek.fullLabel} средняя неделя{' '}
                   {averageWeekDelta >= 0 ? 'выше' : 'ниже'} предыдущего месяца на{' '}
                   {formatCurrency(Math.abs(averageWeekDelta))}.
                 </div>
