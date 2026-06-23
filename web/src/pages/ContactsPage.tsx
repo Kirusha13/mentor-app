@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { Send, ShieldCheck, UserRound, Users } from 'lucide-react';
+import { Pencil, Phone, Send, ShieldCheck, Trash2, UserRound, Users } from 'lucide-react';
 import {
   addStudentContact,
   createContact,
@@ -422,7 +422,7 @@ export default function ContactsPage() {
                 </div>
 
                 <div style={{ display: 'grid', gap: 7, color: '#435066', fontSize: 14 }}>
-                  <span>☎ {record.studentContact.contact.phone_number || '—'}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Phone size={14} /> {record.studentContact.contact.phone_number || '—'}</span>
                   <span>Telegram ID: {record.studentContact.contact.telegram_id || '—'}</span>
                 </div>
 
@@ -442,7 +442,7 @@ export default function ContactsPage() {
                     }}
                     className="icon-button icon-button-danger"
                   >
-                    🗑
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </article>
@@ -664,7 +664,7 @@ export default function ContactsPage() {
                       onClick={() => startEditingContact(selectedRecord)}
                       className="icon-button icon-button-dark"
                     >
-                      ✎
+                      <Pencil size={15} />
                     </button>
                     <button
                       type="button"
@@ -672,7 +672,7 @@ export default function ContactsPage() {
                       onClick={() => handleRemoveContact(selectedRecord)}
                       className="icon-button icon-button-danger"
                     >
-                      🗑
+                      <Trash2 size={16} />
                     </button>
                   </div>
 

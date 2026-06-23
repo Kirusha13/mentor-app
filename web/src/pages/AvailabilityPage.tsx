@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { listRules, replaceRules, type AvailabilityRule, type SaveResult } from '../api/availability';
 
 const panelStyle = {
@@ -369,7 +370,7 @@ export default function AvailabilityPage() {
                               onClick={() => removeWindow(day, idx)}
                               className="icon-button icon-button-danger"
                             >
-                              🗑
+                              <Trash2 size={16} />
                             </button>
                           </div>
                           {w.error && (

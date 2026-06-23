@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckCircle2, Clock, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { CalendarDays, Check, CheckCircle2, Clock, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { confirmPayment, getLessons, updateLesson, type Lesson } from '../api/lessons';
 import {
   createSubscription,
@@ -1309,7 +1309,7 @@ export default function FinancePage() {
                 }}
               >
                 <span><b style={{ color: '#4CAF50' }}>■</b> Оплачено</span>
-                <span><b style={{ color: '#FF9800' }}>▨</b> На проверке</span>
+                <span><b style={{ color: '#FF9800' }}>■</b> На проверке</span>
                 <span><b style={{ color: '#2AABEE' }}>■</b> Ожидается</span>
               </div>
             </>
@@ -1460,7 +1460,7 @@ export default function FinancePage() {
                             disabled={processingPaymentId === row.id}
                             className="icon-button icon-button-compact icon-button-success"
                           >
-                            ✓
+                            <Check size={16} />
                           </button>
                           <button
                             type="button"

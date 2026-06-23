@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
+import { Pencil, Star, Trash2 } from 'lucide-react';
 import {
   createTutorLevel,
   deleteTutorLevel,
@@ -224,7 +225,7 @@ export default function LevelsPage() {
                             onClick={() => handleToggleFavourite(level)}
                             style={{ minWidth: 34, width: 34, height: 34, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.04)', color: level.is_favourite ? '#2AABEE' : '#98a3b3', border: '1px solid rgba(24,33,47,0.08)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                           >
-                            ★
+                            <Star size={18} fill={level.is_favourite ? 'currentColor' : 'none'} />
                           </button>
                           <div style={{ fontWeight: 900, color: '#1f2a3b' }}>{level.name}</div>
                         </div>
@@ -236,10 +237,10 @@ export default function LevelsPage() {
                           onClick={() => startEdit(level)}
                           className="icon-button icon-button-dark"
                         >
-                          ✎
+                          <Pencil size={15} />
                         </button>
                         <button type="button" title="Удалить уровень" onClick={() => handleDelete(level)} className="icon-button icon-button-danger">
-                          🗑
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </>

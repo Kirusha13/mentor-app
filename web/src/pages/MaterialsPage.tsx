@@ -669,8 +669,8 @@ export default function MaterialsPage() {
             </div>
             {selectedTopic && (
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                <button type="button" onClick={openEditTopic} className="icon-button icon-button-dark" title="Редактировать тему">✎</button>
-                <button type="button" onClick={handleDeleteTopic} className="icon-button icon-button-danger" title="Удалить тему">🗑</button>
+                <button type="button" onClick={openEditTopic} className="icon-button icon-button-dark" title="Редактировать тему"><Pencil size={15} /></button>
+                <button type="button" onClick={handleDeleteTopic} className="icon-button icon-button-danger" title="Удалить тему"><Trash2 size={15} /></button>
               </div>
             )}
           </article>

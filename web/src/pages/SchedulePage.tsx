@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, CalendarDays, Wallet } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Check, Pencil, Trash2, Wallet } from 'lucide-react';
 import {
   approveBooking,
   approveReschedule,
@@ -1362,7 +1362,7 @@ export default function SchedulePage() {
           <div />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 6px', background: 'rgba(248,250,252,0.96)', fontWeight: 900, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
             {formatDayLong(dayDate)}
-            <button type="button" title="Редактировать доступность дня" onClick={() => { void openDayEditor(dayStr); }} style={{ padding: '2px 8px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: '1px solid rgba(42,171,238,0.35)', background: 'rgba(42,171,238,0.08)', color: '#1a6fa8', cursor: 'pointer', flexShrink: 0 }}>✎</button>
+            <button type="button" title="Редактировать доступность дня" onClick={() => { void openDayEditor(dayStr); }} style={{ padding: '2px 8px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: '1px solid rgba(42,171,238,0.35)', background: 'rgba(42,171,238,0.08)', color: '#1a6fa8', cursor: 'pointer', flexShrink: 0 }}><Pencil size={12} /></button>
           </div>
           {renderTimeLabels()}
           {renderTimelineColumn(dayLessons, 'day', dayWindows)}
@@ -1380,7 +1380,7 @@ export default function SchedulePage() {
               <div key={dayStr} style={{ textAlign: 'center', padding: '8px 4px', background: 'rgba(248,250,252,0.96)', minWidth: 0, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
                 <div style={{ fontWeight: 900, color: '#1f2a3b' }}>{WEEK_DAYS[index]}</div>
                 <div style={{ color: '#667386', fontSize: 12 }}>{formatDayShort(day)}</div>
-                <button type="button" title="Редактировать доступность дня" onClick={() => { void openDayEditor(dayStr); }} style={{ marginTop: 2, padding: '1px 6px', borderRadius: 7, fontSize: 11, fontWeight: 700, border: '1px solid rgba(42,171,238,0.3)', background: 'rgba(42,171,238,0.07)', color: '#1a6fa8', cursor: 'pointer' }}>✎</button>
+                <button type="button" title="Редактировать доступность дня" onClick={() => { void openDayEditor(dayStr); }} style={{ marginTop: 2, padding: '1px 6px', borderRadius: 7, fontSize: 11, fontWeight: 700, border: '1px solid rgba(42,171,238,0.3)', background: 'rgba(42,171,238,0.07)', color: '#1a6fa8', cursor: 'pointer' }}><Pencil size={11} /></button>
               </div>
             );
           })}
@@ -2006,7 +2006,7 @@ export default function SchedulePage() {
                           onClick={() => { setDayEditorWindows((prev) => prev.filter((_, i) => i !== idx)); setDayEditorResult(null); }}
                           className="icon-button icon-button-danger"
                         >
-                          🗑
+                          <Trash2 size={16} />
                         </button>
                       </div>
                       {w.error && <div style={{ color: '#c53030', fontSize: 12, paddingLeft: 2 }}>{w.error}</div>}
@@ -2078,7 +2078,7 @@ export default function SchedulePage() {
                         : `${subject?.name ?? 'Без предмета'} • ${toLessonDateStr(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`}
                       {!selectedWindow && selectedLesson.attendance_confirmed && (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(72,187,120,0.15)', color: '#276749', fontSize: 12, fontWeight: 700, border: '1px solid rgba(72,187,120,0.3)' }}>
-                          ✓ Подтвердил участие
+                          <Check size={14} /> Подтвердил участие
                         </span>
                       )}
                     </p>
@@ -2122,7 +2122,7 @@ export default function SchedulePage() {
                       }}
                       className="icon-button icon-button-dark"
                     >
-                      ✎
+                      <Pencil size={15} />
                     </button>
                     {!selectedWindow && (
                       <button
@@ -2137,12 +2137,12 @@ export default function SchedulePage() {
                         onClick={() => setShowLessonNoteEditor((prev) => !prev)}
                         className={`icon-button ${showLessonNoteEditor ? 'icon-button-dark' : 'icon-button-primary'}`}
                       >
-                        {selectedLesson.tutor_note?.trim() ? '✎' : '+'}
+                        {selectedLesson.tutor_note?.trim() ? <Pencil size={15} /> : '+'}
                       </button>
                     )}
                     {canMarkConducted && (
                       <button type="button" title="Отметить проведённым" onClick={() => handleLessonPatch(selectedLesson.id, { conduct_status: 'conducted' })} className="icon-button icon-button-success">
-                        ✓
+                        <Check size={16} />
                       </button>
                     )}
                     {canOpenReschedule && (
@@ -2209,7 +2209,7 @@ export default function SchedulePage() {
                         onClick={() => handleLessonDelete(selectedLesson)}
                         className="icon-button icon-button-danger"
                       >
-                        🗑
+                        <Trash2 size={16} />
                       </button>
                     )}
                     {canCancelLesson && (

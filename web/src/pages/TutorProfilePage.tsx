@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, Pencil, Star, Trash2, X } from 'lucide-react';
 import {
   createSubject,
   deleteSubject,
@@ -818,14 +818,14 @@ const profileRules: FieldRules = {
                             onClick={() => startSubjectEditing(subject)}
                             className="icon-button icon-button-dark"
                           >
-                            ✎
+                            <Pencil size={15} />
                           </button>
                           <button
                             title="Удалить предмет"
                             onClick={() => handleSubjectDelete(subject.id, subject.name)}
                             className="icon-button icon-button-danger"
                           >
-                            🗑
+                            <Trash2 size={15} />
                           </button>
                         </>
                       )}
@@ -940,7 +940,7 @@ const profileRules: FieldRules = {
                                 onClick={() => handleToggleLevelFavourite(level)}
                                 style={{ minWidth: 34, width: 34, height: 34, padding: 0, borderRadius: 999, background: 'rgba(23,32,51,0.04)', color: level.is_favourite ? '#2AABEE' : '#98a3b3', border: '1px solid rgba(24,33,47,0.08)', boxShadow: 'none', fontSize: 18, display: 'inline-grid', placeItems: 'center' }}
                               >
-                                ★
+                                <Star size={18} fill={level.is_favourite ? 'currentColor' : 'none'} />
                               </button>
                               <div style={{ color: '#1f2a3b', fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {level.name}
@@ -953,7 +953,7 @@ const profileRules: FieldRules = {
                                 onClick={() => startLevelEditing(level)}
                                 className="icon-button icon-button-dark"
                               >
-                                ✎
+                                <Pencil size={15} />
                               </button>
                               <button
                                 type="button"
@@ -961,7 +961,7 @@ const profileRules: FieldRules = {
                                 onClick={() => handleLevelDelete(level)}
                                 className="icon-button icon-button-danger"
                               >
-                                🗑
+                                <Trash2 size={15} />
                               </button>
                             </div>
                           </>

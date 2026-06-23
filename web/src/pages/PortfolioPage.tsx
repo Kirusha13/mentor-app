@@ -1,6 +1,6 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { CalendarCheck, CheckCircle2, Star, UserCheck } from 'lucide-react';
+import { AlertTriangle, CalendarCheck, Check, CheckCircle2, Star, UserCheck } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getAssignments, type Assignment } from '../api/assignments';
@@ -916,7 +916,7 @@ export default function PortfolioPage() {
       delta: formatDelta(currentStats.averageLessonGrade, previousStats.averageLessonGrade),
       color: COLORS.success,
       background: '#F1FBF2',
-      icon: '★',
+      icon: <Star size={20} />,
     },
     {
       label: 'Проведено занятий',
@@ -2318,9 +2318,9 @@ export default function PortfolioPage() {
 
         <section className="portfolio-insights-grid">
         {[
-          { title: 'Сильные стороны', items: strengths, accent: COLORS.success, bg: '#F1FBF2', icon: '★' },
-          { title: 'Зоны роста', items: growthZones, accent: COLORS.warning, bg: '#FFF8EE', icon: '!' },
-          { title: 'Рекомендации', items: recommendations, accent: COLORS.primary, bg: '#EFF9FF', icon: '✓' },
+          { title: 'Сильные стороны', items: strengths, accent: COLORS.success, bg: '#F1FBF2', icon: <Star size={18} /> },
+          { title: 'Зоны роста', items: growthZones, accent: COLORS.warning, bg: '#FFF8EE', icon: <AlertTriangle size={18} /> },
+          { title: 'Рекомендации', items: recommendations, accent: COLORS.primary, bg: '#EFF9FF', icon: <Check size={18} /> },
         ].map((section) => (
           <article key={section.title} className="portfolio-insight-card" style={panelStyle}>
             <span className="portfolio-icon-box" style={{ color: section.accent, background: section.bg }}>{section.icon}</span>
@@ -2478,9 +2478,9 @@ export default function PortfolioPage() {
 
               <section className="report-insights-grid">
                 {[
-                  { title: 'Сильные стороны', items: strengths.slice(0, 3), accent: COLORS.success, bg: '#F1FBF2', icon: '★' },
-                  { title: 'Зоны роста', items: growthZones.slice(0, 3), accent: COLORS.warning, bg: '#FFF8EE', icon: '!' },
-                  { title: 'Рекомендации', items: recommendations.slice(0, 3), accent: COLORS.primary, bg: '#EFF9FF', icon: '✓' },
+                  { title: 'Сильные стороны', items: strengths.slice(0, 3), accent: COLORS.success, bg: '#F1FBF2', icon: <Star size={18} /> },
+                  { title: 'Зоны роста', items: growthZones.slice(0, 3), accent: COLORS.warning, bg: '#FFF8EE', icon: <AlertTriangle size={18} /> },
+                  { title: 'Рекомендации', items: recommendations.slice(0, 3), accent: COLORS.primary, bg: '#EFF9FF', icon: <Check size={18} /> },
                 ].map((section) => (
                   <article key={section.title} className="report-card report-insight-card">
                     <span className="report-icon-box" style={{ color: section.accent, background: section.bg }}>{section.icon}</span>

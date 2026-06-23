@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { AlertTriangle, CheckCircle2, Eye, Inbox, Pencil } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Eye, Inbox, Pencil, Trash2 } from 'lucide-react';
 import {
   createAssignment,
   deleteAssignment,
@@ -1578,7 +1578,7 @@ export default function AssignmentsPage() {
                       onClick={() => handleDeleteAssignment(selectedAssignment)}
                       className="icon-button icon-button-danger"
                     >
-                      🗑
+                      <Trash2 size={16} />
                     </button>
                     <button type="button" title="Закрыть" onClick={() => setSelectedAssignmentId(null)} className="modal-close">
                       ×
