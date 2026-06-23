@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { AlertTriangle, CheckCircle2, Eye, Inbox, Pencil, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import {
   createAssignment,
   deleteAssignment,
@@ -632,52 +632,6 @@ export default function AssignmentsPage() {
     ]
   );
 
-  const kpiCards = useMemo(
-    () => [
-      {
-        key: 'created',
-        title: 'Не начаты',
-        value: assignmentColumns.find((column) => column.key === 'created')?.items.length ?? 0,
-        icon: <Inbox size={16} />,
-        color: '#2AABEE',
-        soft: '#EFF9FF',
-      },
-      {
-        key: 'in_progress',
-        title: 'В работе',
-        value: assignmentColumns.find((column) => column.key === 'in_progress')?.items.length ?? 0,
-        icon: <Pencil size={16} />,
-        color: '#4CAF50',
-        soft: '#F1FBF2',
-      },
-      {
-        key: 'review',
-        title: 'На проверке',
-        value: assignmentColumns.find((column) => column.key === 'review')?.items.length ?? 0,
-        icon: <Eye size={16} />,
-        color: '#FF9800',
-        soft: '#FFF8EE',
-      },
-      {
-        key: 'overdue',
-        title: 'Просрочено',
-        value: assignmentColumns.find((column) => column.key === 'overdue')?.items.length ?? 0,
-        icon: <AlertTriangle size={16} />,
-        color: '#F44336',
-        soft: '#FFF2F1',
-      },
-      {
-        key: 'checked',
-        title: 'Проверено',
-        value: checkedAssignments.length,
-        icon: <CheckCircle2 size={16} />,
-        color: '#9C27B0',
-        soft: '#F9F0FF',
-      },
-    ],
-    [assignmentColumns, checkedAssignments.length, filteredAssignments.length]
-  );
-
   const renderAssignmentCard = (
     assignment: Assignment,
     laneOverride?: AssignmentLane,
@@ -686,9 +640,12 @@ export default function AssignmentsPage() {
     const lane = laneOverride ?? getAssignmentLane(assignment);
     const meta = LANE_META[lane];
     const { student, subject } = getRelationMeta(assignment.tutor_student_id);
-    const topicTitle = getTopicTitle(assignment.topic_id);
-    const assignmentTitle = assignment.title?.trim() || topicTitle || 'Задание без заголовка';
-    const classLabel = student?.grade ? `${student.grade} класс` : 'класс';
+    const hasTopic = assignment.topic_id != null;
+    // Заголовок карточки: явный title → тема (если задана) → начало описания.
+    // «Без темы» как заголовок больше не показываем (раньше topicTitle-заглушка попадала сюда).
+    const cardTitle =
+      assignment.title?.trim() ||
+      (hasTopic ? getTopicTitle(assignment.topic_id) : assignment.description.trim());
     const actionDate = formatDateTime(getAssignmentActionDate(assignment, lane));
     const isArchive = mode === 'archive';
 
@@ -701,13 +658,10 @@ export default function AssignmentsPage() {
       >
         <div className="assignment-card-head">
           <h4>{student?.full_name ?? 'Ученик'}</h4>
-          <span className="assignment-class-badge" style={{ background: meta.soft, color: meta.color }}>
-            {classLabel}
-          </span>
+          <span className="assignment-subject">{subject?.name ?? 'Без предмета'}</span>
         </div>
 
-        <div className="assignment-subject">{subject?.name ?? 'Без предмета'}</div>
-        <div className="assignment-title">{assignmentTitle}</div>
+        <div className="assignment-title">{cardTitle}</div>
 
         <div className="assignment-card-footer">
           <span className={lane === 'overdue' ? 'assignment-date assignment-date-danger' : 'assignment-date'}>
@@ -730,7 +684,7 @@ export default function AssignmentsPage() {
         {`
           .assignments-page-shell {
             display: grid;
-            grid-template-rows: auto auto auto minmax(0, 1fr);
+            grid-template-rows: auto auto minmax(0, 1fr);
             gap: 14px;
             height: 100%;
             min-height: 0;
@@ -738,7 +692,7 @@ export default function AssignmentsPage() {
           }
 
           .assignments-page-shell.has-homework {
-            grid-template-rows: auto auto auto auto minmax(0, 1fr);
+            grid-template-rows: auto auto auto minmax(0, 1fr);
           }
 
           .homework-nudge {
@@ -935,13 +889,13 @@ export default function AssignmentsPage() {
           .assignment-card {
             border: 1px solid #E8EDF5;
             border-left: 4px solid #2AABEE;
-            border-radius: 17px;
-            padding: 15px 15px 14px;
+            border-radius: 16px;
+            padding: 12px 14px;
             background: #FFFFFF;
             box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045);
             cursor: pointer;
             display: grid;
-            gap: 9px;
+            gap: 6px;
             transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
           }
 
@@ -953,33 +907,29 @@ export default function AssignmentsPage() {
 
           .assignment-card-head {
             display: flex;
+            flex-direction: column;
             align-items: flex-start;
-            justify-content: space-between;
-            gap: 10px;
+            gap: 2px;
+            min-width: 0;
           }
 
           .assignment-card-head h4 {
             min-width: 0;
+            max-width: 100%;
             margin: 0;
             color: #101828;
             font-size: 15px;
             line-height: 1.25;
             font-weight: 950;
-          }
-
-          .assignment-class-badge {
-            flex: 0 0 auto;
-            padding: 5px 8px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 850;
-            line-height: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
           }
 
           .assignment-subject {
             color: #475467;
-            font-size: 14px;
-            line-height: 1.35;
+            font-size: 13px;
+            line-height: 1.3;
           }
 
           .assignment-title {
@@ -987,6 +937,30 @@ export default function AssignmentsPage() {
             font-size: 15px;
             line-height: 1.35;
             font-weight: 900;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+
+          .assignment-column-name {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .assignment-column-count {
+            flex: 0 0 auto;
+            min-width: 26px;
+            height: 24px;
+            padding: 0 8px;
+            border-radius: 999px;
+            display: inline-grid;
+            place-items: center;
+            font-size: 14px;
+            font-weight: 950;
           }
 
           .assignment-card-footer {
@@ -1409,20 +1383,6 @@ export default function AssignmentsPage() {
         <section className="assignments-loading">Загрузка заданий...</section>
       ) : (
         <>
-          <section className="assignments-kpi-grid">
-            {kpiCards.map((card) => (
-              <article key={card.key} className="assignment-kpi-card">
-                <span className="assignment-kpi-icon" style={{ background: card.soft, color: card.color }}>
-                  {card.icon}
-                </span>
-                <div>
-                  <div className="assignment-kpi-value">{card.value}</div>
-                  <div className="assignment-kpi-title">{card.title}</div>
-                </div>
-              </article>
-            ))}
-          </section>
-
           <section className="assignments-board-grid">
             {assignmentColumns.map((column) => {
               const isExpanded = expandedColumnKey === column.key;
@@ -1435,7 +1395,10 @@ export default function AssignmentsPage() {
                 <section key={column.key} className="assignment-board-block">
                   <h3 className="assignment-column-title">
                     <span className="assignment-status-dot" style={{ background: column.color }} />
-                    {column.title}
+                    <span className="assignment-column-name">{column.title}</span>
+                    <span className="assignment-column-count" style={{ background: column.soft, color: column.color }}>
+                      {column.items.length}
+                    </span>
                   </h3>
 
                   <div className="assignment-card-list">
@@ -1459,7 +1422,10 @@ export default function AssignmentsPage() {
             <section className="assignment-board-block checked-panel">
               <h3 className="checked-panel-title">
                 <span className="assignment-status-dot" style={{ background: '#9C27B0' }} />
-                Проверенные задания
+                <span className="assignment-column-name">Проверенные задания</span>
+                <span className="assignment-column-count" style={{ background: '#F9F0FF', color: '#9C27B0' }}>
+                  {checkedAssignments.length}
+                </span>
               </h3>
 
               <div className="checked-panel-list">
@@ -1469,13 +1435,15 @@ export default function AssignmentsPage() {
                 {checkedAssignments.length === 0 && <div className="assignment-empty-spacer" />}
               </div>
 
-              <button
-                type="button"
-                className="checked-archive-button"
-                onClick={() => setCheckedArchiveOpen(true)}
-              >
-                Открыть архив проверенных заданий
-              </button>
+              {checkedAssignments.length > 3 && (
+                <button
+                  type="button"
+                  className="checked-archive-button"
+                  onClick={() => setCheckedArchiveOpen(true)}
+                >
+                  Открыть архив проверенных заданий
+                </button>
+              )}
             </section>
           </section>
         </>
