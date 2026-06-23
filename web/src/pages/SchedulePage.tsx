@@ -1378,10 +1378,10 @@ export default function SchedulePage() {
           {weekDays.map((day, index) => {
             const dayStr = formatDate(day);
             return (
-              <div key={dayStr} style={{ textAlign: 'center', padding: '8px 4px', background: 'rgba(248,250,252,0.96)', minWidth: 0, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
-                <div style={{ fontWeight: 900, color: '#1f2a3b' }}>{WEEK_DAYS[index]}</div>
-                <div style={{ color: '#667386', fontSize: 12 }}>{formatDayShort(day)}</div>
-                <button type="button" title="Редактировать доступность дня" onClick={() => { void openDayEditor(dayStr); }} style={{ marginTop: 2, padding: '1px 6px', borderRadius: 7, fontSize: 11, fontWeight: 700, border: '1px solid rgba(42,171,238,0.3)', background: 'rgba(42,171,238,0.07)', color: '#1a6fa8', cursor: 'pointer' }}><Pencil size={11} /></button>
+              <div key={dayStr} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 4px', background: 'rgba(248,250,252,0.96)', minWidth: 0, borderLeft: '1px solid rgba(24,33,47,0.09)', borderBottom: '1px solid rgba(24,33,47,0.09)' }}>
+                <span style={{ fontWeight: 900, color: '#1f2a3b', fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0 }}>{WEEK_DAYS[index]}</span>
+                <span style={{ color: '#667386', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{formatDayShort(day)}</span>
+                <button type="button" title="Редактировать доступность дня" onClick={() => { void openDayEditor(dayStr); }} style={{ padding: '2px 5px', borderRadius: 7, fontSize: 11, fontWeight: 700, border: '1px solid rgba(42,171,238,0.3)', background: 'rgba(42,171,238,0.07)', color: '#1a6fa8', cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}><Pencil size={11} /></button>
               </div>
             );
           })}
