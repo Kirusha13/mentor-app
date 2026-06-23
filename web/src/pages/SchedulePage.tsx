@@ -2066,8 +2066,8 @@ export default function SchedulePage() {
                     <h3 style={{ fontSize: 28, lineHeight: 1.02, marginBottom: 8 }}>{selectedWindow ? 'Свободный слот' : student?.full_name ?? 'Ученик'}</h3>
                     <p style={{ color: '#5d6778', marginBottom: 0, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                       {selectedWindow
-                        ? `Окно репетитора • ${toLessonDateStr(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`
-                        : `${subject?.name ?? 'Без предмета'} • ${toLessonDateStr(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`}
+                        ? `Окно репетитора • ${lessonDateRu(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`
+                        : `${subject?.name ?? 'Без предмета'} • ${lessonDateRu(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`}
                       {!selectedWindow && selectedLesson.attendance_confirmed && (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(72,187,120,0.15)', color: '#276749', fontSize: 12, fontWeight: 700, border: '1px solid rgba(72,187,120,0.3)' }}>
                           <Check size={14} /> Подтвердил участие
@@ -2083,13 +2083,13 @@ export default function SchedulePage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, marginBottom: 20 }}>
                   {(selectedWindow
                     ? [
-                        ['Дата', toLessonDateStr(selectedLesson)],
+                        ['Дата', lessonDateRu(selectedLesson)],
                         ['Время', `${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`],
                         ['Тип записи', 'Свободный слот'],
                         ['Статус', 'Доступен для записи'],
                       ]
                     : [
-                        ['Занятие', `${toLessonDateStr(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`],
+                        ['Занятие', `${lessonDateRu(selectedLesson)} • ${toTime(toStartTime(selectedLesson))} - ${toTime(toEndTime(selectedLesson))}`],
                         ['Тема занятия', topic?.title ?? 'Без темы'],
                         ['Стоимость', `${selectedLesson.cost ?? '—'} ₽`],
                         ['Оплата', paymentLabel(selectedLesson.payment_status, Boolean(selectedLesson.subscription_covered))],
