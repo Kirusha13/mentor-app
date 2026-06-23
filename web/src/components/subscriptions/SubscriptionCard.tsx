@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AlertTriangle, Pencil } from 'lucide-react';
 import type { Subscription } from '../../api/subscriptions';
 
 interface Props {
@@ -41,7 +42,7 @@ export function SubscriptionCard({
           <div>
             <span style={{ fontWeight: 800, fontSize: 18, color: remColor }}>{remainingHours} ч</span>
             <span style={{ color: '#8a95a8', fontSize: 13 }}> / {purchasedHours} ч</span>
-            {subscriptionLow && <span style={{ color: '#FF9800', fontSize: 12, fontWeight: 700 }}> ⚠</span>}
+            {subscriptionLow && <span style={{ color: '#FF9800', marginLeft: 4, display: 'inline-flex', verticalAlign: 'text-bottom' }}><AlertTriangle size={12} /></span>}
           </div>
           <div style={{ color: '#8a95a8', fontSize: 12 }}>{formatCurrency(totalPrice)} · {expanded ? '▴' : '▾'}</div>
         </div>
@@ -59,7 +60,7 @@ export function SubscriptionCard({
                 <b style={{ color: '#1f2a3b' }}>{sub.hours} ч</b> · {formatCurrency(sub.price)} · с {formatReadableDate(sub.start_date)}
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button type="button" title="Изменить" onClick={() => onEdit(sub)} className="icon-button icon-button-primary" style={{ width: 28, height: 28 }}>✎</button>
+                <button type="button" title="Изменить" onClick={() => onEdit(sub)} className="icon-button icon-button-primary" style={{ width: 28, height: 28 }}><Pencil size={14} /></button>
                 <button type="button" title="Удалить" onClick={() => onDelete(sub)} disabled={busy} className="icon-button icon-button-danger" style={{ width: 28, height: 28 }}>×</button>
               </div>
             </div>

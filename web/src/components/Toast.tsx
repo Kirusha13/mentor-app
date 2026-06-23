@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -18,10 +19,10 @@ const ToastContext = createContext<ToastApi | null>(null);
 
 const AUTO_DISMISS_MS = 3500;
 
-const TYPE_STYLE: Record<ToastType, { bg: string; border: string; color: string; icon: string }> = {
-  success: { bg: '#F0FBF2', border: '#BfE8C7', color: '#1B7A36', icon: '✓' },
-  error: { bg: '#FFF2F1', border: '#F5C6C2', color: '#B42318', icon: '!' },
-  info: { bg: '#EFF9FF', border: '#C5E7F7', color: '#0B6AA2', icon: 'i' },
+const TYPE_STYLE: Record<ToastType, { bg: string; border: string; color: string; icon: ReactNode }> = {
+  success: { bg: '#F0FBF2', border: '#BfE8C7', color: '#1B7A36', icon: <CheckCircle2 size={16} /> },
+  error: { bg: '#FFF2F1', border: '#F5C6C2', color: '#B42318', icon: <AlertCircle size={16} /> },
+  info: { bg: '#EFF9FF', border: '#C5E7F7', color: '#0B6AA2', icon: <Info size={16} /> },
 };
 
 export function useToast(): ToastApi {

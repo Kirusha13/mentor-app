@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Pause, Play } from 'lucide-react';
 import {
   createSeries,
   deleteSeries,
@@ -224,7 +225,7 @@ export function SeriesBlock({ linkId }: Props) {
                       borderRadius: 8,
                     }}
                   >
-                    {item.is_active ? '⏸' : '▶'}
+                    {item.is_active ? <Pause size={14} /> : <Play size={14} />}
                   </button>
                   <button
                     type="button"

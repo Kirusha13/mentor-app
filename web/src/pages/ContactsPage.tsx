@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
+import { Send, ShieldCheck, UserRound, Users } from 'lucide-react';
 import {
   addStudentContact,
   createContact,
@@ -364,19 +365,19 @@ export default function ContactsPage() {
 
       <section className="metric-grid">
         <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>☷</span>
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}><Users size={20} /></span>
           <div><div className="metric-value">{records.length} контактов</div><div className="metric-label">Всего в базе</div></div>
         </div>
         <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.12)', color: '#4CAF50' }}>○</span>
+          <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.12)', color: '#4CAF50' }}><UserRound size={20} /></span>
           <div><div className="metric-value">{parentCount} родителей</div><div className="metric-label">Мамы и папы учеников</div></div>
         </div>
         <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>◇</span>
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}><ShieldCheck size={20} /></span>
           <div><div className="metric-value">{guardianCount} опекунов</div><div className="metric-label">Ответственные лица</div></div>
         </div>
         <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(123,97,200,0.12)', color: '#9C27B0' }}>✉</span>
+          <span className="metric-icon" style={{ background: 'rgba(123,97,200,0.12)', color: '#9C27B0' }}><Send size={20} /></span>
           <div><div className="metric-value">{telegramCount} Telegram</div><div className="metric-label">Есть Telegram ID</div></div>
         </div>
       </section>

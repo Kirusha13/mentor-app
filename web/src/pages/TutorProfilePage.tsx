@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Check, X } from 'lucide-react';
 import {
   createSubject,
   deleteSubject,
@@ -527,8 +528,8 @@ const profileRules: FieldRules = {
                 }}
               >
                 VK
-                <span style={{ fontSize: 15, color: profile.vk_id ? '#81c784' : '#ef9a9a' }}>
-                  {profile.vk_id ? '✓' : '✕'}
+                <span style={{ display: 'inline-flex', color: profile.vk_id ? '#81c784' : '#ef9a9a' }}>
+                  {profile.vk_id ? <Check size={15} /> : <X size={15} />}
                 </span>
               </button>
 
@@ -547,8 +548,8 @@ const profileRules: FieldRules = {
                 }}
               >
                 Telegram
-                <span style={{ fontSize: 15, color: profile.telegram_id ? '#81c784' : '#ef9a9a' }}>
-                  {profile.telegram_id ? '✓' : '✕'}
+                <span style={{ display: 'inline-flex', color: profile.telegram_id ? '#81c784' : '#ef9a9a' }}>
+                  {profile.telegram_id ? <Check size={15} /> : <X size={15} />}
                 </span>
               </button>
             </div>

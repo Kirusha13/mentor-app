@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutGrid, List } from 'lucide-react';
+import { BookOpen, LayoutGrid, List, Trash2, Users } from 'lucide-react';
 import { getStudentContacts, type StudentContact } from '../api/contacts';
 import { getLessons, type Lesson } from '../api/lessons';
 import { createStudent, getStudents, type Student } from '../api/students';
@@ -399,11 +399,11 @@ export default function StudentsPage() {
 
       <section className="metric-grid">
         <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}>👤</span>
+          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}><Users size={20} /></span>
           <div><div className="metric-value">{groupCards(studentCards).length} учеников</div><div className="metric-label">Всего в системе</div></div>
         </div>
         <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.12)', color: '#4CAF50' }}>▤</span>
+          <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.12)', color: '#4CAF50' }}><BookOpen size={20} /></span>
           <div><div className="metric-value">{activeSubjectTitle}</div><div className="metric-label">{activeSubjectSubtitle}</div></div>
         </div>
       </section>
@@ -529,7 +529,7 @@ export default function StudentsPage() {
                     onClick={handleDeleteTutorStudent}
                     className="icon-button icon-button-danger"
                   >
-                    🗑
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </div>
