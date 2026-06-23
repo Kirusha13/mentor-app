@@ -1605,7 +1605,7 @@ export default function SchedulePage() {
               style={{ width: 18, height: 18 }}
             />
           </span>
-          <div><div className="metric-value">Показать перенесённые</div><div className="metric-label">И отменённые занятия</div></div>
+          <div><div className="metric-value">Перенесённые</div><div className="metric-label">и отменённые занятия</div></div>
         </label>
       </section>
 
