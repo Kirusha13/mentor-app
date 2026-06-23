@@ -94,6 +94,17 @@ function formatDateTime(value: string) {
   })}, ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+// Подбираем размер шрифта по длине строки, чтобы текст карточки влезал в одну
+// строку без обрезки троеточием: до `start` символов — максимум, после `end` —
+// минимум, между — линейная интерполяция. Дальше срабатывает ellipsis как страховка.
+function fitCardFont(text: string, max: number, min: number, start: number, end: number) {
+  const len = text.length;
+  if (len <= start) return max;
+  if (len >= end) return min;
+  const ratio = (len - start) / (end - start);
+  return Math.round((max - (max - min) * ratio) * 10) / 10;
+}
+
 function formatDateInput(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -648,6 +659,11 @@ export default function AssignmentsPage() {
       (hasTopic ? getTopicTitle(assignment.topic_id) : assignment.description.trim());
     const actionDate = formatDateTime(getAssignmentActionDate(assignment, lane));
     const isArchive = mode === 'archive';
+    const studentName = student?.full_name ?? 'Ученик';
+    const footerText = `${meta.actionLabel}: ${actionDate}`;
+    // Имя и строка даты подгоняются по длине, чтобы не обрезаться; тема — на ellipsis.
+    const nameFontSize = fitCardFont(studentName, 15, 11, 16, 30);
+    const dateFontSize = fitCardFont(footerText, 13, 10, 20, 32);
 
     return (
       <article
@@ -656,14 +672,17 @@ export default function AssignmentsPage() {
         onClick={() => setSelectedAssignmentId(assignment.id)}
         style={{ borderLeftColor: meta.color }}
       >
-        <div className="assignment-card-name">{student?.full_name ?? 'Ученик'}</div>
+        <div className="assignment-card-name" style={{ fontSize: nameFontSize }}>{studentName}</div>
         <div className="assignment-card-meta">
           {subject?.name ?? 'Без предмета'} · <b>{cardTitle}</b>
         </div>
 
         <div className="assignment-card-footer">
-          <span className={lane === 'overdue' ? 'assignment-date assignment-date-danger' : 'assignment-date'}>
-            {meta.actionLabel}: {actionDate}
+          <span
+            className={lane === 'overdue' ? 'assignment-date assignment-date-danger' : 'assignment-date'}
+            style={{ fontSize: dateFontSize, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+          >
+            {footerText}
           </span>
           {(lane === 'checked' || isArchive) && assignment.grade && (
             <span className="assignment-grade-badge">{assignment.grade}</span>
