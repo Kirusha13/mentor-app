@@ -5,6 +5,7 @@ import { useToast } from '../Toast';
 import { useFieldErrors, FieldError, type FieldRules } from '../formValidation';
 import { useConfirm } from '../ConfirmDialog';
 import { Modal } from '../Modal';
+import { DateField } from '../DateField';
 
 export interface RelationOption {
   id: number;
@@ -113,7 +114,7 @@ export function SubscriptionModal({
 
           <label style={{ display: 'grid', gap: 5, fontSize: 13, color: '#556173' }}>
             Начало действия
-            <input type="date" className={errors.startDate ? 'field-invalid' : undefined} value={startDate} onChange={(e) => { setStartDate(e.target.value); clearError('startDate'); }} onBlur={() => validateField('startDate', subscriptionRules)} style={{ height: 40, borderRadius: 10, border: '1px solid #d8dee8', padding: '0 12px' }} />
+            <DateField value={startDate} onChange={(value) => { setStartDate(value); clearError('startDate'); }} onBlur={() => validateField('startDate', subscriptionRules)} invalid={!!errors.startDate} />
             <FieldError message={errors.startDate} />
           </label>
 

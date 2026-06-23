@@ -27,6 +27,7 @@ import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel
 import { useToast } from '../components/Toast';
 import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
 import { Modal } from '../components/Modal';
+import { DateField } from '../components/DateField';
 import {
   lessonDate as toLessonDateStr,
   lessonDateRu,
@@ -1837,12 +1838,11 @@ export default function SchedulePage() {
               </label>
               <label className="modal-field">
                 Дата
-                <input
-                  type="date"
-                  className={errors.lessonDate ? 'field-invalid' : undefined}
+                <DateField
                   value={lessonDate}
-                  onChange={(event) => { setLessonDate(event.target.value); clearError('lessonDate'); clearError('startTime'); }}
+                  onChange={(value) => { setLessonDate(value); clearError('lessonDate'); clearError('startTime'); }}
                   onBlur={() => validateField('lessonDate', createLessonRules)}
+                  invalid={!!errors.lessonDate}
                 />
                 <FieldError message={errors.lessonDate} />
               </label>
@@ -1908,7 +1908,7 @@ export default function SchedulePage() {
               <div>
                 <h3 className="modal-title">Доступность дня</h3>
                 <p className="modal-subtitle">
-                  {dayEditorDate}
+                  {dayEditorDate ? new Date(`${dayEditorDate}T00:00:00`).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
                   {dayEditorOverridden && (
                     <span
                       title="Этот день отличается от вашего обычного расписания — окна заданы вручную"
@@ -2223,7 +2223,7 @@ export default function SchedulePage() {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12, alignItems: 'start' }}>
                       <div>
-                        <input type="date" className={errors.editLessonDate ? 'field-invalid' : undefined} value={editLessonDate} onChange={(event) => { setEditLessonDate(event.target.value); clearError('editLessonDate'); }} onBlur={() => validateField('editLessonDate', editLessonRules)} style={{ width: '100%' }} />
+                        <DateField value={editLessonDate} onChange={(value) => { setEditLessonDate(value); clearError('editLessonDate'); }} onBlur={() => validateField('editLessonDate', editLessonRules)} invalid={!!errors.editLessonDate} />
                         <FieldError message={errors.editLessonDate} />
                       </div>
                       {!selectedWindow && (
@@ -2280,7 +2280,7 @@ export default function SchedulePage() {
                     <div style={{ fontSize: 14, color: '#687486', marginBottom: 10 }}>Перенос занятия</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12, alignItems: 'start' }}>
                       <div>
-                        <input type="date" className={errors.rescheduleDate ? 'field-invalid' : undefined} value={rescheduleDate} onChange={(event) => { setRescheduleDate(event.target.value); clearError('rescheduleDate'); }} onBlur={() => validateField('rescheduleDate', rescheduleRules)} style={{ width: '100%' }} />
+                        <DateField value={rescheduleDate} onChange={(value) => { setRescheduleDate(value); clearError('rescheduleDate'); }} onBlur={() => validateField('rescheduleDate', rescheduleRules)} invalid={!!errors.rescheduleDate} />
                         <FieldError message={errors.rescheduleDate} />
                       </div>
                       <div />

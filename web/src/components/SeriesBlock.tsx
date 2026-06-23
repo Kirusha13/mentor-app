@@ -8,6 +8,7 @@ import {
   updateSeries,
 } from '../api/series';
 import { getApiErrorMessage } from '../utils/apiError';
+import { DateField } from './DateField';
 import { useToast } from './Toast';
 import { useFieldErrors, FieldError, type FieldRules } from './formValidation';
 import { useConfirm } from './ConfirmDialog';
@@ -298,21 +299,20 @@ export function SeriesBlock({ linkId }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <label style={{ display: 'grid', gap: 4, color: '#556173', fontSize: 13 }}>
               Дата начала
-              <input
-                type="date"
-                className={errors.starts_on ? 'field-invalid' : undefined}
+              <DateField
                 value={form.starts_on}
-                onChange={(e) => { setForm((f) => ({ ...f, starts_on: e.target.value })); clearError('starts_on'); }}
+                onChange={(value) => { setForm((f) => ({ ...f, starts_on: value })); clearError('starts_on'); }}
                 onBlur={() => validateField('starts_on', seriesRules)}
+                invalid={!!errors.starts_on}
               />
               <FieldError message={errors.starts_on} />
             </label>
             <label style={{ display: 'grid', gap: 4, color: '#556173', fontSize: 13 }}>
               Дата конца (опц.)
-              <input
-                type="date"
+              <DateField
                 value={form.ends_on}
-                onChange={(e) => setForm((f) => ({ ...f, ends_on: e.target.value }))}
+                onChange={(value) => setForm((f) => ({ ...f, ends_on: value }))}
+                placeholder="Без конца"
               />
             </label>
           </div>
