@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Eye, Inbox, Pencil, Trash2 } from 'lucide-react';
 import {
   createAssignment,
   deleteAssignment,
@@ -51,6 +51,20 @@ const LANE_META: Record<AssignmentLane, { title: string; color: string; soft: st
 };
 
 const ACTIVE_LANES: AssignmentLane[] = ['created', 'in_progress', 'review', 'overdue'];
+
+// Иконки колонок — те же, что были у KPI-блоков заданий до их удаления (Z6).
+const LANE_ICON: Record<AssignmentLane, typeof Inbox> = {
+  created: Inbox,
+  in_progress: Pencil,
+  review: Eye,
+  overdue: AlertTriangle,
+  checked: CheckCircle2,
+};
+
+function LaneIcon({ lane, size = 15 }: { lane: AssignmentLane; size?: number }) {
+  const Icon = LANE_ICON[lane];
+  return <Icon size={size} />;
+}
 
 const fileToDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -881,11 +895,13 @@ export default function AssignmentsPage() {
             font-weight: 950;
           }
 
-          .assignment-status-dot {
-            width: 11px;
-            height: 11px;
-            border-radius: 999px;
-            flex: 0 0 11px;
+          .assignment-column-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 9px;
+            display: inline-grid;
+            place-items: center;
+            flex: 0 0 28px;
           }
 
           .assignment-card-list {
@@ -1380,7 +1396,9 @@ export default function AssignmentsPage() {
             {assignmentColumns.map((column) => (
               <section key={column.key} className="assignment-board-block">
                 <h3 className="assignment-column-title">
-                  <span className="assignment-status-dot" style={{ background: column.color }} />
+                  <span className="assignment-column-icon" style={{ background: column.soft, color: column.color }}>
+                    <LaneIcon lane={column.key} />
+                  </span>
                   <span className="assignment-column-name">{column.title}</span>
                   <span className="assignment-column-count" style={{ background: column.soft, color: column.color }}>
                     {column.items.length}
@@ -1396,7 +1414,9 @@ export default function AssignmentsPage() {
 
             <section className="assignment-board-block checked-panel">
               <h3 className="checked-panel-title">
-                <span className="assignment-status-dot" style={{ background: '#9C27B0' }} />
+                <span className="assignment-column-icon" style={{ background: '#F9F0FF', color: '#9C27B0' }}>
+                  <LaneIcon lane="checked" />
+                </span>
                 <span className="assignment-column-name">Проверено</span>
                 <span className="assignment-column-count" style={{ background: '#F9F0FF', color: '#9C27B0' }}>
                   {checkedAssignments.length}
