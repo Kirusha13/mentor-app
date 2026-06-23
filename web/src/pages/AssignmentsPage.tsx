@@ -656,12 +656,10 @@ export default function AssignmentsPage() {
         onClick={() => setSelectedAssignmentId(assignment.id)}
         style={{ borderLeftColor: meta.color }}
       >
-        <div className="assignment-card-head">
-          <h4>{student?.full_name ?? 'Ученик'}</h4>
-          <span className="assignment-subject">{subject?.name ?? 'Без предмета'}</span>
+        <div className="assignment-card-name">{student?.full_name ?? 'Ученик'}</div>
+        <div className="assignment-card-meta">
+          {subject?.name ?? 'Без предмета'} · <b>{cardTitle}</b>
         </div>
-
-        <div className="assignment-title">{cardTitle}</div>
 
         <div className="assignment-card-footer">
           <span className={lane === 'overdue' ? 'assignment-date assignment-date-danger' : 'assignment-date'}>
@@ -890,12 +888,12 @@ export default function AssignmentsPage() {
             border: 1px solid #E8EDF5;
             border-left: 4px solid #2AABEE;
             border-radius: 16px;
-            padding: 12px 14px;
+            padding: 11px 13px;
             background: #FFFFFF;
             box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045);
             cursor: pointer;
             display: grid;
-            gap: 6px;
+            gap: 5px;
             transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
           }
 
@@ -905,42 +903,32 @@ export default function AssignmentsPage() {
             border-color: #DDE6F3;
           }
 
-          .assignment-card-head {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 2px;
-            min-width: 0;
-          }
-
-          .assignment-card-head h4 {
+          .assignment-card-name {
+            margin: 0;
             min-width: 0;
             max-width: 100%;
-            margin: 0;
             color: #101828;
             font-size: 15px;
-            line-height: 1.25;
+            line-height: 1.2;
             font-weight: 950;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
           }
 
-          .assignment-subject {
+          .assignment-card-meta {
+            min-width: 0;
             color: #475467;
             font-size: 13px;
             line-height: 1.3;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
           }
 
-          .assignment-title {
+          .assignment-card-meta b {
             color: #101828;
-            font-size: 15px;
-            line-height: 1.35;
-            font-weight: 900;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
+            font-weight: 850;
           }
 
           .assignment-column-name {
