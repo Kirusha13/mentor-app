@@ -571,10 +571,9 @@ const profileRules: FieldRules = {
           }}
         >
           <div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: '#1f2a3b', marginBottom: 2, lineHeight: 1.1 }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#1f2a3b', lineHeight: 1.1 }}>
               Данные профиля
             </div>
-            <div style={{ ...mutedTextStyle, fontSize: 13 }}>Имя и телефон, которые используются в кабинете.</div>
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>

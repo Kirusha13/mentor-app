@@ -1481,28 +1481,31 @@ export default function SchedulePage() {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 12,
-          flexWrap: 'wrap',
+          flexWrap: 'nowrap',
         }}
       >
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
           <button title="Предыдущий период" onClick={() => moveRange(-1)} className="icon-button ghost-button">
             ‹
+          </button>
+          <button
+            type="button"
+            title="Вернуться к сегодня"
+            onClick={() => setAnchorDate(atMidnight(new Date()))}
+            className="ghost-button"
+            style={{ height: 42, padding: '0 16px', display: 'inline-flex', alignItems: 'center', gap: 9, minWidth: 0 }}
+          >
+            <span style={{ color: '#536177', display: 'inline-flex', flex: '0 0 auto' }}><CalendarDays size={18} /></span>
+            <span style={{ fontWeight: 900, color: '#1f2a3b', fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {rangeLabel}
+            </span>
           </button>
           <button title="Следующий период" onClick={() => moveRange(1)} className="icon-button ghost-button">
             ›
           </button>
-          <button onClick={() => setAnchorDate(atMidnight(new Date()))} className="ghost-button" style={{ height: 42, padding: '0 18px' }}>
-            Сегодня
-          </button>
-          <div style={{ display: 'flex', gap: 9, alignItems: 'center', minWidth: 0, marginLeft: 4 }}>
-            <span style={{ color: '#536177', display: 'inline-flex' }}><CalendarDays size={18} /></span>
-            <div style={{ fontWeight: 900, color: '#1f2a3b', fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {rangeLabel}
-            </div>
-          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'nowrap', alignItems: 'center', justifyContent: 'flex-end', flex: '0 0 auto' }}>
           <div style={{ display: 'inline-flex', padding: 4, borderRadius: 16, background: 'rgba(23,32,51,0.06)', border: '1px solid rgba(24,33,47,0.08)' }}>
             {[
               ['week', 'Неделя'],
@@ -1590,7 +1593,7 @@ export default function SchedulePage() {
         </div>
         <div className="metric-card" style={{ minHeight: 92, background: 'linear-gradient(135deg, rgba(47,125,99,0.12), rgba(247,255,251,0.98))', borderColor: 'rgba(47,125,99,0.18)' }}>
           <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.14)', color: '#4CAF50' }}><Wallet size={20} /></span>
-          <div><div className="metric-label">Ожидаемый доход</div><div className="metric-value">{formatMoney(rangeExpectedIncome)}</div><div className="metric-label">По расписанию</div></div>
+          <div><div className="metric-value">{formatMoney(rangeExpectedIncome)}</div><div className="metric-label">Ожидаемый доход</div></div>
         </div>
         <label className="metric-card" style={{ minHeight: 92, cursor: 'pointer', background: 'rgba(255,255,255,0.9)' }}>
           <span className="metric-icon" style={{ background: 'rgba(23,32,51,0.06)', color: '#536177' }}>
@@ -1946,7 +1949,7 @@ export default function SchedulePage() {
                   onChange={(e) => { setDayEditorClosed(e.target.checked); setDayEditorResult(null); }}
                   style={{ width: 17, height: 17 }}
                 />
-                Выходной (нет окон)
+                Выходной (убрать все окна в этот день)
               </label>
 
               {!dayEditorClosed && (
