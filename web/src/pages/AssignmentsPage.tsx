@@ -51,7 +51,6 @@ const LANE_META: Record<AssignmentLane, { title: string; color: string; soft: st
 };
 
 const ACTIVE_LANES: AssignmentLane[] = ['created', 'in_progress', 'review', 'overdue'];
-const KANBAN_PREVIEW_LIMIT = 3;
 
 const fileToDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -182,6 +181,7 @@ export default function AssignmentsPage() {
   const [periodStart, setPeriodStart] = useState(defaultPeriodStart);
   const [periodEnd, setPeriodEnd] = useState(defaultPeriodEnd);
   const [checkedArchiveOpen, setCheckedArchiveOpen] = useState(false);
+  // expandedColumnKey удалён: колонки теперь скроллятся, без «Показать ещё».
   const [archiveSearch, setArchiveSearch] = useState('');
   const [archiveSubjectFilter, setArchiveSubjectFilter] = useState<'all' | string>('all');
   const [archiveStudentFilter, setArchiveStudentFilter] = useState<'all' | string>('all');
@@ -199,7 +199,6 @@ export default function AssignmentsPage() {
   const [attachedFiles, setAttachedFiles] = useState<AssignmentFileAttachment[]>([]);
   const [assignmentGradeCommentDraft, setAssignmentGradeCommentDraft] = useState('');
   const [assignmentCommentSaving, setAssignmentCommentSaving] = useState(false);
-  const [expandedColumnKey, setExpandedColumnKey] = useState<string | null>(null);
 
   const relationOptions = useMemo(
     () =>
@@ -1010,19 +1009,6 @@ export default function AssignmentsPage() {
             flex: 0 0 auto;
           }
 
-          .assignment-show-more {
-            align-self: end;
-            justify-self: center;
-            min-height: 38px;
-            padding: 0 12px;
-            border: 0;
-            background: transparent;
-            color: #2AABEE;
-            box-shadow: none;
-            font-size: 14px;
-            font-weight: 900;
-          }
-
           .checked-panel-list {
             display: grid;
             align-content: start;
@@ -1391,40 +1377,22 @@ export default function AssignmentsPage() {
       ) : (
         <>
           <section className="assignments-board-grid">
-            {assignmentColumns.map((column) => {
-              const isExpanded = expandedColumnKey === column.key;
-              const visibleItems = isExpanded
-                ? column.items
-                : column.items.slice(0, KANBAN_PREVIEW_LIMIT);
-              const hiddenCount = column.items.length - KANBAN_PREVIEW_LIMIT;
+            {assignmentColumns.map((column) => (
+              <section key={column.key} className="assignment-board-block">
+                <h3 className="assignment-column-title">
+                  <span className="assignment-status-dot" style={{ background: column.color }} />
+                  <span className="assignment-column-name">{column.title}</span>
+                  <span className="assignment-column-count" style={{ background: column.soft, color: column.color }}>
+                    {column.items.length}
+                  </span>
+                </h3>
 
-              return (
-                <section key={column.key} className="assignment-board-block">
-                  <h3 className="assignment-column-title">
-                    <span className="assignment-status-dot" style={{ background: column.color }} />
-                    <span className="assignment-column-name">{column.title}</span>
-                    <span className="assignment-column-count" style={{ background: column.soft, color: column.color }}>
-                      {column.items.length}
-                    </span>
-                  </h3>
-
-                  <div className="assignment-card-list">
-                    {visibleItems.map((assignment) => renderAssignmentCard(assignment, column.key))}
-                    {column.items.length === 0 && <div className="assignment-empty-spacer" />}
-                  </div>
-
-                  {hiddenCount > 0 && (
-                    <button
-                      type="button"
-                      className="assignment-show-more"
-                      onClick={() => setExpandedColumnKey(isExpanded ? null : column.key)}
-                    >
-                      {isExpanded ? 'Свернуть' : `Показать ещё ${hiddenCount}`}
-                    </button>
-                  )}
-                </section>
-              );
-            })}
+                <div className="assignment-card-list">
+                  {column.items.map((assignment) => renderAssignmentCard(assignment, column.key))}
+                  {column.items.length === 0 && <div className="assignment-empty-spacer" />}
+                </div>
+              </section>
+            ))}
 
             <section className="assignment-board-block checked-panel">
               <h3 className="checked-panel-title">
