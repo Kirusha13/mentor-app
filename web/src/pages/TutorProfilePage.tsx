@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Check, Pencil, Star, Trash2, X } from 'lucide-react';
+import { Check, GraduationCap, Pencil, Star, Trash2, X } from 'lucide-react';
 import {
   createSubject,
   deleteSubject,
@@ -577,19 +577,6 @@ const profileRules: FieldRules = {
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button
-              type="button"
-              title="Открыть уровни обучения"
-              onClick={() => { reset(); setLevelsModalOpen(true); }}
-              style={{
-                background: '#fff',
-                color: '#1f2a3b',
-                border: '1px solid rgba(24,33,47,0.12)',
-                boxShadow: 'none',
-              }}
-            >
-              Уровни обучения
-            </button>
             {!editing ? (
               <button type="button" title="Редактировать профиль" onClick={() => setEditing(true)}>
                 Редактировать
@@ -685,12 +672,30 @@ const profileRules: FieldRules = {
             <div style={{ ...mutedTextStyle, fontSize: 13 }}>Всего предметов: {subjects.length}</div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 260px) 42px', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+            <button
+              type="button"
+              title="Открыть уровни обучения"
+              onClick={() => { reset(); setLevelsModalOpen(true); }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: '#fff',
+                color: '#1f2a3b',
+                border: '1px solid rgba(24,33,47,0.12)',
+                boxShadow: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <GraduationCap size={16} />
+              Уровни
+            </button>
             <input
               value={subjectSearch}
               onChange={(event) => setSubjectSearch(event.target.value)}
               placeholder="Поиск по названию"
-              style={{ width: '100%' }}
+              style={{ width: 'min(220px, 40vw)' }}
             />
             <button
               title="Создать предмет"
