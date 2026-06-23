@@ -10,6 +10,7 @@ import {
   type MaterialLevel,
   updateMaterial,
 } from '../api/materials';
+import { Modal } from '../components/Modal';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTutorLevels, type TutorLevel } from '../api/tutorLevels';
 import {
@@ -819,8 +820,7 @@ export default function MaterialsPage() {
       </section>
 
       {topicModal && (
-        <div onClick={() => { reset(); setTopicModal(null); }} className="modal-overlay">
-          <div onClick={(event) => event.stopPropagation()} className="app-modal">
+        <Modal onClose={() => { reset(); setTopicModal(null); }}>
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">
@@ -922,13 +922,11 @@ export default function MaterialsPage() {
                 {saving ? 'Сохраняем...' : 'Сохранить'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {materialModal && (
-        <div onClick={() => { reset(); setMaterialModal(null); }} className="modal-overlay">
-          <div onClick={(event) => event.stopPropagation()} className="app-modal">
+        <Modal onClose={() => { reset(); setMaterialModal(null); }}>
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">
@@ -1013,8 +1011,7 @@ export default function MaterialsPage() {
                 {saving ? 'Сохраняем...' : 'Сохранить'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

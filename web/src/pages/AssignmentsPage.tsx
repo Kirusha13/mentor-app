@@ -12,6 +12,7 @@ import {
   type CompletionStatus,
 } from '../api/assignments';
 import { getStudents, type Student } from '../api/students';
+import { Modal } from '../components/Modal';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTopics, type TheoryTopic } from '../api/topics';
 import { getTutorLevels, type TutorLevel } from '../api/tutorLevels';
@@ -1266,8 +1267,7 @@ export default function AssignmentsPage() {
       </section>
 
       {createModalOpen && (
-        <div onClick={closeCreateModal} className="modal-overlay">
-          <div onClick={(event) => event.stopPropagation()} className="app-modal wide">
+        <Modal onClose={closeCreateModal} className="wide">
           <div className="modal-header">
             <div>
               <h3 className="modal-title">Создать задание</h3>
@@ -1402,8 +1402,7 @@ export default function AssignmentsPage() {
               </div>
             </div>
           )}
-            </div>
-          </div>
+        </Modal>
       )}
 
       {loading ? (
@@ -1559,8 +1558,7 @@ export default function AssignmentsPage() {
         const color = LANE_META[selectedLane].color;
 
         return (
-          <div onClick={() => setSelectedAssignmentId(null)} className="modal-overlay">
-            <div onClick={(event) => event.stopPropagation()} className="app-modal" style={{ width: 'min(640px, 100%)', padding: 0, gap: 0 }}>
+          <Modal onClose={() => setSelectedAssignmentId(null)} style={{ width: 'min(640px, 100%)', padding: 0, gap: 0 }}>
               <div style={{ padding: '22px 24px 18px', background: `${color}14`, borderBottom: '1px solid rgba(24,33,47,0.08)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                   <div>
@@ -1713,8 +1711,7 @@ export default function AssignmentsPage() {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+        </Modal>
         );
       })()}
     </div>

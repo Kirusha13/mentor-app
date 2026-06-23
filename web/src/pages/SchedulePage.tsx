@@ -26,6 +26,7 @@ import { getApiErrorCode, getApiErrorMessage } from '../utils/apiError';
 import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel';
 import { useToast } from '../components/Toast';
 import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
+import { Modal } from '../components/Modal';
 import {
   lessonDate as toLessonDateStr,
   lessonDateRu,
@@ -1611,12 +1612,7 @@ export default function SchedulePage() {
       </section>
 
       {isRequestsModalOpen && (
-        <div onClick={() => setIsRequestsModalOpen(false)} className="modal-overlay">
-          <div
-            onClick={(event) => event.stopPropagation()}
-            className="app-modal wide"
-            style={{ width: 'min(860px, calc(100vw - 48px))' }}
-          >
+        <Modal onClose={() => setIsRequestsModalOpen(false)} className="wide" style={{ width: 'min(860px, calc(100vw - 48px))' }}>
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">Запросы</h3>
@@ -1708,20 +1704,11 @@ export default function SchedulePage() {
                 ))}
               </div>
             )}
-          </div>
-        </div>
+        </Modal>
       )}
 
       {selectedMonthDay && selectedMonthDayDate && (
-        <div
-          onClick={() => setSelectedMonthDay(null)}
-          className="modal-overlay"
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            className="app-modal"
-            style={{ width: 'min(560px, calc(100vw - 48px))', padding: 0, gap: 0 }}
-          >
+        <Modal onClose={() => setSelectedMonthDay(null)} style={{ width: 'min(560px, calc(100vw - 48px))', padding: 0, gap: 0 }}>
             <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid rgba(24,33,47,0.08)', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
               <div>
                 <h3 style={{ fontSize: 22, lineHeight: 1.05, marginBottom: 6 }}>
@@ -1790,19 +1777,11 @@ export default function SchedulePage() {
                 })
               )}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {isCreateLessonOpen && (
-        <div
-          onClick={() => { reset(); setIsCreateLessonOpen(false); }}
-          className="modal-overlay"
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            className="app-modal"
-          >
+        <Modal onClose={() => { reset(); setIsCreateLessonOpen(false); }}>
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">Создать занятие</h3>
@@ -1903,17 +1882,11 @@ export default function SchedulePage() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {isDayEditorOpen && (
-        <div onClick={() => setIsDayEditorOpen(false)} className="modal-overlay">
-          <div
-            onClick={(event) => event.stopPropagation()}
-            className="app-modal"
-            style={{ width: 'min(520px, calc(100vw - 48px))' }}
-          >
+        <Modal onClose={() => setIsDayEditorOpen(false)} style={{ width: 'min(520px, calc(100vw - 48px))' }}>
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">Доступность дня</h3>
@@ -2028,8 +2001,7 @@ export default function SchedulePage() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {selectedLesson && (() => {
@@ -2056,15 +2028,7 @@ export default function SchedulePage() {
           selectedLesson.conduct_status !== 'rescheduled';
 
         return (
-          <div
-            onClick={() => setSelectedLessonId(null)}
-            className="modal-overlay"
-          >
-            <div
-              onClick={(event) => event.stopPropagation()}
-              className="app-modal"
-              style={{ width: 'min(560px, calc(100vw - 48px))', padding: 0, gap: 0, overflow: 'hidden' }}
-            >
+          <Modal onClose={() => setSelectedLessonId(null)} style={{ width: 'min(560px, calc(100vw - 48px))', padding: 0, gap: 0, overflow: 'hidden' }}>
               <div style={{ padding: '22px 24px 18px', background: `${currentStatusColor}12`, borderBottom: '1px solid rgba(24,33,47,0.08)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                   <div>
@@ -2395,8 +2359,7 @@ export default function SchedulePage() {
                   </div>
                 )}
               </div>
-            </div>
-          </div>
+        </Modal>
         );
       })()}
     </div>

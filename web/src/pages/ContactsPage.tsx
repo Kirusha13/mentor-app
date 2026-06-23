@@ -12,6 +12,7 @@ import {
 } from '../api/contacts';
 import { getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
+import { Modal } from '../components/Modal';
 import { getTutorStudents, type TutorStudent } from '../api/tutorStudents';
 import { useToast } from '../components/Toast';
 import { useFieldErrors, FieldError, personNameError, phoneError, telegramIdError, type FieldRules } from '../components/formValidation';
@@ -457,8 +458,7 @@ export default function ContactsPage() {
       </div>
 
       {createModalOpen && (
-        <div onClick={() => { reset(); setCreateModalOpen(false); }} className="modal-overlay">
-          <div onClick={(event) => event.stopPropagation()} className="app-modal">
+        <Modal onClose={() => { reset(); setCreateModalOpen(false); }}>
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">Добавить контактное лицо</h3>
@@ -553,19 +553,11 @@ export default function ContactsPage() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
+        </Modal>
       )}
 
       {detailsOpen && selectedRecord && (
-        <div
-          onClick={closeDetails}
-          className="modal-overlay"
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            className="app-modal"
-          >
+        <Modal onClose={closeDetails}>
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">
@@ -719,8 +711,7 @@ export default function ContactsPage() {
                 </div>
               )}
             </section>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import { Modal } from './Modal';
 
 interface ConfirmOptions {
   confirmLabel?: string;
@@ -46,34 +47,28 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     <ConfirmContext.Provider value={confirm.current}>
       {children}
       {pending && (
-        <div
-          className="modal-overlay"
-          onClick={() => close(false)}
-          style={{ zIndex: 3500 }}
+        <Modal
+          onClose={() => close(false)}
+          overlayStyle={{ zIndex: 3500 }}
+          style={{ width: 'min(420px, 100%)', gap: 18 }}
         >
-          <div
-            className="app-modal"
-            onClick={(event) => event.stopPropagation()}
-            style={{ width: 'min(420px, 100%)', gap: 18 }}
-          >
-            <p style={{ margin: 0, fontSize: 16, lineHeight: 1.5, color: '#1f2a3b', fontWeight: 600 }}>
-              {pending.message}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button type="button" className="modal-secondary" onClick={() => close(false)}>
-                {pending.options.cancelLabel ?? 'Отмена'}
-              </button>
-              <button
-                type="button"
-                className="modal-primary"
-                onClick={() => close(true)}
-                style={danger ? { background: '#e53e3e', boxShadow: '0 10px 24px rgba(229,62,62,0.26)' } : undefined}
-              >
-                {pending.options.confirmLabel ?? 'Подтвердить'}
-              </button>
-            </div>
+          <p style={{ margin: 0, fontSize: 16, lineHeight: 1.5, color: '#1f2a3b', fontWeight: 600 }}>
+            {pending.message}
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button type="button" className="modal-secondary" onClick={() => close(false)}>
+              {pending.options.cancelLabel ?? 'Отмена'}
+            </button>
+            <button
+              type="button"
+              className="modal-primary"
+              onClick={() => close(true)}
+              style={danger ? { background: '#e53e3e', boxShadow: '0 10px 24px rgba(229,62,62,0.26)' } : undefined}
+            >
+              {pending.options.confirmLabel ?? 'Подтвердить'}
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </ConfirmContext.Provider>
   );

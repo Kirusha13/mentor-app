@@ -4,6 +4,7 @@ import { getApiErrorMessage } from '../../utils/apiError';
 import { useToast } from '../Toast';
 import { useFieldErrors, FieldError, type FieldRules } from '../formValidation';
 import { useConfirm } from '../ConfirmDialog';
+import { Modal } from '../Modal';
 
 export interface RelationOption {
   id: number;
@@ -79,14 +80,7 @@ export function SubscriptionModal({
   };
 
   return (
-    <div
-      onClick={onClose}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(20,32,56,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ background: '#fff', borderRadius: 18, padding: 22, width: 'min(420px, 100%)', boxShadow: '0 24px 70px rgba(15,23,42,0.2)' }}
-      >
+    <Modal onClose={onClose} style={{ width: 'min(420px, 100%)' }}>
         <div style={{ fontWeight: 800, fontSize: 17, color: '#1f2a3b', marginBottom: 16 }}>
           {mode === 'edit' ? 'Изменить абонемент' : 'Добавить абонемент'}
         </div>
@@ -135,7 +129,6 @@ export function SubscriptionModal({
             {saving ? 'Сохраняем...' : mode === 'edit' ? 'Сохранить' : 'Добавить'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

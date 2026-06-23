@@ -6,6 +6,7 @@ import { getLessons, type Lesson } from '../api/lessons';
 import { createStudent, getStudents, type Student } from '../api/students';
 import { getSubjects, type Subject } from '../api/subjects';
 import { getTutorLevels, type TutorLevel } from '../api/tutorLevels';
+import { Modal } from '../components/Modal';
 import {
   approveTutorStudent,
   createTutorStudent,
@@ -445,8 +446,7 @@ export default function StudentsPage() {
       </section>
 
       {createModalOpen && (
-        <div onClick={() => { reset(); setCreateModalOpen(false); }} className="modal-overlay">
-          <div onClick={(event) => event.stopPropagation()} className="app-modal">
+        <Modal onClose={() => { reset(); setCreateModalOpen(false); }}>
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">Создать ученика</h3>
@@ -508,17 +508,11 @@ export default function StudentsPage() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
+        </Modal>
       )}
 
       {detailsModalOpen && selectedCard && (
-        <div onClick={() => { reset(); setDetailsModalOpen(false); }} className="modal-overlay">
-          <div
-            onClick={(event) => event.stopPropagation()}
-            className="app-modal wide"
-            style={{ width: 'min(940px, calc(100vw - 48px))' }}
-          >
+        <Modal onClose={() => { reset(); setDetailsModalOpen(false); }} className="wide" style={{ width: 'min(940px, calc(100vw - 48px))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
@@ -684,8 +678,7 @@ export default function StudentsPage() {
                 <SeriesBlock linkId={selectedCard.tutorStudent.id} />
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

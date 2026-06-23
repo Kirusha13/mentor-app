@@ -8,6 +8,7 @@ import {
   type Subject,
 } from '../api/subjects';
 import { getTutorProfile, updateTutorProfile, type TutorProfile } from '../api/tutor';
+import { Modal } from '../components/Modal';
 import {
   createTutorLevel,
   deleteTutorLevel,
@@ -840,8 +841,7 @@ const profileRules: FieldRules = {
       </div>
 
       {levelsModalOpen && (
-        <div onClick={() => setLevelsModalOpen(false)} className="modal-overlay">
-          <div onClick={(event) => event.stopPropagation()} className="app-modal wide">
+        <Modal onClose={() => setLevelsModalOpen(false)} className="wide">
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">Уровни обучения</h3>
@@ -972,13 +972,11 @@ const profileRules: FieldRules = {
                 </div>
               )}
             </section>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {subjectCreateModalOpen && (
-        <div onClick={() => setSubjectCreateModalOpen(false)} className="modal-overlay">
-          <div onClick={(event) => event.stopPropagation()} className="app-modal">
+        <Modal onClose={() => setSubjectCreateModalOpen(false)}>
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">Создать предмет</h3>
@@ -1018,8 +1016,7 @@ const profileRules: FieldRules = {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
