@@ -1422,7 +1422,7 @@ export default function AssignmentsPage() {
             <section className="assignment-board-block checked-panel">
               <h3 className="checked-panel-title">
                 <span className="assignment-status-dot" style={{ background: '#9C27B0' }} />
-                <span className="assignment-column-name">Проверенные задания</span>
+                <span className="assignment-column-name">Проверено</span>
                 <span className="assignment-column-count" style={{ background: '#F9F0FF', color: '#9C27B0' }}>
                   {checkedAssignments.length}
                 </span>

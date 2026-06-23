@@ -229,8 +229,8 @@ export default function Layout({ children }: LayoutProps) {
         gridTemplateColumns: isMobile
           ? '1fr'
           : isTablet
-            ? '238px minmax(0, 1fr)'
-            : '286px minmax(0, 1fr)',
+            ? '208px minmax(0, 1fr)'
+            : '232px minmax(0, 1fr)',
         background: 'transparent',
         overflow: isMobile ? 'visible' : 'hidden',
       }}

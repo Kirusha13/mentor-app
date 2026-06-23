@@ -1484,7 +1484,7 @@ export default function SchedulePage() {
           flexWrap: 'nowrap',
         }}
       >
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0, flex: '1 1 auto' }}>
           <button title="Предыдущий период" onClick={() => moveRange(-1)} className="icon-button ghost-button">
             ‹
           </button>
@@ -1520,7 +1520,8 @@ export default function SchedulePage() {
                   onClick={() => setMode(value as CalendarMode)}
                   style={{
                     height: 38,
-                    minWidth: 88,
+                    minWidth: 0,
+                    padding: '0 16px',
                     borderRadius: 13,
                     background: active ? '#172033' : 'transparent',
                     color: active ? '#fff' : '#435066',

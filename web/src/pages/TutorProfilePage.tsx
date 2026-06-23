@@ -659,20 +659,20 @@ const profileRules: FieldRules = {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(180px, 1fr) minmax(270px, auto)',
+            gridTemplateColumns: 'minmax(0, 1fr) auto',
             alignItems: 'center',
             gap: 12,
             minHeight: 48,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 20, fontWeight: 900, color: '#1f2a3b', marginBottom: 2, lineHeight: 1.1 }}>
               Предметы
             </div>
             <div style={{ ...mutedTextStyle, fontSize: 13 }}>Всего предметов: {subjects.length}</div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'nowrap', justifyContent: 'flex-end', alignItems: 'center' }}>
             <button
               type="button"
               title="Открыть уровни обучения"
@@ -681,6 +681,7 @@ const profileRules: FieldRules = {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
+                flex: '0 0 auto',
                 background: '#fff',
                 color: '#1f2a3b',
                 border: '1px solid rgba(24,33,47,0.12)',
@@ -694,8 +695,8 @@ const profileRules: FieldRules = {
             <input
               value={subjectSearch}
               onChange={(event) => setSubjectSearch(event.target.value)}
-              placeholder="Поиск по названию"
-              style={{ width: 'min(220px, 40vw)' }}
+              placeholder="Поиск..."
+              style={{ width: 'clamp(120px, 14vw, 190px)', minWidth: 0 }}
             />
             <button
               title="Создать предмет"
