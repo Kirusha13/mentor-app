@@ -10,6 +10,32 @@ const panelStyle = {
   boxShadow: 'var(--shadow-card)',
 } as const;
 
+const timeInputStyle = {
+  padding: '6px 8px',
+  borderRadius: 10,
+  border: '1px solid rgba(24,33,47,0.14)',
+  fontSize: 14,
+  fontFamily: 'inherit',
+  background: '#fff',
+  color: '#1f2a3b',
+  outline: 'none',
+} as const;
+
+const addWindowButtonStyle = {
+  justifySelf: 'start',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  padding: '5px 12px',
+  borderRadius: 10,
+  border: '1px solid rgba(42,171,238,0.35)',
+  background: 'rgba(42,171,238,0.07)',
+  color: '#1a6fa8',
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: 'pointer',
+} as const;
+
 const WEEKDAY_LABELS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 
 interface TimeWindow {
@@ -42,36 +68,36 @@ function timeToMinutes(t: string): number {
 }
 
 function validateDayWindows(windows: TimeWindow[]): TimeWindow[] {
-  // Reset all errors first
   const validated = windows.map((w) => ({ ...w, error: undefined as string | undefined }));
 
-  for (let i = 0; i < validated.length; i++) {
-    const w = validated[i];
-    if (!w) continue;
-
+  // Шаг 1: формат каждого окна по отдельности.
+  const formatBad = validated.map((w) => {
     if (!w.start || !w.end) {
       w.error = 'Укажи начало и конец окна';
-      continue;
+      return true;
     }
-
-    const startMin = timeToMinutes(w.start);
-    const endMin = timeToMinutes(w.end);
-
-    if (startMin >= endMin) {
+    if (timeToMinutes(w.start) >= timeToMinutes(w.end)) {
       w.error = 'Начало должно быть раньше конца';
-      continue;
+      return true;
     }
+    return false;
+  });
 
-    // Check overlap with other windows
-    for (let j = 0; j < validated.length; j++) {
-      if (i === j) continue;
-      const other = validated[j];
-      if (!other || other.error || !other.start || !other.end) continue;
-      const oStart = timeToMinutes(other.start);
-      const oEnd = timeToMinutes(other.end);
-      if (startMin < oEnd && endMin > oStart) {
-        w.error = 'Окна пересекаются';
-        break;
+  // Шаг 2: пересечения. Помечаем ОБА окна пары, чтобы репетитор видел,
+  // что с чем конфликтует, и сам выбрал, какое подвинуть.
+  for (let i = 0; i < validated.length; i++) {
+    if (formatBad[i]) continue;
+    const a = validated[i];
+    for (let j = i + 1; j < validated.length; j++) {
+      if (formatBad[j]) continue;
+      const b = validated[j];
+      const aStart = timeToMinutes(a.start);
+      const aEnd = timeToMinutes(a.end);
+      const bStart = timeToMinutes(b.start);
+      const bEnd = timeToMinutes(b.end);
+      if (aStart < bEnd && aEnd > bStart) {
+        a.error = 'Пересекается с другим окном — измени одно из них';
+        b.error = 'Пересекается с другим окном — измени одно из них';
       }
     }
   }
@@ -207,6 +233,7 @@ export default function AvailabilityPage() {
         <div style={{ ...panelStyle, color: '#687486' }}>Загрузка...</div>
       ) : (
         <>
+          <div style={{ display: 'grid', gap: 12 }}>
           {networkError && (
             <div
               style={{
@@ -273,6 +300,7 @@ export default function AvailabilityPage() {
               Задай рабочие часы один раз — ученики увидят свободные окна автоматически.
             </div>
           )}
+          </div>
 
           <section
             style={{
@@ -286,84 +314,40 @@ export default function AvailabilityPage() {
             {([0, 1, 2, 3, 4, 5, 6] as const).map((day) => {
               const windows = dayMap[day] ?? [];
               return (
-                <div key={day} style={{ ...panelStyle, padding: '14px 16px' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: windows.length > 0 ? 12 : 0,
-                      gap: 12,
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <span style={{ fontWeight: 800, fontSize: 15, color: '#1f2a3b' }}>
-                      {WEEKDAY_LABELS[day]}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => addWindow(day)}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        padding: '5px 12px',
-                        borderRadius: 10,
-                        border: '1px solid rgba(42,171,238,0.35)',
-                        background: 'rgba(42,171,238,0.07)',
-                        color: '#1a6fa8',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      + Добавить окно
-                    </button>
-                  </div>
+                <div key={day} style={{ ...panelStyle, padding: '14px 16px', display: 'grid', gap: 10 }}>
+                  <span style={{ fontWeight: 800, fontSize: 15, color: '#1f2a3b' }}>
+                    {WEEKDAY_LABELS[day]}
+                  </span>
 
-                  {windows.length > 0 && (
+                  {windows.length > 0 ? (
                     <div style={{ display: 'grid', gap: 8 }}>
                       {windows.map((w, idx) => (
-                        <div key={idx} style={{ display: 'grid', gap: 6 }}>
+                        <div key={idx} style={{ display: 'grid', gap: 4 }}>
                           <div
                             style={{
                               display: 'flex',
                               alignItems: 'center',
                               gap: 8,
-                              flexWrap: 'wrap',
+                              padding: '8px 10px',
+                              borderRadius: 12,
+                              background: w.error ? 'rgba(229,62,62,0.06)' : 'rgba(23,32,51,0.035)',
+                              border: w.error ? '1px solid rgba(229,62,62,0.45)' : '1px solid rgba(24,33,47,0.08)',
                             }}
                           >
                             <input
                               type="time"
                               value={w.start}
                               onChange={(e) => updateWindow(day, idx, 'start', e.target.value)}
-                              style={{
-                                padding: '6px 10px',
-                                borderRadius: 10,
-                                border: w.error ? '1px solid #e53e3e' : '1px solid rgba(24,33,47,0.14)',
-                                fontSize: 14,
-                                fontFamily: 'inherit',
-                                background: '#fff',
-                                color: '#1f2a3b',
-                                outline: 'none',
-                              }}
+                              style={timeInputStyle}
                             />
-                            <span style={{ color: '#687486', fontSize: 13, fontWeight: 600 }}>—</span>
+                            <span style={{ color: '#687486', fontSize: 13, fontWeight: 600 }}>–</span>
                             <input
                               type="time"
                               value={w.end}
                               onChange={(e) => updateWindow(day, idx, 'end', e.target.value)}
-                              style={{
-                                padding: '6px 10px',
-                                borderRadius: 10,
-                                border: w.error ? '1px solid #e53e3e' : '1px solid rgba(24,33,47,0.14)',
-                                fontSize: 14,
-                                fontFamily: 'inherit',
-                                background: '#fff',
-                                color: '#1f2a3b',
-                                outline: 'none',
-                              }}
+                              style={timeInputStyle}
                             />
+                            <div style={{ flex: 1 }} />
                             <button
                               type="button"
                               title="Удалить окно"
@@ -381,13 +365,13 @@ export default function AvailabilityPage() {
                         </div>
                       ))}
                     </div>
+                  ) : (
+                    <div style={{ color: '#9aabba', fontSize: 13 }}>Нет окон — день выходной</div>
                   )}
 
-                  {windows.length === 0 && (
-                    <div style={{ color: '#9aabba', fontSize: 13, marginTop: 6 }}>
-                      Нет окон — день выходной
-                    </div>
-                  )}
+                  <button type="button" onClick={() => addWindow(day)} style={addWindowButtonStyle}>
+                    + Добавить окно
+                  </button>
                 </div>
               );
             })}

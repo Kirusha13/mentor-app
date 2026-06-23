@@ -62,22 +62,35 @@ function dayEditorTimeToMinutes(t: string): number {
 
 function validateDayEditorWindows(windows: DayEditorWindow[]): DayEditorWindow[] {
   const validated = windows.map((w) => ({ ...w, error: undefined as string | undefined }));
+
+  // Шаг 1: формат каждого окна.
+  const formatBad = validated.map((w) => {
+    if (!w.start || !w.end) { w.error = 'Укажи начало и конец'; return true; }
+    if (dayEditorTimeToMinutes(w.start) >= dayEditorTimeToMinutes(w.end)) {
+      w.error = 'Начало должно быть раньше конца';
+      return true;
+    }
+    return false;
+  });
+
+  // Шаг 2: пересечения — помечаем ОБА окна пары, чтобы было видно что с чем.
   for (let i = 0; i < validated.length; i++) {
-    const w = validated[i];
-    if (!w) continue;
-    if (!w.start || !w.end) { w.error = 'Укажи начало и конец'; continue; }
-    const sMin = dayEditorTimeToMinutes(w.start);
-    const eMin = dayEditorTimeToMinutes(w.end);
-    if (sMin >= eMin) { w.error = 'Начало должно быть раньше конца'; continue; }
-    for (let j = 0; j < validated.length; j++) {
-      if (i === j) continue;
-      const other = validated[j];
-      if (!other || other.error || !other.start || !other.end) continue;
-      const oStart = dayEditorTimeToMinutes(other.start);
-      const oEnd = dayEditorTimeToMinutes(other.end);
-      if (sMin < oEnd && eMin > oStart) { w.error = 'Окна пересекаются'; break; }
+    if (formatBad[i]) continue;
+    const a = validated[i];
+    for (let j = i + 1; j < validated.length; j++) {
+      if (formatBad[j]) continue;
+      const b = validated[j];
+      const aStart = dayEditorTimeToMinutes(a.start);
+      const aEnd = dayEditorTimeToMinutes(a.end);
+      const bStart = dayEditorTimeToMinutes(b.start);
+      const bEnd = dayEditorTimeToMinutes(b.end);
+      if (aStart < bEnd && aEnd > bStart) {
+        a.error = 'Пересекается с другим окном — измени одно из них';
+        b.error = 'Пересекается с другим окном — измени одно из них';
+      }
     }
   }
+
   return validated;
 }
 
@@ -1957,7 +1970,17 @@ export default function SchedulePage() {
                 <div style={{ display: 'grid', gap: 8 }}>
                   {dayEditorWindows.map((w, idx) => (
                     <div key={idx} style={{ display: 'grid', gap: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '8px 10px',
+                          borderRadius: 12,
+                          background: w.error ? 'rgba(229,62,62,0.06)' : 'rgba(23,32,51,0.035)',
+                          border: w.error ? '1px solid rgba(229,62,62,0.45)' : '1px solid rgba(24,33,47,0.08)',
+                        }}
+                      >
                         <input
                           type="time"
                           value={w.start}
@@ -1965,9 +1988,9 @@ export default function SchedulePage() {
                             setDayEditorWindows((prev) => prev.map((item, i) => i === idx ? { ...item, start: e.target.value, error: undefined } : item));
                             setDayEditorResult(null);
                           }}
-                          style={{ padding: '6px 10px', borderRadius: 10, border: w.error ? '1px solid #e53e3e' : '1px solid rgba(24,33,47,0.14)', fontSize: 14, fontFamily: 'inherit', background: '#fff', color: '#1f2a3b', outline: 'none' }}
+                          style={{ padding: '6px 8px', borderRadius: 10, border: '1px solid rgba(24,33,47,0.14)', fontSize: 14, fontFamily: 'inherit', background: '#fff', color: '#1f2a3b', outline: 'none' }}
                         />
-                        <span style={{ color: '#687486', fontSize: 13, fontWeight: 600 }}>—</span>
+                        <span style={{ color: '#687486', fontSize: 13, fontWeight: 600 }}>–</span>
                         <input
                           type="time"
                           value={w.end}
@@ -1975,8 +1998,9 @@ export default function SchedulePage() {
                             setDayEditorWindows((prev) => prev.map((item, i) => i === idx ? { ...item, end: e.target.value, error: undefined } : item));
                             setDayEditorResult(null);
                           }}
-                          style={{ padding: '6px 10px', borderRadius: 10, border: w.error ? '1px solid #e53e3e' : '1px solid rgba(24,33,47,0.14)', fontSize: 14, fontFamily: 'inherit', background: '#fff', color: '#1f2a3b', outline: 'none' }}
+                          style={{ padding: '6px 8px', borderRadius: 10, border: '1px solid rgba(24,33,47,0.14)', fontSize: 14, fontFamily: 'inherit', background: '#fff', color: '#1f2a3b', outline: 'none' }}
                         />
+                        <div style={{ flex: 1 }} />
                         <button
                           type="button"
                           title="Удалить окно"
