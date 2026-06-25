@@ -1,5 +1,17 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import {
+  BookOpen,
+  CalendarDays,
+  Contact,
+  FileText,
+  Home,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RussianRuble,
+  Users,
+} from 'lucide-react';
 import { getLessons } from '../api/lessons';
 import { getHomeworkQueue } from '../api/homework';
 import { useConfirm } from './ConfirmDialog';
@@ -45,92 +57,19 @@ const ALL_NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) =>
   group.items.map((item) => ({ ...item })),
 );
 
+const NAV_ICON_MAP = {
+  home: Home,
+  calendar: CalendarDays,
+  users: Users,
+  file: FileText,
+  book: BookOpen,
+  contact: Contact,
+  ruble: RussianRuble,
+} as const;
+
 function NavIcon({ name }: { name: NavIconName }) {
-  const common = {
-    width: 19,
-    height: 19,
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 2.1,
-    strokeLinecap: 'round' as const,
-    strokeLinejoin: 'round' as const,
-    'aria-hidden': true,
-  };
-
-  if (name === 'home') {
-    return (
-      <svg {...common}>
-        <path d="M3 11.5 12 4l9 7.5" />
-        <path d="M5.5 10.5V20h13v-9.5" />
-        <path d="M9.5 20v-5h5v5" />
-      </svg>
-    );
-  }
-
-  if (name === 'calendar') {
-    return (
-      <svg {...common}>
-        <path d="M7 3v4" />
-        <path d="M17 3v4" />
-        <path d="M4 8h16" />
-        <path d="M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" />
-      </svg>
-    );
-  }
-
-  if (name === 'users') {
-    return (
-      <svg {...common}>
-        <path d="M16 19c0-2.2-1.8-4-4-4s-4 1.8-4 4" />
-        <circle cx="12" cy="8" r="3" />
-        <path d="M4.5 18c.2-1.7 1.3-3.1 2.8-3.8" />
-        <path d="M16.7 14.2c1.5.7 2.6 2.1 2.8 3.8" />
-        <path d="M6.8 10.5a2.3 2.3 0 1 1 1.5-4" />
-        <path d="M17.2 10.5a2.3 2.3 0 1 0-1.5-4" />
-      </svg>
-    );
-  }
-
-  if (name === 'file') {
-    return (
-      <svg {...common}>
-        <path d="M7 3h7l4 4v14H7z" />
-        <path d="M14 3v5h5" />
-        <path d="M9.5 13h5" />
-        <path d="M9.5 17h4" />
-      </svg>
-    );
-  }
-
-  if (name === 'book') {
-    return (
-      <svg {...common}>
-        <path d="M5 4h6a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H5z" />
-        <path d="M19 4h-5a3 3 0 0 0-3 3" />
-        <path d="M19 4v13h-5a3 3 0 0 0-3 3" />
-      </svg>
-    );
-  }
-
-  if (name === 'contact') {
-    return (
-      <svg {...common}>
-        <path d="M5 4h14v16H5z" />
-        <circle cx="12" cy="10" r="2.5" />
-        <path d="M8.5 17c.6-2 2-3 3.5-3s2.9 1 3.5 3" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg {...common}>
-      <path d="M8 4v16" />
-      <path d="M16 4v16" />
-      <path d="M6 8h10a3 3 0 1 1 0 6H6" />
-      <path d="M6 14h12" />
-    </svg>
-  );
+  const Icon = NAV_ICON_MAP[name];
+  return <Icon size={19} strokeWidth={2.1} aria-hidden />;
 }
 
 function getInitials(label: string) {
@@ -334,20 +273,7 @@ export default function Layout({ children }: LayoutProps) {
                   flex: '0 0 auto',
                 }}
               >
-                <svg
-                  aria-hidden="true"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{ transform: railMode ? 'rotate(180deg)' : 'none' }}
-                >
-                  <path d="M15 6l-6 6 6 6" />
-                </svg>
+                {railMode ? <PanelLeftOpen size={18} strokeWidth={2.1} aria-hidden /> : <PanelLeftClose size={18} strokeWidth={2.1} aria-hidden />}
               </button>
             )}
           </div>
@@ -572,21 +498,7 @@ export default function Layout({ children }: LayoutProps) {
               fontSize: 20,
             }}
           >
-            <svg
-              aria-hidden="true"
-              width="21"
-              height="21"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M10 17l5-5-5-5" />
-              <path d="M15 12H3" />
-              <path d="M14 4h4a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-4" />
-            </svg>
+            <LogOut size={21} strokeWidth={2.2} aria-hidden />
           </button>
         </div>
       </aside>
