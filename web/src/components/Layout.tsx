@@ -18,7 +18,6 @@ const NAV_GROUPS = [
     items: [
       { to: '/', label: 'Главная', icon: 'home', exact: true },
       { to: '/schedule', label: 'Расписание', icon: 'calendar' },
-      { to: '/availability', label: 'Доступность', icon: 'clock' },
     ],
   },
   {

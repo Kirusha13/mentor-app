@@ -1,6 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, CalendarDays, Check, Pencil, Trash2, Wallet } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Check, Clock, Pencil, Trash2, Wallet } from 'lucide-react';
 import {
   approveBooking,
   approveReschedule,
@@ -27,6 +26,7 @@ import { formatTopicLevels, topicMatchesStudentLevel } from '../utils/studyLevel
 import { useToast } from '../components/Toast';
 import { useFieldErrors, FieldError, type FieldRules } from '../components/formValidation';
 import { Modal } from '../components/Modal';
+import { WorkHoursModal } from '../components/WorkHoursModal';
 import { DateField } from '../components/DateField';
 import {
   lessonDate as toLessonDateStr,
@@ -451,7 +451,6 @@ function layoutTimelineLessons(items: Lesson[], startHour: number, slotHeights: 
 }
 
 export default function SchedulePage() {
-  const navigate = useNavigate();
   const toast = useToast();
   const { errors, validateField, validateAll, clearError, reset } = useFieldErrors();
   const [mode, setMode] = useState<CalendarMode>('week');
@@ -501,6 +500,7 @@ export default function SchedulePage() {
   const [lessonCommentSaving, setLessonCommentSaving] = useState(false);
   const [showLessonNoteEditor, setShowLessonNoteEditor] = useState(false);
   const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
+  const [isWorkHoursOpen, setIsWorkHoursOpen] = useState(false);
   const [processingRequestId, setProcessingRequestId] = useState<number | null>(null);
 
   const dayDate = useMemo(() => atMidnight(anchorDate), [anchorDate]);
@@ -1551,6 +1551,28 @@ export default function SchedulePage() {
 
           <button
             type="button"
+            title="Часы работы — обычное недельное расписание"
+            onClick={() => setIsWorkHoursOpen(true)}
+            style={{
+              height: 42,
+              padding: '0 14px',
+              borderRadius: 14,
+              background: '#fff',
+              color: '#1f2a3b',
+              border: '1px solid rgba(24,33,47,0.12)',
+              boxShadow: 'none',
+              fontWeight: 800,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <span style={{ color: '#536177', display: 'inline-flex' }}><Clock size={17} /></span>
+            Часы работы
+          </button>
+
+          <button
+            type="button"
             title="Запросы"
             onClick={() => setIsRequestsModalOpen(true)}
             style={{
@@ -1926,10 +1948,10 @@ export default function SchedulePage() {
               Изменения применятся только к этой дате. Чтобы изменить обычное расписание по этому дню недели,{' '}
               <button
                 type="button"
-                onClick={() => { setIsDayEditorOpen(false); navigate('/availability'); }}
+                onClick={() => { setIsDayEditorOpen(false); setIsWorkHoursOpen(true); }}
                 style={{ padding: 0, background: 'none', border: 'none', boxShadow: 'none', color: '#2AABEE', fontWeight: 700, fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}
               >
-                откройте «Доступность»
+                откройте «Часы работы»
               </button>
               .
             </p>
@@ -2031,6 +2053,8 @@ export default function SchedulePage() {
             </div>
         </Modal>
       )}
+
+      {isWorkHoursOpen && <WorkHoursModal onClose={() => setIsWorkHoursOpen(false)} />}
 
       {selectedLesson && (() => {
         const relation = tutorStudents.find((item) => item.id === selectedLesson.tutor_student_id);

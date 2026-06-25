@@ -5,7 +5,6 @@ import AuthCallbackPage from '../pages/AuthCallbackPage';
 import LinkVkCallbackPage from '../pages/LinkVkCallbackPage';
 import LinkTelegramCallbackPage from '../pages/LinkTelegramCallbackPage';
 import AssignmentsPage from '../pages/AssignmentsPage';
-import AvailabilityPage from '../pages/AvailabilityPage';
 import ContactsPage from '../pages/ContactsPage';
 import DashboardPage from '../pages/DashboardPage';
 import FinancePage from '../pages/FinancePage';
@@ -38,7 +37,6 @@ export default function AppRouter() {
         <Route path="/students" element={<ProtectedLayout><StudentsPage /></ProtectedLayout>} />
         <Route path="/contacts" element={<ProtectedLayout><ContactsPage /></ProtectedLayout>} />
         <Route path="/schedule" element={<ProtectedLayout><SchedulePage /></ProtectedLayout>} />
-        <Route path="/availability" element={<ProtectedLayout><AvailabilityPage /></ProtectedLayout>} />
         <Route path="/assignments" element={<ProtectedLayout><AssignmentsPage /></ProtectedLayout>} />
         <Route path="/materials" element={<ProtectedLayout><MaterialsPage /></ProtectedLayout>} />
         <Route path="/finance" element={<ProtectedLayout><FinancePage /></ProtectedLayout>} />

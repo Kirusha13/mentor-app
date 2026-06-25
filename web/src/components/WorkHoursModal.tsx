@@ -1,14 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { listRules, replaceRules, type AvailabilityRule, type SaveResult } from '../api/availability';
-
-const panelStyle = {
-  background: 'rgba(255,255,255,0.88)',
-  padding: '16px',
-  borderRadius: '22px',
-  border: '1px solid rgba(24,33,47,0.08)',
-  boxShadow: 'var(--shadow-card)',
-} as const;
+import { Modal } from './Modal';
 
 const timeInputStyle = {
   padding: '6px 8px',
@@ -34,6 +27,15 @@ const addWindowButtonStyle = {
   fontSize: 13,
   fontWeight: 700,
   cursor: 'pointer',
+} as const;
+
+const dayPanelStyle = {
+  background: 'rgba(255,255,255,0.88)',
+  padding: '14px 16px',
+  borderRadius: '18px',
+  border: '1px solid rgba(24,33,47,0.08)',
+  display: 'grid',
+  gap: 10,
 } as const;
 
 const WEEKDAY_LABELS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
@@ -119,7 +121,11 @@ function formatConflictDate(startsAt: string): string {
   }
 }
 
-export default function AvailabilityPage() {
+interface Props {
+  onClose: () => void;
+}
+
+export function WorkHoursModal({ onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
@@ -226,22 +232,29 @@ export default function AvailabilityPage() {
   const totalWindows = Object.values(dayMap).reduce((sum, windows) => sum + windows.length, 0);
 
   return (
-    <div style={{ display: 'grid', gap: 16, height: '100%', minHeight: 0, overflow: 'hidden', gridTemplateRows: 'auto auto minmax(0, 1fr) auto' }}>
-      <h1 className="page-heading">Моя доступность</h1>
+    <Modal onClose={onClose} className="wide" style={{ width: 'min(640px, calc(100vw - 48px))' }}>
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Часы работы</h3>
+          <p className="modal-subtitle">
+            Обычное недельное расписание. Ученики автоматически видят свободные окна.
+          </p>
+        </div>
+        <button type="button" title="Закрыть" onClick={onClose} className="modal-close">×</button>
+      </div>
 
       {loading ? (
-        <div style={{ ...panelStyle, color: '#687486' }}>Загрузка...</div>
+        <div style={{ color: '#687486', padding: '8px 2px' }}>Загрузка...</div>
       ) : (
-        <>
-          <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gap: 12 }}>
           {networkError && (
             <div
               style={{
-                ...panelStyle,
                 background: 'rgba(229,62,62,0.08)',
                 border: '1px solid rgba(229,62,62,0.2)',
                 color: '#c53030',
                 padding: '12px 16px',
+                borderRadius: 14,
               }}
             >
               {networkError}
@@ -251,11 +264,11 @@ export default function AvailabilityPage() {
           {saveResult && (
             <div
               style={{
-                ...panelStyle,
                 background: saveResult.conflicts.length > 0 ? 'rgba(237,137,54,0.08)' : 'rgba(72,187,120,0.1)',
                 border: `1px solid ${saveResult.conflicts.length > 0 ? 'rgba(237,137,54,0.25)' : 'rgba(72,187,120,0.25)'}`,
                 color: saveResult.conflicts.length > 0 ? '#c05621' : '#276749',
                 padding: '12px 16px',
+                borderRadius: 14,
               }}
             >
               {saveResult.conflicts.length === 0 && saveResult.rejected_bookings === 0 ? (
@@ -289,32 +302,32 @@ export default function AvailabilityPage() {
           {!hasRulesEver && totalWindows === 0 && !networkError && (
             <div
               style={{
-                ...panelStyle,
                 background: 'rgba(42,171,238,0.07)',
                 border: '1px solid rgba(42,171,238,0.2)',
                 color: '#1a6fa8',
                 padding: '12px 16px',
+                borderRadius: 14,
                 fontSize: 14,
               }}
             >
               Задай рабочие часы один раз — ученики увидят свободные окна автоматически.
             </div>
           )}
-          </div>
 
           <section
             style={{
               display: 'grid',
               gap: 12,
+              maxHeight: 'min(58vh, 520px)',
               overflowY: 'auto',
               scrollbarWidth: 'thin',
-              minHeight: 0,
+              paddingRight: 2,
             }}
           >
             {([0, 1, 2, 3, 4, 5, 6] as const).map((day) => {
               const windows = dayMap[day] ?? [];
               return (
-                <div key={day} style={{ ...panelStyle, padding: '14px 16px', display: 'grid', gap: 10 }}>
+                <div key={day} style={dayPanelStyle}>
                   <span style={{ fontWeight: 800, fontSize: 15, color: '#1f2a3b' }}>
                     {WEEKDAY_LABELS[day]}
                   </span>
@@ -379,13 +392,12 @@ export default function AvailabilityPage() {
 
           <div
             style={{
-              ...panelStyle,
-              padding: '12px 16px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: 12,
               flexWrap: 'wrap',
+              paddingTop: 4,
             }}
           >
             <span style={{ color: '#687486', fontSize: 13 }}>
@@ -401,8 +413,8 @@ export default function AvailabilityPage() {
               {saving ? 'Сохраняем...' : 'Сохранить'}
             </button>
           </div>
-        </>
+        </div>
       )}
-    </div>
+    </Modal>
   );
 }
