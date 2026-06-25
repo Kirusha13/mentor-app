@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, LayoutGrid, List, Trash2, Users } from 'lucide-react';
+import { LayoutGrid, List, Trash2 } from 'lucide-react';
 import { getStudentContacts, type StudentContact } from '../api/contacts';
 import { getLessons, type Lesson } from '../api/lessons';
 import { createStudent, getStudents, type Student } from '../api/students';
@@ -280,20 +280,7 @@ export default function StudentsPage() {
     }
   };
 
-  const activeSubjectIds = new Set(
-    tutorStudents
-      .filter((relation) => relation.status === 'active')
-      .map((relation) => relation.subject_id)
-  );
-  const activeSubjectNames = subjects.filter((subject) => activeSubjectIds.has(subject.id)).map((subject) => subject.name);
-  const activeSubjectTitle =
-    activeSubjectIds.size === 1
-      ? '1 активный предмет'
-      : `${activeSubjectIds.size} активных предметов`;
-  const activeSubjectSubtitle =
-    activeSubjectNames.length === 0
-      ? 'Предметы не созданы'
-      : activeSubjectNames.slice(0, 2).join(', ') + (activeSubjectNames.length > 2 ? ` +${activeSubjectNames.length - 2}` : '');
+  const totalStudentCount = useMemo(() => groupCards(studentCards).length, [studentCards]);
   const getStudentInitials = (name: string) =>
     name
       .split(' ')
@@ -341,41 +328,55 @@ export default function StudentsPage() {
       return a.student.full_name.localeCompare(b.student.full_name, 'ru-RU');
     });
 
-  const renderGrid = (groups: StudentGroupData[]) => <div style={{ display: 'grid', gap: 16, gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fit, minmax(300px, 1fr))' : '1fr' }}>{sortGroups(groups).map((group, index) => {
+  const renderGrid = (groups: StudentGroupData[]) => <div style={{ display: 'grid', gap: 12, gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fit, minmax(280px, 1fr))' : '1fr' }}>{sortGroups(groups).map((group, index) => {
     const primary = group.cards[0];
     const nextLesson = getNextLessonForGroup(group);
     const palette = ['#2AABEE', '#4CAF50', '#9C27B0', '#1565C0', '#6A1B9A'];
     const accent = primary.subject?.color || palette[index % palette.length];
     return (
-      <button key={group.student.id} type="button" onClick={() => { reset(); setSelectedTutorStudentId(primary.tutorStudent.id); setDetailsModalOpen(true); }} style={{ display: 'grid', gridTemplateRows: 'auto auto 1fr auto', minHeight: 188, gap: 14, padding: 18, textAlign: 'left', borderRadius: 22, background: '#fff', color: '#1f2a3b', border: '1px solid rgba(24,33,47,0.08)', boxShadow: 'var(--shadow-soft)' }}>
-        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-          <span style={{ width: 58, height: 58, borderRadius: 22, background: `${accent}16`, color: accent, display: 'inline-grid', placeItems: 'center', fontSize: 18, fontWeight: 900, flex: '0 0 auto' }}>
+      <button key={group.student.id} type="button" onClick={() => { reset(); setSelectedTutorStudentId(primary.tutorStudent.id); setDetailsModalOpen(true); }} style={{ display: 'grid', gridTemplateRows: 'auto auto', gap: 10, padding: 14, textAlign: 'left', borderRadius: 18, background: '#fff', color: '#1f2a3b', border: '1px solid rgba(24,33,47,0.08)', boxShadow: 'var(--shadow-soft)' }}>
+        <div style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
+          <span style={{ width: 44, height: 44, borderRadius: 14, background: `${accent}16`, color: accent, display: 'inline-grid', placeItems: 'center', fontSize: 15, fontWeight: 900, flex: '0 0 auto' }}>
             {getStudentInitials(group.student.full_name) || 'У'}
           </span>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.student.full_name}</div>
-            <div style={{ color: '#687486', fontSize: 14 }}>{group.student.grade ? `${group.student.grade} класс` : 'Класс не указан'} • {group.contacts.length} контактов</div>
+            <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{group.student.full_name}</div>
+            <div style={{ color: '#687486', fontSize: 13 }}>{group.student.grade ? `${group.student.grade} класс` : 'Класс не указан'} • {group.contacts.length} конт.</div>
+          </div>
+          <div style={{ textAlign: 'right', flex: '0 0 auto' }}>
+            <div style={{ color: '#9aabba', fontSize: 11, marginBottom: 2 }}>След. занятие</div>
+            <div style={{ color: '#1f2a3b', fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap' }}>{nextLesson ? formatShortLessonDate(nextLesson.starts_at) : '—'}</div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {group.cards.map((card) => (
-            <span key={card.tutorStudent.id} style={{ padding: '6px 9px', borderRadius: 999, background: card.tutorStudent.status === 'active' ? 'rgba(47,125,99,0.12)' : 'rgba(166,63,59,0.1)', color: card.tutorStudent.status === 'active' ? '#4CAF50' : '#F44336', fontSize: 12, fontWeight: 800 }}>
+            <span key={card.tutorStudent.id} style={{ padding: '4px 8px', borderRadius: 999, background: card.tutorStudent.status === 'active' ? 'rgba(47,125,99,0.12)' : 'rgba(166,63,59,0.1)', color: card.tutorStudent.status === 'active' ? '#4CAF50' : '#F44336', fontSize: 11, fontWeight: 800 }}>
               {card.subject?.name ?? t.subjectMissing}
             </span>
           ))}
-        </div>
-        <div style={{ display: 'grid', gap: 16, alignItems: 'end' }}>
-          <div>
-            <div style={{ color: '#687486', fontSize: 13, marginBottom: 4 }}>Следующее занятие</div>
-            <div style={{ color: '#1f2a3b', fontWeight: 800 }}>{nextLesson ? formatShortLessonDate(nextLesson.starts_at) : '—'}</div>
-          </div>
         </div>
       </button>
     );
   })}</div>;
   return (
-    <div style={{ display: 'grid', gridTemplateRows: 'auto auto auto minmax(0, 1fr)', gap: 16, height: '100%', minHeight: 0, overflow: 'hidden' }}>
-      <h1 className="page-heading">{t.title}</h1>
+    <div style={{ display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)', gap: 16, height: '100%', minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <h1 className="page-heading" style={{ marginBottom: 0 }}>{t.title}</h1>
+        {!loading && (
+          <span
+            style={{
+              padding: '2px 11px',
+              borderRadius: 999,
+              background: 'rgba(42,171,238,0.12)',
+              color: '#2AABEE',
+              fontSize: 13,
+              fontWeight: 800,
+            }}
+          >
+            {totalStudentCount}
+          </span>
+        )}
+      </div>
 
       <section className="mentor-panel toolbar-panel" style={{ gridTemplateColumns: 'minmax(260px, 1.35fr) minmax(150px, 0.55fr) minmax(190px, 0.7fr) minmax(140px, 0.45fr) auto auto' }}>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по имени, телефону или Telegram ID" />
@@ -396,17 +397,6 @@ export default function StudentsPage() {
               <button type="button" title="Список" onClick={() => setViewMode('list')} className="icon-button ghost-button" style={{ background: viewMode === 'list' ? '#2AABEE' : 'transparent', color: viewMode === 'list' ? '#fff' : '#435066' }}><List size={16} /></button>
             </div>
             <button type="button" title="Создать ученика" onClick={() => { reset(); setCreateModalOpen(true); }} className="add-trigger">+</button>
-      </section>
-
-      <section className="metric-grid">
-        <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(42,171,238,0.12)', color: '#2AABEE' }}><Users size={20} /></span>
-          <div><div className="metric-value">{groupCards(studentCards).length} учеников</div><div className="metric-label">Всего в системе</div></div>
-        </div>
-        <div className="metric-card">
-          <span className="metric-icon" style={{ background: 'rgba(47,125,99,0.12)', color: '#4CAF50' }}><BookOpen size={20} /></span>
-          <div><div className="metric-value">{activeSubjectTitle}</div><div className="metric-label">{activeSubjectSubtitle}</div></div>
-        </div>
       </section>
 
       <section className="mentor-panel" style={{ padding: 18, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin' }}>

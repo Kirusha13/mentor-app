@@ -264,8 +264,10 @@ export default function Layout({ children }: LayoutProps) {
                   width: 34,
                   height: 34,
                   borderRadius: 11,
-                  display: 'inline-grid',
-                  placeItems: 'center',
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   color: 'rgba(255,255,255,0.78)',
                   border: '1px solid rgba(255,255,255,0.1)',
                   background: 'rgba(255,255,255,0.05)',
@@ -273,7 +275,7 @@ export default function Layout({ children }: LayoutProps) {
                   flex: '0 0 auto',
                 }}
               >
-                {railMode ? <PanelLeftOpen size={18} strokeWidth={2.1} aria-hidden /> : <PanelLeftClose size={18} strokeWidth={2.1} aria-hidden />}
+                {railMode ? <PanelLeftOpen size={18} strokeWidth={2.1} aria-hidden style={{ display: 'block' }} /> : <PanelLeftClose size={18} strokeWidth={2.1} aria-hidden style={{ display: 'block' }} />}
               </button>
             )}
           </div>
