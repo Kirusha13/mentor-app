@@ -40,6 +40,11 @@ const NAV_GROUPS = [
 
 type NavIconName = (typeof NAV_GROUPS)[number]['items'][number]['icon'];
 
+type NavItem = { to: string; label: string; icon: NavIconName; exact?: boolean };
+const ALL_NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) =>
+  group.items.map((item) => ({ ...item })),
+);
+
 function NavIcon({ name }: { name: NavIconName }) {
   const common = {
     width: 19,
@@ -161,6 +166,32 @@ export default function Layout({ children }: LayoutProps) {
   const initials = useMemo(() => getInitials(tutorLabel), [tutorLabel]);
   const isProfileActive = location.pathname.startsWith('/profile');
 
+  // SB2: сворачиваемый сайдбар. Состояние помним в localStorage.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sidebar-collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
+    } catch {
+      // localStorage недоступен — не критично
+    }
+  }, [collapsed]);
+
+  // Рельса из иконок — только на десктопе/планшете (на мобиле сайдбар — верхняя плашка).
+  const railMode = !isMobile && collapsed;
+
+  const badgeFor = (to: string): { count: number; color: string } | null => {
+    if (to === '/schedule' && lessonRequestCount > 0) return { count: lessonRequestCount, color: '#e53e3e' };
+    if (to === '/students' && pendingStudentCount > 0) return { count: pendingStudentCount, color: '#d97706' };
+    if (to === '/assignments' && homeworkCount > 0) return { count: homeworkCount, color: '#e53e3e' };
+    return null;
+  };
+
   const handleLogout = async () => {
     const confirmed = await confirm('Вы действительно хотите выйти из кабинета?');
     if (!confirmed) return;
@@ -227,9 +258,11 @@ export default function Layout({ children }: LayoutProps) {
         display: 'grid',
         gridTemplateColumns: isMobile
           ? '1fr'
-          : isTablet
-            ? '208px minmax(0, 1fr)'
-            : '232px minmax(0, 1fr)',
+          : railMode
+            ? '76px minmax(0, 1fr)'
+            : isTablet
+              ? '208px minmax(0, 1fr)'
+              : '232px minmax(0, 1fr)',
         background: 'transparent',
         overflow: isMobile ? 'visible' : 'hidden',
       }}
@@ -239,7 +272,7 @@ export default function Layout({ children }: LayoutProps) {
           background:
             'radial-gradient(circle at 20% 0%, rgba(86,112,158,0.28), transparent 24%), linear-gradient(180deg, #152238 0%, #111d30 52%, #0d1728 100%)',
           color: '#f8fafc',
-          padding: isMobile ? '14px 14px 12px' : '22px 18px 18px',
+          padding: isMobile ? '14px 14px 12px' : railMode ? '18px 12px 16px' : '22px 18px 18px',
           borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.06)',
           borderBottom: isMobile ? '1px solid rgba(255,255,255,0.06)' : 'none',
           boxShadow: isMobile
@@ -256,39 +289,93 @@ export default function Layout({ children }: LayoutProps) {
       >
         <div
           style={{
-            padding: '2px 8px 14px',
+            padding: railMode ? '0 0 12px' : '2px 8px 14px',
             borderBottom: '1px solid rgba(255,255,255,0.08)',
           }}
         >
           <div
             style={{
-              fontSize: 13,
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.72)',
-              marginBottom: 16,
-              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: railMode ? 'center' : 'space-between',
+              gap: 8,
+              marginBottom: railMode ? 14 : 16,
             }}
           >
-            Mentor App
+            {!railMode && (
+              <div
+                style={{
+                  fontSize: 13,
+                  letterSpacing: '0.18em',
+                  textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,0.72)',
+                  fontWeight: 800,
+                }}
+              >
+                Mentor App
+              </div>
+            )}
+            {!isMobile && (
+              <button
+                type="button"
+                onClick={() => setCollapsed((prev) => !prev)}
+                title={railMode ? 'Развернуть меню' : 'Свернуть меню'}
+                aria-label={railMode ? 'Развернуть меню' : 'Свернуть меню'}
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 11,
+                  display: 'inline-grid',
+                  placeItems: 'center',
+                  color: 'rgba(255,255,255,0.78)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.05)',
+                  cursor: 'pointer',
+                  flex: '0 0 auto',
+                }}
+              >
+                <svg
+                  aria-hidden="true"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ transform: railMode ? 'rotate(180deg)' : 'none' }}
+                >
+                  <path d="M15 6l-6 6 6 6" />
+                </svg>
+              </button>
+            )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: railMode ? 'center' : 'flex-start',
+              gap: 10,
+              marginBottom: railMode ? 0 : 10,
+            }}
+          >
             <button
               type="button"
               onClick={() => navigate('/profile')}
               title="Личный кабинет"
               style={{
                 ...sidebarButtonBase,
-                width: 52,
-                height: 52,
+                width: railMode ? 44 : 52,
+                height: railMode ? 44 : 52,
                 border: isProfileActive
                   ? '1px solid rgba(255,255,255,0.18)'
                   : '1px solid rgba(255,255,255,0.1)',
                 background: isProfileActive
                   ? 'linear-gradient(180deg, rgba(42,171,238,0.96) 0%, rgba(34,158,217,0.96) 100%)'
                   : 'linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
-                fontSize: 18,
+                fontSize: railMode ? 16 : 18,
                 fontWeight: 800,
                 boxShadow: isProfileActive
                   ? '0 10px 24px rgba(42,171,238,0.24)'
@@ -298,13 +385,62 @@ export default function Layout({ children }: LayoutProps) {
               {initials || 'Р'}
             </button>
 
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.05 }}>{tutorLabel}</div>
-              <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13 }}>{tutorSubtitle}</div>
-            </div>
+            {!railMode && (
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.05 }}>{tutorLabel}</div>
+                <div style={{ color: 'rgba(255,255,255,0.64)', fontSize: 13 }}>{tutorSubtitle}</div>
+              </div>
+            )}
           </div>
         </div>
 
+        {railMode ? (
+          <nav style={{ display: 'grid', gap: 8, overflowY: 'auto', justifyItems: 'center', minHeight: 0 }}>
+            {ALL_NAV_ITEMS.map((item) => {
+              const badge = badgeFor(item.to);
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.exact ?? false}
+                  title={item.label}
+                  style={({ isActive }) => ({
+                    position: 'relative',
+                    display: 'grid',
+                    placeItems: 'center',
+                    width: 48,
+                    height: 48,
+                    borderRadius: 14,
+                    color: isActive ? '#fff' : 'rgba(255,255,255,0.72)',
+                    background: isActive
+                      ? 'linear-gradient(180deg, #2AABEE 0%, #229ED9 100%)'
+                      : 'rgba(255,255,255,0.04)',
+                    border: isActive
+                      ? '1px solid rgba(255,255,255,0.12)'
+                      : '1px solid rgba(255,255,255,0.05)',
+                    boxShadow: isActive ? '0 12px 26px rgba(42,171,238,0.28)' : 'none',
+                  })}
+                >
+                  <NavIcon name={item.icon} />
+                  {badge && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: 6,
+                        right: 6,
+                        minWidth: 9,
+                        height: 9,
+                        borderRadius: 999,
+                        background: badge.color,
+                        border: '2px solid #111d30',
+                      }}
+                    />
+                  )}
+                </NavLink>
+              );
+            })}
+          </nav>
+        ) : (
         <nav style={{ display: 'grid', gap: 16, overflowY: 'auto', paddingRight: 2, minHeight: 0 }}>
           {NAV_GROUPS.map((group) => (
             <div
@@ -380,75 +516,38 @@ export default function Layout({ children }: LayoutProps) {
                       <NavIcon name={item.icon} />
                     </span>
                     <span>{item.label}</span>
-                    {item.to === '/schedule' && lessonRequestCount > 0 && (
-                      <span
-                        style={{
-                          marginLeft: 'auto',
-                          background: '#e53e3e',
-                          color: '#fff',
-                          borderRadius: 999,
-                          fontSize: 11,
-                          fontWeight: 800,
-                          minWidth: 18,
-                          height: 18,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '0 5px',
-                          lineHeight: 1,
-                        }}
-                      >
-                        {lessonRequestCount}
-                      </span>
-                    )}
-                    {item.to === '/students' && pendingStudentCount > 0 && (
-                      <span
-                        style={{
-                          marginLeft: 'auto',
-                          background: '#d97706',
-                          color: '#fff',
-                          borderRadius: 999,
-                          fontSize: 11,
-                          fontWeight: 800,
-                          minWidth: 18,
-                          height: 18,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '0 5px',
-                          lineHeight: 1,
-                        }}
-                      >
-                        {pendingStudentCount}
-                      </span>
-                    )}
-                    {item.to === '/assignments' && homeworkCount > 0 && (
-                      <span
-                        style={{
-                          marginLeft: 'auto',
-                          background: '#e53e3e',
-                          color: '#fff',
-                          borderRadius: 999,
-                          fontSize: 11,
-                          fontWeight: 800,
-                          minWidth: 18,
-                          height: 18,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '0 5px',
-                          lineHeight: 1,
-                        }}
-                      >
-                        {homeworkCount}
-                      </span>
-                    )}
+                    {(() => {
+                      const badge = badgeFor(item.to);
+                      if (!badge) return null;
+                      return (
+                        <span
+                          style={{
+                            marginLeft: 'auto',
+                            background: badge.color,
+                            color: '#fff',
+                            borderRadius: 999,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            minWidth: 18,
+                            height: 18,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '0 5px',
+                            lineHeight: 1,
+                          }}
+                        >
+                          {badge.count}
+                        </span>
+                      );
+                    })()}
                   </NavLink>
                 ))}
               </div>
             </div>
           ))}
         </nav>
+        )}
 
         <div
           style={{
